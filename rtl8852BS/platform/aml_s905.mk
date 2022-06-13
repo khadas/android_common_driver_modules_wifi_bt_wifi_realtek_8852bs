@@ -9,15 +9,19 @@ EXTRA_CFLAGS += -DCONFIG_IFACE_NUMBER=3
 EXTRA_CFLAGS += -DCONFIG_SEL_P2P_IFACE=1
 endif
 
+export CONFIG_RTL8852BS = m
+
 # default setting for Android
 # config CONFIG_RTW_ANDROID in main Makefile
 
+EXTRA_CFLAGS += -w
 ARCH ?= arm64
 CROSS_COMPILE ?= /home/Jimmy/amlogic_905x4+8852AS/skw-rtk/cross_compile_toolchain/gcc-linaro-6.3.1-2017.02-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-
 ifndef KSRC
-KSRC := /home/Jimmy/amlogic_905x4+8852AS/skw-rtk/kernel
+KSRC := $(KERNEL_SRC)
+#KSRC := /home/Jimmy/amlogic_905x4+8852AS/skw-rtk/kernel
 # To locate output files in a separate directory.
-KSRC += O=/home/Jimmy/amlogic_905x4+8852AS/skw-rtk/kernel_obj
+#KSRC += O=/home/Jimmy/amlogic_905x4+8852AS/skw-rtk/kernel_obj
 endif
 
 ifeq ($(CONFIG_PCI_HCI), y)

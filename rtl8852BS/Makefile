@@ -154,7 +154,7 @@ CONFIG_LAYER2_ROAMING = y
 CONFIG_ROAMING_FLAG = 0x3
 
 ###################### Platform Related #######################
-CONFIG_PLATFORM_I386_PC = y
+CONFIG_PLATFORM_I386_PC = n
 CONFIG_PLATFORM_RTL8198D = n
 CONFIG_PLATFORM_ANDROID_X86 = n
 CONFIG_PLATFORM_ANDROID_INTEL_X86 = n
@@ -163,7 +163,7 @@ CONFIG_PLATFORM_NV_TK1_UBUNTU = n
 CONFIG_PLATFORM_ARM_SUNxI = n
 CONFIG_PLATFORM_RTK1319 = n
 CONFIG_PLATFORM_RTK16XXB = n
-CONFIG_PLATFORM_AML_S905 = n
+CONFIG_PLATFORM_AML_S905 = y
 CONFIG_PLATFORM_HUANGLONG = n
 CONFIG_PLATFORM_ARM_ROCKCHIP = n
 
@@ -645,15 +645,21 @@ endif
 else
 
 export CONFIG_RTL8852BS = m
+M ?= $(shell pwd)
 
 all: modules
 
 modules:
 	#rm -f .symvers.$(MODULE_NAME)
 
-	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) CC="$(CC)" V=$(V) -C $(KSRC) M=$(shell pwd) modules
-
+	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) CC="$(CC)" V=$(V) -C $(KSRC) M=$(M) modules
+	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
 	#cp Module.symvers .symvers.$(MODULE_NAME)
+
+modules_install:
+	@$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KSRC) modules_install
+	mkdir -p ${OUT_DIR}/../vendor_lib/modules
+	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
 
 strip:
 	$(CROSS_COMPILE)strip $(MODULE_NAME).ko --strip-unneeded
@@ -708,7 +714,7 @@ config_r:
 .PHONY: modules clean
 
 clean:
-	#$(MAKE) -C $(KSRC) M=$(shell pwd) clean
+	$(MAKE) -C $(KSRC) M=$(M) clean
 	cd $(HAL) ; rm -fr */*/*/*/*.mod.c */*/*/*/*.mod */*/*/*/*.o */*/*/*/.*.cmd */*/*/*/*.ko
 	cd $(HAL) ; rm -fr */*/*/*.mod.c */*/*/*.mod */*/*/*.o */*/*/.*.cmd */*/*/*.ko
 	cd $(HAL) ; rm -fr */*/*.mod.c */*/*.mod */*/*.o */*/.*.cmd */*/*.ko
@@ -725,3 +731,18 @@ clean:
 	rm -fr .tmp_versions
 endif
 
+ifneq ($(srctree),)
+_EXTRA_CFLAGS :=
+_INC_CFLAGS :=
+$(foreach flag,$(EXTRA_CFLAGS),\
+ $(if $(shell echo $(flag) | grep "\-I"),\
+  $(eval _INC_CFLAGS += $(flag)),\
+  $(eval _EXTRA_CFLAGS += $(flag))\
+ )\
+)
+_INC_CFLAGS := \
+$(foreach flag,$(subst -I,,$(_INC_CFLAGS)),\
+ $(shell if test -d $(srctree)/$(flag); then echo -I$$(cd $(srctree)/$(flag) && pwd); else echo -I$(flag); fi)\
+)
+EXTRA_CFLAGS := $(_EXTRA_CFLAGS) $(_INC_CFLAGS)
+endif
