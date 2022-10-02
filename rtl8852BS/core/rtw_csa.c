@@ -148,7 +148,7 @@ static void rtw_ecsa_update_sta_chan_info(struct _ADAPTER *a, struct rtw_chan_de
 	}
 
 	#ifdef CONFIG_DFS_MASTER
-	rtw_dfs_rd_en_decision(a, MLME_OPCH_SWITCH, 0);
+	rtw_dfs_rd_en_dec_on_mlme_act(a, GET_PRIMARY_LINK(a), MLME_OPCH_SWITCH, 0);
 	#endif
 }
 
@@ -228,6 +228,16 @@ bool rtw_ap_check_ecsa_allow(
 	struct core_ecsa_info *ecsa_info = &(a->ecsa_info);
 	bool ecsa_allow = _TRUE;
 	u8 i;
+
+/* This is workaround patch, full MCC-ECSA feature doesn't support */
+#ifdef CONFIG_MCC_MODE
+	{
+		RTW_INFO("CSA : "FUNC_ADPT_FMT" : Don't switch channel" \
+			" under CONFIG_MCC_MODE\n", FUNC_ADPT_ARG(a));
+		ecsa_allow = _FALSE;
+		goto exit;
+	}
+#endif
 
 	/* TODO : need to check MCC-ECSA case */
 	/* if (!(ecsa_info->ecsa_allow_case & BIT(reason))) { */
@@ -427,7 +437,7 @@ static void rtw_sta_ecsa_invalid_hdl(struct _ADAPTER *a, s16 req_ch, u8 req_bw, 
 
 	/* Decide whether enable DFS slave radar detection or not */
 	#ifdef CONFIG_DFS_MASTER
-	rtw_dfs_rd_en_decision(a, MLME_OPCH_SWITCH, ifbmp_s);
+	rtw_dfs_rd_en_dec_on_mlme_act(a, GET_PRIMARY_LINK(a), MLME_OPCH_SWITCH, ifbmp_s);
 	#endif
 
 	/* TODO : DFS slave may need to switch channel as soon as possible before disconnect */

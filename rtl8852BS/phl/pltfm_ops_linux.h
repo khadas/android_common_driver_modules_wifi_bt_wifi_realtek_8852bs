@@ -615,7 +615,7 @@ static __inline u8 _os_thread_deinit(void *drv_priv, _os_thread *thread)
 {
 	if (CHK_THREAD_STATUS(thread, THREAD_STATUS_STARTED)) {
 		CLR_THREAD_STATUS(thread, THREAD_STATUS_STARTED);
-		return rtw_thread_stop(thread->thread_handler);
+		rtw_thread_stop(thread->thread_handler);
 	}
 
 	return RTW_PHL_STATUS_SUCCESS;

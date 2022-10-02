@@ -3170,7 +3170,7 @@ static u32 ss_tx_len_chk(struct mac_ax_adapter *adapter, u16 macid)
 		dw[sel] = ss_poll_own(adapter, R_AX_SS_SRAM_CTRL_1);
 		if (dw[sel] & (BIT(29) | BIT(30))) {
 			val32 |= SS_POLL_STAT_TX_LEN;
-			PLTFM_MSG_ALWAYS("[ERR]SS_POLL_STAT_TX_LEN, macid %d, ",
+			PLTFM_MSG_ALWAYS("[WARN]SS_POLL_STAT_TX_LEN, macid %d, ",
 					 macid);
 			PLTFM_MSG_ALWAYS("ac %d\n", sel);
 			PLTFM_MSG_ALWAYS("R_AX_SS_SRAM_CTRL_1 = 0x%x\n",
@@ -3179,7 +3179,7 @@ static u32 ss_tx_len_chk(struct mac_ax_adapter *adapter, u16 macid)
 		}
 		if (dw[sel] & B_AX_SS_OWN) {
 			val32 |= SS_POLL_OWN_TX_LEN;
-			PLTFM_MSG_ALWAYS("[ERR]SS_POLL_OWN_TX_LEN, macid %d, ",
+			PLTFM_MSG_ALWAYS("[WARN]SS_POLL_OWN_TX_LEN, macid %d, ",
 					 macid);
 			PLTFM_MSG_ALWAYS("ac %d\n", sel);
 			PLTFM_MSG_ALWAYS("R_AX_SS_SRAM_CTRL_1 = 0x%x\n",
@@ -3190,25 +3190,25 @@ static u32 ss_tx_len_chk(struct mac_ax_adapter *adapter, u16 macid)
 
 	if (((dw[0] >> SS_MACID_SH) & SS_TX_LEN_MSK) != 0) {
 		val32 |= SS_TX_LEN_BE;
-		PLTFM_MSG_ALWAYS("[ERR]SS_TX_LEN_BE, macid %d, ", macid);
+		PLTFM_MSG_ALWAYS("[WARN]SS_TX_LEN_BE, macid %d, ", macid);
 		PLTFM_MSG_ALWAYS("len 0x%X\n",
 				 (dw[0] >> SS_MACID_SH) & SS_TX_LEN_MSK);
 	}
 	if (((dw[1] >> SS_MACID_SH) & SS_TX_LEN_MSK) != 0) {
 		val32 |= SS_TX_LEN_BK;
-		PLTFM_MSG_ALWAYS("[ERR]SS_TX_LEN_BK, macid %d, ", macid);
+		PLTFM_MSG_ALWAYS("[WARN]SS_TX_LEN_BK, macid %d, ", macid);
 		PLTFM_MSG_ALWAYS("len 0x%X\n",
 				 (dw[1] >> SS_MACID_SH) & SS_TX_LEN_MSK);
 	}
 	if (((dw[2] >> SS_MACID_SH) & SS_TX_LEN_MSK) != 0) {
 		val32 |= SS_TX_LEN_VI;
-		PLTFM_MSG_ALWAYS("[ERR]SS_TX_LEN_VI, macid %d, ", macid);
+		PLTFM_MSG_ALWAYS("[WARN]SS_TX_LEN_VI, macid %d, ", macid);
 		PLTFM_MSG_ALWAYS("len 0x%X\n",
 				 (dw[2] >> SS_MACID_SH) & SS_TX_LEN_MSK);
 	}
 	if (((dw[3] >> SS_MACID_SH) & SS_TX_LEN_MSK) != 0) {
 		val32 |= SS_TX_LEN_VO;
-		PLTFM_MSG_ALWAYS("[ERR]SS_TX_LEN_VO, macid %d, ", macid);
+		PLTFM_MSG_ALWAYS("[WARN]SS_TX_LEN_VO, macid %d, ", macid);
 		PLTFM_MSG_ALWAYS("len 0x%X\n",
 				 (dw[3] >> SS_MACID_SH) & SS_TX_LEN_MSK);
 	}
@@ -3251,14 +3251,14 @@ static u32 ss_link_chk(struct mac_ax_adapter *adapter,
 
 	if (poll & (BIT(29) | BIT(30))) {
 		val32 |= SS_POLL_STAT_LINK;
-		PLTFM_MSG_ALWAYS("[ERR]SS_POLL_STAT_LINK, ul/wmm/ac %d/%d/%d\n",
+		PLTFM_MSG_ALWAYS("[WARN]SS_POLL_STAT_LINK, ul/wmm/ac %d/%d/%d\n",
 				 link->ul, wmm, ac);
 		PLTFM_MSG_ALWAYS("R_AX_SS_LINK_INFO = 0x%x\n", poll);
 		return val32;
 	}
 	if (poll & B_AX_SS_OWN) {
 		val32 |= SS_POLL_OWN_LINK;
-		PLTFM_MSG_ALWAYS("[ERR]SS_POLL_OWN_LINK, ul/wmm/ac %d/%d/%d\n",
+		PLTFM_MSG_ALWAYS("[WARN]SS_POLL_OWN_LINK, ul/wmm/ac %d/%d/%d\n",
 				 link->ul, wmm, ac);
 		PLTFM_MSG_ALWAYS("R_AX_SS_LINK_INFO = 0x%x\n", poll);
 		return val32;
@@ -3269,7 +3269,7 @@ static u32 ss_link_chk(struct mac_ax_adapter *adapter,
 			val32 |= SS_LINK_UL << ((wmm << 2) + ac);
 		else
 			val32 |= SS_LINK_WMM0_BE << ((wmm << 2) + ac);
-		PLTFM_MSG_ALWAYS("[ERR]SS_LINK_DUMP, ul/wmm/ac %d/%d/%d, ",
+		PLTFM_MSG_ALWAYS("[WARN]SS_LINK_DUMP, ul/wmm/ac %d/%d/%d, ",
 				 link->ul, wmm, ac);
 		PLTFM_MSG_ALWAYS("head/tail/len 0x%X/0x%X/%d\n",
 				 link_head, link_tail, link_len);
@@ -3298,11 +3298,11 @@ static u32 ss_link_chk(struct mac_ax_adapter *adapter,
 
 			if (GET_FIELD(poll, B_AX_SS_VALUE) == id_empty) {
 				if (macid != link_tail) {
-					PLTFM_MSG_ALWAYS("[ERR]tail error!!\n");
+					PLTFM_MSG_ALWAYS("[WARN]tail error!!\n");
 					break;
 				}
 				if (i >= link_len) {
-					PLTFM_MSG_ALWAYS("[ERR]len error!!\n");
+					PLTFM_MSG_ALWAYS("[WARN]len error!!\n");
 					break;
 				}
 				break;
@@ -3311,7 +3311,7 @@ static u32 ss_link_chk(struct mac_ax_adapter *adapter,
 
 			i++;
 		} while (i < SS_LINK_SIZE);
-		PLTFM_MSG_ALWAYS("\n[ERR]SS_LINK_DUMP, end\n");
+		PLTFM_MSG_ALWAYS("\nSS_LINK_DUMP, end\n");
 	}
 
 	return val32;
@@ -3369,78 +3369,78 @@ static void ss_dbgpkg_val_parser(struct mac_ax_adapter *adapter,
 				 struct mac_ax_dbgpkg *val)
 {
 	/* STA Scheduler 0, indirect */
-	PLTFM_MSG_ALWAYS("[ERR][STA_SCH] ss_dbg_0 = 0x%X\n", val->ss_dbg_0);
+	PLTFM_MSG_ALWAYS("[WARN][STA_SCH] ss_dbg_0 = 0x%X\n", val->ss_dbg_0);
 	if (val->ss_dbg_0 & SS_TX_LEN_BE)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] some MACID's BE length != 0\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] some MACID's BE length != 0\n");
 	if (val->ss_dbg_0 & SS_TX_LEN_BK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] some MACID's BK length != 0\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] some MACID's BK length != 0\n");
 	if (val->ss_dbg_0 & SS_TX_LEN_VI)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] some MACID's VI length != 0\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] some MACID's VI length != 0\n");
 	if (val->ss_dbg_0 & SS_TX_LEN_VO)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] some MACID's VO length != 0\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] some MACID's VO length != 0\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM0_BE)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_0 BE not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_0 BE not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM0_BK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_0 BK not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_0 BK not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM0_VI)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_0 VI not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_0 VI not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM0_VO)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_0 VO not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_0 VO not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM1_BE)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_1 BE not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_1 BE not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM1_BK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_1 BK not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_1 BK not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM1_VI)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_1 VI not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_1 VI not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM1_VO)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_1 VO not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_1 VO not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM2_BE)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_2 BE not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_2 BE not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM2_BK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_2 BK not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_2 BK not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM2_VI)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_2 VI not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_2 VI not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM2_VO)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_2 VO not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_2 VO not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM3_BE)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_3 BE not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_3 BE not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM3_BK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_3 BK not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_3 BK not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM3_VI)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_3 VI not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_3 VI not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_WMM3_VO)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WMM_3 VO not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WMM_3 VO not empty\n");
 	if (val->ss_dbg_0 & SS_LINK_UL)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] UL not empty\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] UL not empty\n");
 	if (val->ss_dbg_0 & SS_POLL_OWN_TX_LEN)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] (length) own bit polling fail\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] (length) own bit polling fail\n");
 	if (val->ss_dbg_0 & SS_POLL_OWN_LINK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] (link) own bit polling fail\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] (link) own bit polling fail\n");
 	if (val->ss_dbg_0 & SS_POLL_STAT_TX_LEN)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] (length) state machine fail\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] (length) state machine fail\n");
 	if (val->ss_dbg_0 & SS_POLL_STAT_LINK)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] (link) state machine fail\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] (link) state machine fail\n");
 
 	/* STA Scheduler 1, direct */
-	PLTFM_MSG_ALWAYS("[ERR][STA_SCH] ss_dbg_1 = 0x%X\n", val->ss_dbg_1);
+	PLTFM_MSG_ALWAYS("[WARN][STA_SCH] ss_dbg_1 = 0x%X\n", val->ss_dbg_1);
 	if (val->ss_dbg_1 & SS_TX_HW_LEN_UDN)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] HW cause length underflow\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] HW cause length underflow\n");
 	if (val->ss_dbg_1 & SS_TX_SW_LEN_UDN)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] SW cause length underflow\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] SW cause length underflow\n");
 	if (val->ss_dbg_1 & SS_TX_HW_LEN_OVF)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] HW cause length overflow\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] HW cause length overflow\n");
 	if (val->ss_dbg_1 & SS_STAT_FWTX)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] SW Tx state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] SW Tx state machine not idle\n");
 	if (val->ss_dbg_1 & SS_STAT_RPTA)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] Report state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] Report state machine not idle\n");
 	if (val->ss_dbg_1 & SS_STAT_WDEA)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] WDE state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] WDE state machine not idle\n");
 	if (val->ss_dbg_1 & SS_STAT_PLEA)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] PLE state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] PLE state machine not idle\n");
 	if (val->ss_dbg_1 & SS_STAT_ULRU)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] UL RU state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] UL RU state machine not idle\n");
 	if (val->ss_dbg_1 & SS_STAT_DLTX)
-		PLTFM_MSG_ERR("[ERR][STA_SCH] HW Tx state machine not idle\n");
+		PLTFM_MSG_ERR("[WARN][STA_SCH] HW Tx state machine not idle\n");
 }
 
 static void ps_dbg_dump(struct mac_ax_adapter *adapter)
@@ -4476,7 +4476,7 @@ static u32 tx_cnt_dump(struct mac_ax_adapter *adapter, u8 band, u32 loop_num)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ERR("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ERR("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 
@@ -4508,7 +4508,7 @@ static u32 rx_cnt_dump(struct mac_ax_adapter *adapter, u8 band, u32 loop_num)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ERR("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ERR("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 
@@ -4545,7 +4545,7 @@ static u32 dmac_dbg_dump(struct mac_ax_adapter *adapter)
 
 	ret = check_mac_en(adapter, 0, MAC_AX_DMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ALWAYS("[ERR] check dmac en %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN] check dmac en %d\n", ret);
 		return ret;
 	}
 
@@ -4682,7 +4682,7 @@ static u32 cmac_dbg_dump(struct mac_ax_adapter *adapter, enum mac_ax_band band)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ERR("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ERR("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 
@@ -4823,7 +4823,7 @@ static u32 cmac_dbg_dump(struct mac_ax_adapter *adapter, enum mac_ax_band band)
 	/* TMAC TX COUNTER */
 	ret = tx_cnt_dump(adapter, band, TRX_CNT_REPT_CNT);
 	if (ret != MACSUCCESS)
-		PLTFM_MSG_ALWAYS("[ERR]tx cnt dump err %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN]tx cnt dump err %d\n", ret);
 
 	/* TRX PTCL */
 	reg = band == MAC_AX_BAND_1 ?
@@ -4849,7 +4849,7 @@ static u32 cmac_dbg_dump(struct mac_ax_adapter *adapter, enum mac_ax_band band)
 	/* RMAC RX COUNTER */
 	ret = rx_cnt_dump(adapter, band, TRX_CNT_REPT_CNT);
 	if (ret != MACSUCCESS)
-		PLTFM_MSG_ALWAYS("[ERR]rx cnt dump err %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN]rx cnt dump err %d\n", ret);
 
 	adapter->sm.l2_st = MAC_AX_L2_EN;
 
@@ -4978,7 +4978,7 @@ static u32 tx_dbg_dump(struct mac_ax_adapter *adapter)
 		/* TMAC TX COUNTER */
 		ret = tx_cnt_dump(adapter, MAC_AX_BAND_0, 1);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ALWAYS("[ERR]tx cnt dump err %d\n", ret);
+			PLTFM_MSG_ALWAYS("[WARN]tx cnt dump err %d\n", ret);
 
 		pltfm_dbg_dump(adapter);
 
@@ -5106,7 +5106,7 @@ static u32 mac_tx_status_dump(struct mac_ax_adapter *adapter)
 
 	ret = check_mac_en(adapter, 0, MAC_AX_DMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ALWAYS("[ERR] check dmac en %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN] check dmac en %d\n", ret);
 		return ret;
 	}
 
@@ -5256,16 +5256,19 @@ static u32 ptcl_status_dump(struct mac_ax_adapter *adapter, u8 band)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ERR("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ERR("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 
-	reg = band == MAC_AX_BAND_1 ? R_AX_PTCL_TX_CTN_SEL_C1 : R_AX_PTCL_TX_CTN_SEL;
-
+	reg = band == MAC_AX_BAND_1 ?
+	      R_AX_PTCL_TX_CTN_SEL_C1 : R_AX_PTCL_TX_CTN_SEL;
 	val32 = MAC_REG_R32(reg);
-	PLTFM_MSG_ALWAYS("B%d PTCL_TX_CTN_SEL=0x%x\n",
-			 band, val32);
-	PLTFM_DELAY_US(TRX_CNT_READ_DLY_US);
+	PLTFM_MSG_ALWAYS("B%d PTCL_TX_CTN_SEL=0x%x\n", band, val32);
+
+	reg = band == MAC_AX_BAND_1 ?
+	      R_AX_PTCL_TX_MACID_0_C1 : R_AX_PTCL_TX_MACID_0;
+	val32 = MAC_REG_R32(reg);
+	PLTFM_MSG_ALWAYS("B%d PTCL_TX_MACID_0=0x%x\n", band, val32);
 
 	return MACSUCCESS;
 }
@@ -5280,7 +5283,7 @@ static u32 tx_flow_ptcl_dbg_port(struct mac_ax_adapter *adapter, u8 band)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ALWAYS("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 	info = band == MAC_AX_BAND_1 ? dbg_port_ptcl_c1 : dbg_port_ptcl_c0;
@@ -5324,7 +5327,7 @@ static u32 tx_flow_sch_dbg_port(struct mac_ax_adapter *adapter, u8 band)
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
-		PLTFM_MSG_ALWAYS("[ERR] check cmac en %d\n", ret);
+		PLTFM_MSG_ALWAYS("[WARN] check cmac en %d\n", ret);
 		return ret;
 	}
 
@@ -5367,18 +5370,18 @@ static u32 mac_tx_flow_dbg(struct mac_ax_adapter *adapter)
 		/* commom check */
 		ret = mac_tx_status_dump(adapter);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]common check %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]common check %d\n", ret);
 
 		/* dump TMAC tr counter */
 		ret = tx_cnt_dump(adapter, MAC_AX_BAND_0,
 				  TXFLOW_TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 tx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 tx cnt dump err %d\n", ret);
 
 		ret = tx_cnt_dump(adapter, MAC_AX_BAND_1,
 				  TXFLOW_TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 tx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 tx cnt dump err %d\n", ret);
 
 		ret = crit_dbg_dump(adapter);
 		if (ret != MACSUCCESS)
@@ -5387,33 +5390,33 @@ static u32 mac_tx_flow_dbg(struct mac_ax_adapter *adapter)
 		/* dump PTCL TX status */
 		ret = ptcl_status_dump(adapter, MAC_AX_BAND_0);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 ptcl tx status dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 ptcl tx status dump err %d\n", ret);
 		ret = ptcl_status_dump(adapter, MAC_AX_BAND_1);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 ptcl tx status dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 ptcl tx status dump err %d\n", ret);
 
 		/* PTCL Debug port */
 		ret = tx_flow_ptcl_dbg_port(adapter, MAC_AX_BAND_0);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 ptcl dbg dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 ptcl dbg dump err %d\n", ret);
 
 		ret = tx_flow_ptcl_dbg_port(adapter, MAC_AX_BAND_1);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 ptcl dbg dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 ptcl dbg dump err %d\n", ret);
 
 		/* check dle status */
 		ret = mac_dle_status_dump(adapter);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR] dle status err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN] dle status err %d\n", ret);
 
 		/* Sch Debug port */
 		ret = tx_flow_sch_dbg_port(adapter, MAC_AX_BAND_0);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 sch dbg err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 sch dbg err %d\n", ret);
 
 		ret = tx_flow_sch_dbg_port(adapter, MAC_AX_BAND_1);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 sch dbg dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 sch dbg dump err %d\n", ret);
 
 		/* HCI flow control */
 		mac_hci_flow_ctrl_dump(adapter);
@@ -5490,17 +5493,17 @@ void mac_dbg_status_dump(struct mac_ax_adapter *adapter,
 		/* 2nd dump trx counter after dbg port dump */
 		ret = tx_cnt_dump(adapter, MAC_AX_BAND_0, TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 tx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 tx cnt dump err %d\n", ret);
 		ret = rx_cnt_dump(adapter, MAC_AX_BAND_0, TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B0 rx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B0 rx cnt dump err %d\n", ret);
 
 		ret = tx_cnt_dump(adapter, MAC_AX_BAND_1, TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 tx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 tx cnt dump err %d\n", ret);
 		ret = rx_cnt_dump(adapter, MAC_AX_BAND_1, TRX_CNT_REPT_CNT);
 		if (ret != MACSUCCESS)
-			PLTFM_MSG_ERR("[ERR]B1 rx cnt dump err %d\n", ret);
+			PLTFM_MSG_ERR("[WARN]B1 rx cnt dump err %d\n", ret);
 	}
 
 	if (en->dle_dbg && ret_dmac == MACSUCCESS) {
@@ -6057,4 +6060,24 @@ u32 mac_get_fw_status(struct mac_ax_adapter *adapter)
 		return MACNOFW;
 	}
 	return MACSUCCESS;
+}
+
+u32 mac_get_ple_dbg_addr(struct mac_ax_adapter *adapter)
+{
+	u32 addr = RSVD_PLE_OFST_DBG_START;
+
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+		addr += RSVD_PLE_OFST_8852A;
+	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+		addr += RSVD_PLE_OFST_8852B;
+	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C)) {
+		addr += RSVD_PLE_OFST_8852C;
+	} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB)) {
+		addr += RSVD_PLE_OFST_8192XB;
+	} else {
+		PLTFM_MSG_ERR("[ERR]unknown chip id\n");
+		return MACCHIPID;
+	}
+
+	return addr;
 }

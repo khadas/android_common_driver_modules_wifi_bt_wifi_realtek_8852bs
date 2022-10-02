@@ -134,6 +134,14 @@
 
 #define CHK_BBRF_IO 0
 
+/* Narrow BW*/
+#define US_TIME_10M     0x50
+#define US_TIME_5M      0x40
+#define SLOTTIME_10M    0xD
+#define SLOTTIME_5M     0x15
+#define ACK_TO_10M      0x80
+#define ACK_TO_5M       0xFF
+
 /*--------------------Define Enum---------------------------------------*/
 
 /**
@@ -1158,9 +1166,12 @@ u32 mac_io_chk_access(struct mac_ax_adapter *adapter, u32 offset);
  *
  * @param *adapter
  * @return Please Place Description here.
+ * @param *wdt_param
+ * @return Please Place Description here.
  * @retval u32
  */
-u32 mac_watchdog(struct mac_ax_adapter *adapter);
+u32 mac_watchdog(struct mac_ax_adapter *adapter,
+		 struct mac_ax_wdt_param *wdt_param);
 /**
  * @}
  * @}

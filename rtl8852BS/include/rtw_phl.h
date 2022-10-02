@@ -70,6 +70,7 @@ void rtw_hw_stop(struct dvobj_priv *dvobj);
 bool rtw_hw_get_init_completed(struct dvobj_priv *dvobj);
 bool rtw_hw_is_init_completed(struct dvobj_priv *dvobj);
 void rtw_hw_cap_init(struct dvobj_priv *dvobj);
+void rtw_dump_rfe_type(struct dvobj_priv *d);
 
 u8 rtw_hw_iface_init(_adapter *adapter);
 u8 rtw_hw_iface_type_change(_adapter *adapter, u8 iface_type);
@@ -91,6 +92,10 @@ int rtw_hw_set_ch_bw(struct _ADAPTER *a,
 			u8 ch, enum channel_width bw, u8 offset, u8 do_rfk);
 int rtw_hw_set_edca(struct _ADAPTER *a, u8 ac, u32 param);
 
+int rtw_hw_set_multi_edca(struct _ADAPTER *a,
+				     struct rtw_multi_edca_param *medca,
+				     const char *caller);
+
 /* connect */
 #ifdef RTW_WKARD_UPDATE_PHL_ROLE_CAP
 void rtw_update_phl_cap_by_rgstry(struct _ADAPTER *a);
@@ -104,11 +109,15 @@ int rtw_hw_connected(struct _ADAPTER *a, struct sta_info *sta);
 int rtw_hw_connected_apmode(struct _ADAPTER *a, struct sta_info *sta);
 int rtw_hw_disconnect(struct _ADAPTER *a, struct sta_info *sta);
 
+void rtw_update_listen_chan_def(_adapter *adapter, u8 remain_ch,
+				enum channel_width remain_bw,
+				enum chan_offset offset);
 void rtw_hw_update_chan_def(_adapter *adapter);
 
 #ifdef RTW_DETECT_HANG
 void rtw_is_hang_check(struct _ADAPTER *a);
 #endif
+int rtw_get_sta_tx_stat(_adapter *adapter, struct sta_info *sta);
 
 #ifdef CONFIG_RTW_ACS
 u16 rtw_acs_get_channel_by_idx(struct _ADAPTER *a, u8 idx);
@@ -126,11 +135,21 @@ u8 rtw_hw_wow(struct _ADAPTER *a, u8 wow_en);
 u8 rtw_hw_mcc_chk_inprogress(struct _ADAPTER *a);
 #endif
 
-void rtw_update_phl_edcca_mode(struct _ADAPTER *a);
+void rtw_edcca_hal_update(struct dvobj_priv *dvobj);
 
-void rtw_dump_phl_tx_power_ext_info(void *sel, _adapter *adapter);
+#ifdef CONFIG_DFS_MASTER
+void rtw_dfs_hal_radar_detect_disable(struct dvobj_priv *dvobj, u8 band_idx);
+void rtw_dfs_hal_radar_detect_enable(struct dvobj_priv *dvobj, u8 band_idx, bool cac, u8 ch, enum channel_width bw, enum chan_offset offset);
+void rtw_dfs_hal_set_cac_status(struct dvobj_priv *dvobj, u8 band_idx, bool cac);
+void rtw_dfs_hal_csa_mg_tx_pause(struct dvobj_priv *dvobj, u8 band_idx, bool pause);
+void rtw_dfs_hal_update_region(struct dvobj_priv *dvobj, u8 band_idx);
+u8 rtw_dfs_hal_radar_detect_polling_int_ms(struct dvobj_priv *dvobj);
+#endif /* CONFIG_DFS_MASTER */
 
-void rtw_update_phl_txpwr_level(_adapter *adapter);
+bool rtw_txpwr_hal_get_pwr_lmt_en(struct dvobj_priv *dvobj);
+struct tx_power_ext_info;
+bool rtw_txpwr_hal_get_ext_info(struct dvobj_priv *dvobj, struct tx_power_ext_info *info);
+void rtw_txpwr_hal_update_pwr(struct dvobj_priv *dvobj, enum phl_band_idx band_idx);
 
 u8 get_phy_tx_nss(_adapter *adapter);
 u8 get_phy_rx_nss(_adapter *adapter);

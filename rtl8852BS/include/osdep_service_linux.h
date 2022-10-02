@@ -119,6 +119,10 @@
 #include <linux/fs.h>
 #endif
 
+#ifdef CONFIG_PCI_HCI
+#include <linux/pci_regs.h>
+#endif
+
 #ifdef CONFIG_USB_HCI
 #include <linux/usb.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 21))
@@ -1020,11 +1024,41 @@ static inline void rtw_dump_stack(void)
 #define STRUCT_PACKED __attribute__ ((packed))
 
 #ifndef fallthrough
-#if defined(__has_attribute) && __has_attribute(__fallthrough__)
+#if __GNUC__ >= 5 || defined(__clang__)
+#ifndef __has_attribute
+#define __has_attribute(x) 0
+#endif
+#if __has_attribute(__fallthrough__)
 #define fallthrough __attribute__((__fallthrough__))
-#else
+#endif
+#endif
+#ifndef fallthrough
 #define fallthrough do {} while (0) /* fallthrough */
 #endif
 #endif
+
+#ifdef CONFIG_PCI_HCI
+/* Extended Capabilities (PCI-X 2.0 and Express) */
+#ifndef PCI_EXT_CAP_ID_L1SS
+#define PCI_EXT_CAP_ID_L1SS  0x1E	/* L1 PM Substates */
+#endif
+/* L1 PM Substates */
+#ifndef PCI_L1SS_CAP
+#define PCI_L1SS_CAP		    4	/* capability register */
+#define  PCI_L1SS_CAP_PCIPM_L1_2	 1	/* PCI PM L1.2 Support */
+#define  PCI_L1SS_CAP_PCIPM_L1_1	 2	/* PCI PM L1.1 Support */
+#define  PCI_L1SS_CAP_ASPM_L1_2		 4	/* ASPM L1.2 Support */
+#define  PCI_L1SS_CAP_ASPM_L1_1		 8	/* ASPM L1.1 Support */
+#define  PCI_L1SS_CAP_L1_PM_SS		16	/* L1 PM Substates Support */
+#endif
+#ifndef PCI_L1SS_CTL1
+#define PCI_L1SS_CTL1		    8	/* Control Register 1 */
+#define  PCI_L1SS_CTL1_PCIPM_L1_2	1	/* PCI PM L1.2 Enable */
+#define  PCI_L1SS_CTL1_PCIPM_L1_1	2	/* PCI PM L1.1 Support */
+#define  PCI_L1SS_CTL1_ASPM_L1_2	4	/* ASPM L1.2 Support */
+#define  PCI_L1SS_CTL1_ASPM_L1_1	8	/* ASPM L1.1 Support */
+#define  PCI_L1SS_CTL1_L1SS_MASK	0x0000000F
+#endif
+#endif /* CONFIG_PCI_HCI */
 
 #endif /* __OSDEP_LINUX_SERVICE_H_ */

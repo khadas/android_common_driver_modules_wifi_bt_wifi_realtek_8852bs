@@ -96,5 +96,8 @@ void halrf_test_cmd(struct rf_info *rf, char input[][16], u32 *_used,  char *out
 void halrf_scanf(char *in, enum rf_scanf_type type, u32 *out);
 void halrf_txgapk_dbg_cmd(struct rf_info *rf, char input[][16], u32 *_used, char *output, u32 *_out_len);
 void halrf_dump_rf_reg_cmd(struct rf_info *rf, char input[][16], u32 *_used, char *output, u32 *_out_len);
+void halrf_hwtx_dbg_cmd(struct rf_info *rf, char input[][16], u32 *_used, char *output, u32 *_out_len);
+void halrf_kfree_dbg_cmd(struct rf_info *rf, char input[][16], u32 *_used, char *output, u32 *_out_len);
+void halrf_chl_rfk_dbg_cmd(struct rf_info *rf, char input[][16], u32 *_used, char *output, u32 *_out_len);
 
 #endif

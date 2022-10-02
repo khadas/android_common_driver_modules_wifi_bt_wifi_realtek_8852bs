@@ -126,10 +126,11 @@ void rtw_phl_stop_rx_ba_session(void *phl, struct rtw_phl_stainfo_t *sta,
 	}
 
 	PHL_INFO("Stop rx BA session for sta=0x%p, tid=%u\n", sta, tid);
-	rtw_hal_stop_ba_session(phl_info->hal, sta, tid);
 
 	if (tid >= ARRAY_SIZE(sta->tid_rx))
 		return;
+
+	rtw_hal_stop_ba_session(phl_info->hal, sta, tid);
 
 	_os_spinlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 	if (!sta->tid_rx[tid]) {
@@ -215,6 +216,17 @@ rtw_phl_start_rx_ba_session(void *phl, struct rtw_phl_stainfo_t *sta,
 	void *drv_priv = phl_to_drvpriv(phl_info);
 	struct phl_tid_ampdu_rx *r;
 
+	PHL_INFO("Start rx BA session for sta=0x%p, tid=%u, buf_size=%u, timeout=%u\n",
+	         sta, tid, buf_size, timeout);
+
+	if (tid >= ARRAY_SIZE(sta->tid_rx)) {
+		PHL_WARN("tid(%u) index out of range (%u)\n", tid, (u32)ARRAY_SIZE(sta->tid_rx));
+		return RTW_PHL_STATUS_RESOURCE;
+	}
+
+	if (sta->tid_rx[tid])
+		rtw_hal_stop_ba_session(phl_info->hal, sta, tid);
+
 	hal_sts = rtw_hal_start_ba_session(phl_info->hal, sta, dialog_token,
 	                                   timeout, start_seq_num, ba_policy,
 	                                   tid, buf_size);
@@ -222,9 +234,6 @@ rtw_phl_start_rx_ba_session(void *phl, struct rtw_phl_stainfo_t *sta,
 	/* TODO: sta status */
 
 	/* TODO: check sta capability */
-
-	PHL_INFO("Start rx BA session for sta=0x%p, tid=%u, buf_size=%u, timeout=%u\n",
-	         sta, tid, buf_size, timeout);
 
 	/* apply policies */
 	if (ba_policy) {

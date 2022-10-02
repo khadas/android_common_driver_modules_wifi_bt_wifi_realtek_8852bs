@@ -64,11 +64,11 @@ void init_hal_spec_8852bs(struct rtw_phl_com_t *phl_com,
 	phl_com->dev_cap.hw_sup_flags |= HW_SUP_SDIO_MULTI_FUN;
 
 	/* default TX/RX resouce setting */
-	bus_hw->tx_buf_size = 32768;		/* 32KB */
+	bus_hw->tx_buf_size = 20480;		/* 20KB */
 	bus_hw->tx_buf_num = 8;
 	bus_hw->tx_mgnt_buf_size = 3096;	/* 3KB */
 	bus_hw->tx_mgnt_buf_num = 3;
-	bus_hw->rx_buf_size = 90112;		/* 88KB */
+	bus_hw->rx_buf_size = 30720;		/* 30KB */
 	bus_hw->rx_buf_num = 8;
 
 	hal->hal_com->dev_hw_cap.ps_cap.lps_pause_tx = true;

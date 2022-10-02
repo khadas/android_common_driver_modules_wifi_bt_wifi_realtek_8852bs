@@ -308,8 +308,8 @@ void halbb_trace_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			 "11. (( %s ))DIG\n",
 			 ((comp & DBG_DIG) ? ("V") : (".")));
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-			 "12. (( %s ))TBD\n",
-			 ((comp & BIT(12)) ? ("V") : (".")));
+			 "12. (( %s ))PATH_DIV\n",
+			 ((comp & DBG_PATH_DIV) ? ("V") : (".")));
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "13. (( %s ))UL_TB_CTRL\n",
 			 ((comp & BIT(13)) ? ("V") : (".")));
@@ -764,9 +764,25 @@ void halbb_cmd_parser(struct bb_info *bb, char input[][MAX_ARGV],
 	case HALBB_HW_SETTING:
 		halbb_ic_hw_setting_dbg(bb, input, &used, output, &out_len);
 		break;
+#ifdef HALBB_PATH_DIV_SUPPORT
+	case HALBB_PATH_DIV:
+		halbb_pathdiv_dbg(bb, input, &used, output, &out_len);
+		break;
+#endif
 	case HALBB_MAC_PHY_INTF:
 		halbb_mac_phy_intf_dbg(bb, input, &used, output, &out_len);
 		break;
+#ifdef	HALBB_CNSL_CMN_INFO_SUPPORT
+	case HALBB_CMN_INFO:
+		halbb_basic_dbg_message_cnsl_dbg(bb, input, &used, output, &out_len);
+		break;
+#endif
+#ifdef HALBB_DYN_DTR_SUPPORT
+	case HALBB_DTR_DBG:
+		halbb_dyn_dtr_dbg(bb, input, &used, output, &out_len);
+		break;
+#endif
+
 	default:
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "Do not support this command\n");

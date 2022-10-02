@@ -92,6 +92,20 @@ bool halbb_fw_set_reg_cmn(struct bb_info *bb, u32 addr,
 	return ret;
 }
 
+void halbb_fwofld_cfgcr_start(struct bb_info *bb)
+{
+	bb->bb_cmn_hooker->bbcr_fwofld_state = 1;
+}
+
+void halbb_fwofld_cfgcr_end(struct bb_info *bb)
+{
+	bool ret = true;
+
+	bb->bb_cmn_hooker->bbcr_fwofld_state = 0;
+
+	ret = halbb_fw_set_reg(bb, 0x1a24, 0xff, 0, 1);
+}
+#ifdef BB_8852A_2_SUPPORT
 bool halbb_fwcfg_bb_phy_8852a_2(struct bb_info *bb, u32 addr, u32 data,
 			    enum phl_phy_idx phy_idx)
 {
@@ -601,11 +615,14 @@ bool halbb_fwofld_ch_8852a_2(struct bb_info *bb, u8 central_ch,
 		ret &= halbb_fw_set_reg(bb, 0x2318, 0xffffff, 0xfe5fcc, 0);
 		ret &= halbb_fw_set_reg(bb, 0x231c, 0xffffff, 0xffdff5, 0);
 	}
-	/* === Set Gain Error === */
-	ret &= halbb_fw_set_gain_error_8852a_2(bb, central_ch);
-	/* === Set Efuse === */
-	ret &= halbb_fw_set_efuse_8852a_2(bb, central_ch, bb->rx_path, phy_idx);
-
+	if (bb->bb_phl_evt == MSG_EVT_SCAN_START) {
+		BB_WARNING("Skip gain error setting in scan status");
+	} else {
+		/* === Set Gain Error === */
+		ret &= halbb_fw_set_gain_error_8852a_2(bb, central_ch);
+		/* === Set Efuse === */
+		ret &= halbb_fw_set_efuse_8852a_2(bb, central_ch, bb->rx_path, phy_idx);
+	}
 	/* === Set Ch idx report in phy-sts === */
 	/* write for last cmd*/
 	ret &= halbb_fw_set_reg_cmn(bb, 0x0734, 0x0ff0000, central_ch, phy_idx, 0);
@@ -923,4 +940,102 @@ bool halbb_fwofld_bw_ch_8852a_2(struct bb_info *bb, u8 pri_ch, u8 central_ch,
 
 	return rpt;
 }
+
+void halbb_fwofld_stop_pmac_tx_8852a_2(struct bb_info *bb,
+			      struct halbb_pmac_info *tx_info,
+			      enum phl_phy_idx phy_idx)
+{
+	if (tx_info->is_cck) { // CCK
+		if (tx_info->mode == CONT_TX) {
+			halbb_fw_set_reg(bb, 0x2300, BIT(26), 1, 0);
+			halbb_fw_set_reg(bb, 0x2338, BIT(17), 0, 0);
+			halbb_fw_set_reg(bb, 0x2300, BIT(28), 0, 0);
+			halbb_fw_set_reg(bb, 0x2300, BIT(26), 0, 0);
+		} else if (tx_info->mode == PKTS_TX) {
+			halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(4), 0, phy_idx, 0);
+		} else if (tx_info->mode == CCK_CARRIER_SIPPRESSION_TX) {
+			halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(4), 0, phy_idx, 0);
+			/*Carrier Suppress Tx*/
+			halbb_fw_set_reg(bb, 0x2338, BIT(18), 0, 0);
+			/*Enable scrambler at payload part*/
+			halbb_fw_set_reg(bb, 0x2304, BIT(26), 0, 0);
+		}
+	} else { // OFDM
+		if (tx_info->mode == CONT_TX)
+			halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(0), 0, phy_idx, 0);
+		else if (tx_info->mode == PKTS_TX)
+			halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(4), 0, phy_idx, 0);
+	}
+}
+
+void halbb_fwofld_start_pmac_tx_8852a_2(struct bb_info *bb,
+			       struct halbb_pmac_info *tx_info,
+			       enum halbb_pmac_mode mode, u32 pkt_cnt,u16 period,
+			       enum phl_phy_idx phy_idx)
+{
+	if (mode == CONT_TX) {
+		if (tx_info->is_cck) {
+			halbb_fw_set_reg(bb, 0x2338, BIT(17), 1, 0);
+			halbb_fw_set_reg(bb, 0x2300, BIT(28), 0, 0);
+		} else {
+			halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(0), 1, phy_idx, 0);
+		}
+	} else if (mode == PKTS_TX) {
+		/*Tx_N_PACKET_EN */
+		halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(4), 1, phy_idx, 0);
+		/*Tx_N_PERIOD */
+		halbb_fw_set_reg_cmn(bb, 0x9c4, 0xffffff00, period, phy_idx, 0);
+		/*Tx_N_PACKET */
+		halbb_fw_set_reg_cmn(bb, 0x9c8, 0xffffffff, pkt_cnt, phy_idx, 0);
+	} else if (mode == CCK_CARRIER_SIPPRESSION_TX) {
+		if (tx_info->is_cck) {
+			/*Carrier Suppress Tx*/
+			halbb_fw_set_reg(bb, 0x2338, BIT(18), 1, 0);
+			/*Disable scrambler at payload part*/
+			halbb_fw_set_reg(bb, 0x2304, BIT(26), 1, 0);
+		} else {
+			return;
+		}
+		/*Tx_N_PACKET_EN */
+		halbb_fw_set_reg_cmn(bb, 0x9c4, BIT(4), 1, phy_idx, 0);
+		/*Tx_N_PERIOD */
+		halbb_fw_set_reg_cmn(bb, 0x9c4, 0xffffff00, period, phy_idx, 0);
+		/*Tx_N_PACKET */
+		halbb_fw_set_reg_cmn(bb, 0x9c8, 0xffffffff, pkt_cnt, phy_idx, 0);
+	}
+	/*Tx_EN */
+	halbb_fw_set_reg_cmn(bb, 0x9c0, BIT(0), 1, phy_idx, 0);
+	halbb_fw_set_reg_cmn(bb, 0x9c0, BIT(0), 0, phy_idx, 1);
+}
+
+void halbb_fwofld_set_pmac_tx_8852a_2(struct bb_info *bb, struct halbb_pmac_info *tx_info,
+			     enum phl_phy_idx phy_idx)
+{
+	BB_DBG(bb, DBG_PHY_CONFIG, "<====== %s ======>\n", __func__);
+
+	if (!tx_info->en_pmac_tx) {
+		halbb_fwofld_stop_pmac_tx_8852a_2(bb, tx_info, phy_idx);
+		/* PD hit enable */
+		halbb_fw_set_reg_cmn(bb, 0xc3c, BIT(9), 0, phy_idx, 0);
+		if (bb->hal_com->band[phy_idx].cur_chandef.band == BAND_ON_24G)
+			halbb_fw_set_reg(bb, 0x2344, BIT(31), 0, 1);
+		return;
+	}
+	/*Turn on PMAC */
+	/* Tx */
+	halbb_fw_set_reg_cmn(bb, 0x0980, BIT(0), 1, phy_idx, 0);
+	/* Rx */
+	halbb_fw_set_reg_cmn(bb, 0x0980, BIT(16), 1, phy_idx, 0);
+	halbb_fw_set_reg_cmn(bb, 0x0988, 0x3f, 0x3f, phy_idx, 0);
+
+	/* PD hit enable */
+	halbb_fw_set_reg_cmn(bb, 0x704, BIT(1), 0, phy_idx, 0);
+	halbb_fw_set_reg_cmn(bb, 0xc3c, BIT(9), 1, phy_idx, 0);
+	halbb_fw_set_reg(bb, 0x2344, BIT(31), 1, 0);
+	halbb_fw_set_reg_cmn(bb, 0x704, BIT(1), 1, phy_idx, 0);
+
+	halbb_fwofld_start_pmac_tx_8852a_2(bb, tx_info, tx_info->mode, tx_info->tx_cnt,
+		       tx_info->period, phy_idx);
+}
+#endif
 #endif

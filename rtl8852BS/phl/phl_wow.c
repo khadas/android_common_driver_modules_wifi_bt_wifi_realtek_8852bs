@@ -851,51 +851,37 @@ enum rtw_phl_status rtw_phl_cfg_gpio_wake_pulse(void *phl, struct rtw_wow_gpio_i
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
 	struct phl_wow_info *wow_info = phl_to_wow_info(phl_info);
 	struct rtw_wow_gpio_info *wow_gpio = &wow_info->wow_gpio;
+	void *drv_priv = phl_to_drvpriv(phl_info);
+	struct rtw_dev2hst_gpio_info *d2h_gpio_info = &wow_gpio->d2h_gpio_info;
 
 	FUNCIN();
 
-	wow_gpio->dev2hst_gpio_en = info->dev2hst_gpio_en;
-	wow_gpio->disable_inband = info->disable_inband;
-	wow_gpio->gpio_output_input = info->gpio_output_input;
-	wow_gpio->gpio_active = info->gpio_active;
-	wow_gpio->toggle_pulse = info->toggle_pulse;
-	wow_gpio->data_pin_wakeup = info->data_pin_wakeup;
-	wow_gpio->gpio_pulse_nonstop = info->gpio_pulse_nonstop;
-	wow_gpio->gpio_time_unit = info->gpio_time_unit;
-	wow_gpio->gpio_num = info->gpio_num;
-	wow_gpio->gpio_pulse_dura = info->gpio_pulse_dura;
-	wow_gpio->gpio_pulse_period = info->gpio_pulse_period;
-	wow_gpio->gpio_pulse_count = info->gpio_pulse_count;
-	wow_gpio->customer_id = info->customer_id;
-	wow_gpio->gpio_pulse_en_a = info->gpio_pulse_en_a;
-	wow_gpio->gpio_duration_unit_a = info->gpio_duration_unit_a;
-	wow_gpio->gpio_pulse_nonstop_a = info->gpio_pulse_nonstop_a;
-	wow_gpio->special_reason_a = info->special_reason_a;
-	wow_gpio->gpio_duration_a = info->gpio_duration_a;
-	wow_gpio->gpio_pulse_count_a = info->gpio_pulse_count_a;
+	_os_mem_cpy(drv_priv, d2h_gpio_info, &info->d2h_gpio_info,
+		    sizeof(struct rtw_dev2hst_gpio_info));
 	wow_gpio->dev2hst_gpio_mode = info->dev2hst_gpio_mode;
 	wow_gpio->dev2hst_gpio = info->dev2hst_gpio;
 	wow_gpio->dev2hst_high = info->dev2hst_high;
 
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] dev2hst_gpio_en %d\n", wow_gpio->dev2hst_gpio_en);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] disable_inband %d\n", wow_gpio->disable_inband);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_output_input %d\n", wow_gpio->gpio_output_input);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_active %d\n", wow_gpio->gpio_active);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] toggle_pulse %d\n", wow_gpio->toggle_pulse);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] data_pin_wakeup %d\n", wow_gpio->data_pin_wakeup);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_nonstop %d\n", wow_gpio->gpio_pulse_nonstop);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_time_unit %d\n", wow_gpio->gpio_time_unit);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_num %d\n", wow_gpio->gpio_num);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_dura %d\n", wow_gpio->gpio_pulse_dura);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_period %d\n", wow_gpio->gpio_pulse_period);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_count %d\n", wow_gpio->gpio_pulse_count);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] customer_id %d\n", wow_gpio->customer_id);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_en_a %d\n", wow_gpio->gpio_pulse_en_a);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_duration_unit_a %d\n", wow_gpio->gpio_duration_unit_a);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_nonstop_a %d\n", wow_gpio->gpio_pulse_nonstop_a);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] special_reason_a %d\n", wow_gpio->special_reason_a);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_duration_a %d\n", wow_gpio->gpio_duration_a);
-	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_count_a %d\n", wow_gpio->gpio_pulse_count_a);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] dev2hst_gpio_en %d\n", d2h_gpio_info->dev2hst_gpio_en);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] disable_inband %d\n", d2h_gpio_info->disable_inband);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_output_input %d\n", d2h_gpio_info->gpio_output_input);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_active %d\n", d2h_gpio_info->gpio_active);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] toggle_pulse %d\n", d2h_gpio_info->toggle_pulse);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] data_pin_wakeup %d\n", d2h_gpio_info->data_pin_wakeup);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_nonstop %d\n", d2h_gpio_info->gpio_pulse_nonstop);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_time_unit %d\n", d2h_gpio_info->gpio_time_unit);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_num %d\n", d2h_gpio_info->gpio_num);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_dura %d\n", d2h_gpio_info->gpio_pulse_dura);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_period %d\n", d2h_gpio_info->gpio_pulse_period);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] gpio_pulse_count %d\n", d2h_gpio_info->gpio_pulse_count);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] customer_id %d\n", d2h_gpio_info->customer_id);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a_en %d\n", d2h_gpio_info->rsn_a_en);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a_time_unit %d\n", d2h_gpio_info->rsn_a_time_unit);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a_pulse_nonstop %d\n", d2h_gpio_info->rsn_a_pulse_nonstop);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a %d\n", d2h_gpio_info->rsn_a);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a_pulse_duration %d\n", d2h_gpio_info->rsn_a_pulse_duration);
+	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rsn_a_pulse_count %d\n", d2h_gpio_info->rsn_a_pulse_count);
+
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] dev2hst_gpio_mode %d\n", wow_gpio->dev2hst_gpio_mode);
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] dev2hst_gpio %d\n", wow_gpio->dev2hst_gpio);
 	PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] dev2hst_high %d\n", wow_gpio->dev2hst_high);
@@ -1221,6 +1207,17 @@ static enum rtw_phl_status _phl_indic_wake_rsn(struct phl_wow_info *wow_info)
 	return phl_status;
 }
 
+static void _phl_get_nlo_rpt(struct phl_wow_info *wow_info)
+{
+	struct phl_info_t *phl_info = wow_info->phl_info;
+
+	if (wow_info->nlo_info.nlo_en)
+		rtw_hal_wow_cfg_nlo(phl_info->hal, SCAN_OFLD_OP_RPT,
+		                    wow_info->sta->macid,
+		                    wow_info->sta->wrole->hw_band,
+		                    wow_info->sta->wrole->hw_port, NULL);
+}
+
 void phl_wow_handle_wake_rsn(struct phl_wow_info *wow_info, u8 *reset)
 {
 	struct phl_info_t *phl_info = wow_info->phl_info;
@@ -1294,14 +1291,15 @@ enum rtw_phl_status phl_wow_deinit_precfg(struct phl_wow_info *wow_info)
 
 	rtw_hal_cfg_wow_sleep(phl_info->hal, false);
 
+	_phl_get_nlo_rpt(wow_info);
+
 	_phl_handle_aoac_rpt_action(wow_info, false);
 
 	/* resume sw rx */
 #ifdef CONFIG_USB_HCI
 	trx_ops->trx_cfg(phl_info);
-#else
-	trx_ops->trx_resume(phl_info, PHL_CTRL_RX);
 #endif
+	trx_ops->trx_resume(phl_info, PHL_CTRL_RX);
 
 	_deinit_precfg_set_intr(phl_info);
 

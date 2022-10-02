@@ -237,13 +237,12 @@ void rtw_hal_rf_reg_dump(void *sel, void *h)
 	int i, j = 1, path;
 	struct hal_info_t *hal_info = (struct hal_info_t *)h;
 	struct rtw_hal_com_t *hal = hal_info->hal_com;
+	struct rtw_phl_com_t *phl_com = hal_info->phl_com;
 	u32 value;
 	u8 path_nums;
 
-	if (hal->rfpath_tx_num > hal->rfpath_rx_num)
-		path_nums = hal->rfpath_tx_num;
-	else
-		path_nums = hal->rfpath_rx_num;
+	path_nums = (phl_com->phy_cap[0].tx_path_num > phl_com->phy_cap[0].rx_path_num) ?
+	             phl_com->phy_cap[0].tx_path_num : phl_com->phy_cap[0].rx_path_num;
 
 	RTW_PRINT_SEL(sel, "======= RF REG =======\n");
 	for (path = 0; path < path_nums; path++) {
@@ -904,7 +903,7 @@ enum rtw_hal_status rtw_hal_init(void *drv_priv,
 	else if(ic_id == RTL8852C)
 		chip_id = CHIP_WIFI6_8852C;
 	else
-		return RTW_HAL_STATUS_FAILURE;
+		chip_id = CHIP_WIFI6_MAX;
 
 	hal_info = _os_mem_alloc(drv_priv, sizeof(struct hal_info_t));
 	if (hal_info == NULL) {
@@ -920,7 +919,7 @@ enum rtw_hal_status rtw_hal_init(void *drv_priv,
 		PHL_ERR("alloc hal_com failed\n");
 		goto error_hal_com_mem;
 	}
-
+	hal_info->phl_com = phl_com;
 	hal_info->hal_com = hal_com;
 	hal_com->drv_priv = drv_priv;
 	hal_com->hal_priv = hal_info;
@@ -952,6 +951,12 @@ enum rtw_hal_status rtw_hal_init(void *drv_priv,
 		goto error_io_priv;
 	}
 
+	hal_status = rtw_hal_mac_init(phl_com, hal_info);
+	if ((hal_status != RTW_HAL_STATUS_SUCCESS) || (hal_info->mac == NULL)) {
+		PHL_ERR("rtw_hal_mac_init failed\n");
+		goto error_mac_init;
+	}
+
 	/*set hal_ops and hal_hook_trx_ops*/
 	hal_status = hal_set_ops(phl_com, hal_info);
 	if (hal_status != RTW_HAL_STATUS_SUCCESS) {
@@ -963,12 +968,6 @@ enum rtw_hal_status rtw_hal_init(void *drv_priv,
 	if (hal_status != RTW_HAL_STATUS_SUCCESS) {
 		PHL_ERR("hal_ops.hal_init failed\n");
 		goto error_hal_init;
-	}
-
-	hal_status = rtw_hal_mac_init(phl_com, hal_info);
-	if ((hal_status != RTW_HAL_STATUS_SUCCESS) || (hal_info->mac == NULL)) {
-		PHL_ERR("rtw_hal_mac_init failed\n");
-		goto error_mac_init;
 	}
 
 	hal_status = rtw_hal_efuse_init(phl_com, hal_info);
@@ -1020,13 +1019,13 @@ error_bb_init:
 	rtw_hal_efuse_deinit(phl_com, hal_info);
 
 error_efuse_init:
-	rtw_hal_mac_deinit(phl_com, hal_info);
-
-error_mac_init:
 	hal_info->hal_ops.hal_deinit(phl_com, hal_info);
 
 error_hal_init:
 error_hal_ops:
+	rtw_hal_mac_deinit(phl_com, hal_info);
+
+error_mac_init:
 	hal_deinit_io_priv(hal_com);
 
 error_io_priv:
@@ -1312,18 +1311,14 @@ enum rtw_hal_status rtw_hal_start(struct rtw_phl_com_t *phl_com, void *hal)
 
 	rtw_hal_rf_set_power(hal_info, HW_PHY_0, PWR_BY_RATE);
 #ifdef RTW_WKARD_DEF_CMACTBL_CFG
-	if (phl_com->phy_cap[0].txss < hal_info->hal_com->rfpath_tx_num)
-		hal_info->hal_com->rfpath_tx_num = phl_com->phy_cap[0].txss;
-	if (phl_com->phy_cap[0].rxss < hal_info->hal_com->rfpath_rx_num)
-		hal_info->hal_com->rfpath_rx_num = phl_com->phy_cap[0].rxss;
-	tx = _get_path_from_ant_num(hal_info->hal_com->rfpath_tx_num);
-	rx = _get_path_from_ant_num(hal_info->hal_com->rfpath_rx_num);
+	tx = _get_path_from_ant_num(phl_com->phy_cap[0].tx_path_num);
+	rx = _get_path_from_ant_num(phl_com->phy_cap[0].rx_path_num);
 	rtw_hal_bb_trx_path_cfg(hal_info, tx, phl_com->phy_cap[0].txss,
 		rx, phl_com->phy_cap[0].rxss);
 #endif
 #ifdef RTW_WKARD_SINGLE_PATH_RSSI
 	hal_info->hal_com->cur_rx_rfpath =
-		_get_path_from_ant_num(hal_info->hal_com->rfpath_rx_num);
+		_get_path_from_ant_num(phl_com->phy_cap[0].rx_path_num);
 #endif
 	#ifdef CONFIG_BTCOEX
 	rtw_hal_btc_radio_state_ntfy(hal_info, true);
@@ -1454,7 +1449,7 @@ hal_ver_check(struct rtw_hal_com_t *hal_com)
 
 
 enum rtw_hal_status
-rtw_hal_watchdog(void *hal)
+rtw_hal_watchdog(void *hal, struct rtw_phl_com_t *phl_com)
 {
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
@@ -1471,7 +1466,7 @@ rtw_hal_watchdog(void *hal)
 		goto exit;
 	}
 
-	hal_status = rtw_hal_mac_watchdog(hal_info);
+	hal_status = rtw_hal_mac_watchdog(hal_info, phl_com);
 	if (hal_status != RTW_HAL_STATUS_SUCCESS) {
 		PHL_ERR("%s rtw_hal_mac_watchdog fail (%x)\n", __FUNCTION__, hal_status);
 		goto exit;
@@ -1504,6 +1499,7 @@ rtw_hal_cfg_trx_path(void *hal, enum rf_path tx, u8 tx_nss,
 		     enum rf_path rx, u8 rx_nss)
 {
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct rtw_phl_com_t *phl_com = hal_info->phl_com;
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_FAILURE;
 
 	if (tx < RF_PATH_AB) {
@@ -1518,11 +1514,11 @@ rtw_hal_cfg_trx_path(void *hal, enum rf_path tx, u8 tx_nss,
 	hal_status = rtw_hal_bb_trx_path_cfg(
 			hal_info,
 			tx,
-			((tx_nss > hal_info->hal_com->rfpath_tx_num) ?
-			  hal_info->hal_com->rfpath_tx_num : tx_nss),
+			((tx_nss > phl_com->phy_cap[0].tx_path_num) ?
+			  phl_com->phy_cap[0].tx_path_num : tx_nss),
 			rx,
-			((rx_nss > hal_info->hal_com->rfpath_rx_num) ?
-			  hal_info->hal_com->rfpath_rx_num : rx_nss));
+			((rx_nss > phl_com->phy_cap[0].rx_path_num) ?
+			  phl_com->phy_cap[0].rx_path_num : rx_nss));
 #ifdef RTW_WKARD_SINGLE_PATH_RSSI
 	hal_info->hal_com->cur_rx_rfpath = rx;
 #endif

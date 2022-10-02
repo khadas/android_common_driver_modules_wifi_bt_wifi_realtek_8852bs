@@ -110,6 +110,8 @@ typedef struct _ADAPTER _adapter;
 #include <sta_info.h>
 #include <rtw_event.h>
 #include <rtw_mlme_ext.h>
+#include "../core/rtw_dfs.h"
+#include "../core/rtw_txpwr.h"
 #include <rtw_sec_cam.h>
 #include <rtw_mi.h>
 #include <rtw_ap.h>
@@ -211,6 +213,7 @@ struct registry_priv {
 	u8	wow_lps_1t1r;
 	#endif
 #endif /* CONFIG_WOWLAN */
+	u8	lps_mode;
 	u8	smart_ps;
 #ifdef CONFIG_WMMPS_STA
 	u8	wmm_smart_ps;
@@ -266,12 +269,13 @@ struct registry_priv {
 #ifdef CONFIG_80211N_HT
 	u8	ht_enable;
 	/* 0: 20 MHz, 1: 40 MHz, 2: 80 MHz, 3: 160MHz */
-	/* 2.4G use bit 0 ~ 3, 5G use bit 4 ~ 7 */
-	/* 0x21 means enable 2.4G 40MHz & 5G 80MHz */
-	u8	bw_mode;
+	/* 2.4G use bit 0 ~ 3, 5G use bit 4 ~ 7,  6G use bit 8 ~ 11*/
+	/* 0x321 means enable 2.4G 40MHz & 5G 80MHz & 6G 160MHz*/
+	u16 bw_mode;
 	u8	ampdu_enable;/* for tx */
 	u8	rx_ampdu_amsdu;/* Rx A-MPDU Supports A-MSDU is permitted */
 	u8	tx_ampdu_amsdu;/* Tx A-MPDU Supports A-MSDU is permitted */
+	u8	tx_ampdu_num;
 	u8	tx_quick_addba_req;
 	u8 rx_ampdu_sz_limit_by_nss_bw[4][4]; /* 1~4SS, BW20~BW160 */
 	/* Short GI support Bit Map */
@@ -280,7 +284,11 @@ struct registry_priv {
 	/* BIT2 - 80MHz, 1: support, 0: non-support */
 	/* BIT3 - 160MHz, 1: support, 0: non-support */
 	u8	short_gi;
-	/* BIT0: Enable VHT LDPC Rx, BIT1: Enable VHT LDPC Tx, BIT4: Enable HT LDPC Rx, BIT5: Enable HT LDPC Tx */
+	/*
+	  * BIT0: Enable VHT LDPC Rx, BIT1: Enable VHT LDPC Tx
+	  * BIT2: Enable HE LDPC Rx, BIT3: Enable HE LDPC Tx
+	  * BIT4: Enable HT LDPC Rx, BIT5: Enable HT LDPC Tx
+	  */
 	u8	ldpc_cap;
 	/*
 	 * BIT0: Enable VHT STBC Rx, BIT1: Enable VHT STBC Tx
@@ -529,16 +537,20 @@ struct registry_priv {
 #define BSSID_SZ(field)   sizeof(((PWLAN_BSSID_EX) 0)->field)
 
 #define BW_MODE_2G(bw_mode) ((bw_mode) & 0x0F)
-#define BW_MODE_5G(bw_mode) ((bw_mode) >> 4)
+#define BW_MODE_5G(bw_mode) (((bw_mode) >> 4) & 0x0F)
+#define BW_MODE_6G(bw_mode) (((bw_mode) >> 8) & 0x0F)
 #ifdef CONFIG_80211N_HT
 #define REGSTY_BW_2G(regsty) BW_MODE_2G((regsty)->bw_mode)
 #define REGSTY_BW_5G(regsty) BW_MODE_5G((regsty)->bw_mode)
+#define REGSTY_BW_6G(regsty) BW_MODE_6G((regsty)->bw_mode)
 #else
 #define REGSTY_BW_2G(regsty) CHANNEL_WIDTH_20
 #define REGSTY_BW_5G(regsty) CHANNEL_WIDTH_20
+#define REGSTY_BW_6G(regsty) CHANNEL_WIDTH_20
 #endif
 #define REGSTY_IS_BW_2G_SUPPORT(regsty, bw) (REGSTY_BW_2G((regsty)) >= (bw))
 #define REGSTY_IS_BW_5G_SUPPORT(regsty, bw) (REGSTY_BW_5G((regsty)) >= (bw))
+#define REGSTY_IS_BW_6G_SUPPORT(regsty, bw) (REGSTY_BW_6G((regsty)) >= (bw))
 
 #ifdef CONFIG_80211AC_VHT
 #define REGSTY_IS_11AC_ENABLE(regsty) ((regsty)->vht_enable != 0)
@@ -585,6 +597,7 @@ struct registry_priv {
 #define GET_PRIMARY_ADAPTER(padapter) (((_adapter *)padapter)->dvobj->padapters[IFACE_ID0])
 #define GET_IFACE_NUMS(padapter) (((_adapter *)padapter)->dvobj->iface_nums)
 #define GET_ADAPTER(padapter, iface_id) (((_adapter *)padapter)->dvobj->padapters[iface_id])
+#define GET_PRIMARY_LINK(padapter) (&(padapter)->adapter_link)
 
 
 #ifdef RTW_PHL_TX
@@ -614,7 +627,9 @@ struct registry_priv {
 #define SZ_TX_RING 		(SZ_TXREQ+SZ_HEAD_BUF+SZ_TAIL_BUF+(SZ_PKT_LIST*NUM_PKT_LIST_PER_TXREQ))
 #define SZ_MGT_RING		(SZ_TXREQ + SZ_PKT_LIST)/* MGT_TXREQ_QMGT */
 
+#ifndef MAX_TX_RING_NUM
 #define MAX_TX_RING_NUM 	4096
+#endif /*MAX_TX_RING_NUM*/
 #endif
 
 
@@ -969,6 +984,8 @@ struct rf_ctl_t {
 	u8 highest_ht_rate_bw_bmp;
 	u8 highest_vht_rate_bw_bmp;
 #endif
+	u8 tpc_mode;
+	u16 tpc_manual_constraint; /* mB */
 
 	bool ch_sel_within_same_band;
 
@@ -995,15 +1012,19 @@ struct rf_ctl_t {
 	struct rtw_chan_def csa_chandef;
 
 #ifdef CONFIG_DFS_MASTER
-	u8 dfs_region_domain;
+	enum rtw_dfs_regd dfs_region_domain;
 	_timer radar_detect_timer;
-	bool radar_detect_by_others;
+	bool radar_detect_by_others[HW_BAND_MAX];
 	u8 radar_detect_enabled;
+
 	bool radar_detected;
 
+	enum phl_band_idx radar_detect_hwband;
+	/* 5G band is implicit */
 	u8 radar_detect_ch;
 	u8 radar_detect_bw;
 	u8 radar_detect_offset;
+	u8 radar_detect_cch;
 
 	systime cac_start_time;
 	systime cac_end_time;
@@ -1046,7 +1067,6 @@ struct wow_ctl_t {
 #define RFCTL_REG_EN_11AX(rfctl) 0
 #endif
 
-#define RTW_CAC_STOPPED 0
 #ifdef CONFIG_DFS_MASTER
 #define IS_CAC_STOPPED(rfctl) ((rfctl)->cac_end_time == RTW_CAC_STOPPED)
 #define IS_CH_WAITING(rfctl) (!IS_CAC_STOPPED(rfctl) && rtw_time_after((rfctl)->cac_end_time, rtw_get_current_time()))
@@ -1065,6 +1085,10 @@ struct wow_ctl_t {
 #define IS_DFS_SLAVE_WITH_RD(rfctl) 0
 #endif
 
+#define HWBAND_FMT "HB%d"
+#define HWBAND_ARG(band_idx) (band_idx)
+#define FUNC_HWBAND_FMT "%s("HWBAND_FMT")"
+#define FUNC_HWBAND_ARG(band_idx) __func__, HWBAND_ARG(band_idx)
 
 #ifdef CONFIG_USB_HCI
 
@@ -1351,6 +1375,7 @@ _adapter *dvobj_get_unregisterd_adapter(struct dvobj_priv *dvobj);
 _adapter *dvobj_get_adapter_by_addr(struct dvobj_priv *dvobj, u8 *addr);
 #define dvobj_get_primary_adapter(dvobj)	((dvobj)->padapters[IFACE_ID0])
 
+void rtw_efuse_dbg_raw_dump(struct dvobj_priv *pdvobj);
 
 enum _ADAPTER_TYPE {
 	PRIMARY_ADAPTER,
@@ -1526,6 +1551,16 @@ enum _DIS_TURBO_EDCA {
 	DIS_TURBO_USE_MANUAL,
 };
 
+struct _ADAPTER_LINK {
+	_adapter *adapter;
+};
+
+#define ALINK_GET_HWBAND(alink) ((alink)->adapter->phl_role->hw_band)
+#define ALINK_GET_BAND(alink) (rtw_is_2g_ch((alink)->adapter->mlmeextpriv.chandef.chan) ? BAND_ON_24G : BAND_ON_5G)
+#define ALINK_GET_CH(alink) ((alink)->adapter->mlmeextpriv.chandef.chan)
+#define ALINK_GET_BW(alink) ((alink)->adapter->mlmeextpriv.chandef.bw)
+#define ALINK_GET_OFFSET(alink) ((alink)->adapter->mlmeextpriv.chandef.offset)
+
 struct _ADAPTER {
 	int	pid[3];/*process id from UI, 0:wpa_supplicant, 1:hostapd, 2:dhcpcd*/
 
@@ -1553,6 +1588,7 @@ struct _ADAPTER {
 	u8 registered;
 	u8 ndev_unregistering;
 
+	struct _ADAPTER_LINK adapter_link;
 
 	struct dvobj_priv *dvobj;
 	struct mlme_priv mlmepriv;
@@ -1764,7 +1800,6 @@ struct _ADAPTER {
 	u8 driver_rx_ampdu_spacing;  /* driver control Rx AMPDU Density */
 	u8 fix_rx_ampdu_accept;
 	u8 fix_rx_ampdu_size; /* 0~127, TODO:consider each sta and each TID */
-	u8 driver_tx_max_agg_num; /*fix tx desc max agg num , 0xff: disable drv ctrl*/
 
 	#ifdef DBG_RX_COUNTER_DUMP
 	u8 dump_rx_cnt_mode;/*BIT0:drv,BIT1:mac,BIT2:phy*/

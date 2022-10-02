@@ -95,6 +95,10 @@ void _halrf_tssi_hw_tx_8852b(struct rf_info *rf,
 
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s\n", __func__);
 
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+	rtw_hal_bb_fwofld_cfgcr_start(rf->hal_com);
+#endif
+
 	tx_info.ppdu = rate;
 	tx_info.mcs = 7;
 	tx_info.bw = bw;
@@ -108,6 +112,10 @@ void _halrf_tssi_hw_tx_8852b(struct rf_info *rf,
 	tx_info.length = 0;
 
 	halrf_set_pmac_tx(rf, phy, path, &tx_info, enable, false);
+
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+	rtw_hal_bb_fwofld_cfgcr_end(rf->hal_com);
+#endif
 }
 
 void _halrf_tssi_rf_setting_8852b(struct rf_info *rf,
@@ -732,32 +740,67 @@ void _halrf_tssi_set_dac_gain_tbl_8852b(struct rf_info *rf,
 void _halrf_tssi_slope_cal_org_8852b(struct rf_info *rf,
 					enum phl_phy_idx phy, enum rf_path path)
 {
+	u8 channel = rf->hal_com->band[phy].cur_chandef.center_ch;
+
+	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======>%s   channel=%d   path=%d\n",
+		__func__, channel, path);
+
 	if (path == RF_PATH_A) {
-		halrf_wreg(rf, 0x5608, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x560c, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x5610, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x5614, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x5618, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x561c, 0x000001ff, 0x008);
-		halrf_wreg(rf, 0x561c, 0xffff0000, 0x0808);
-		halrf_wreg(rf, 0x5620, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x5624, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x5628, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x562c, 0x0000ffff, 0x0808);
-		halrf_wreg(rf, 0x581c, 0x00100000, 0x0);		
+		if (channel >= 1 && channel <= 14) {
+			halrf_wreg(rf, 0x5608, 0x07ffffff, 0x0801008);
+			halrf_wreg(rf, 0x560c, 0x07ffffff, 0x0201020);
+			halrf_wreg(rf, 0x5610, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x5614, 0x07ffffff, 0x0804008);
+			halrf_wreg(rf, 0x5618, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x561c, 0x000001ff, 0x008);
+			halrf_wreg(rf, 0x561c, 0xffff0000, 0x0808);
+			halrf_wreg(rf, 0x5620, 0xffffffff, 0x08081e28);
+			halrf_wreg(rf, 0x5624, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x5628, 0xffffffff, 0x08081e28);
+			halrf_wreg(rf, 0x562c, 0x0000ffff, 0x0808);
+			halrf_wreg(rf, 0x581c, 0x00100000, 0x1);
+		} else {
+			halrf_wreg(rf, 0x5608, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x560c, 0x07ffffff, 0x0201020);
+			halrf_wreg(rf, 0x5610, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x5614, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x5618, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x561c, 0x000001ff, 0x008);
+			halrf_wreg(rf, 0x561c, 0xffff0000, 0x0808);
+			halrf_wreg(rf, 0x5620, 0xffffffff, 0x08081e08);
+			halrf_wreg(rf, 0x5624, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x5628, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x562c, 0x0000ffff, 0x0808);
+			halrf_wreg(rf, 0x581c, 0x00100000, 0x1);
+		}
 	} else {
-		halrf_wreg(rf, 0x7608, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x760c, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x7610, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x7614, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x7618, 0x07ffffff, 0x0201008);
-		halrf_wreg(rf, 0x761c, 0x000001ff, 0x008);
-		halrf_wreg(rf, 0x761c, 0xffff0000, 0x0808);
-		halrf_wreg(rf, 0x7620, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x7624, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x7628, 0xffffffff, 0x08080808);
-		halrf_wreg(rf, 0x762c, 0x0000ffff, 0x0808);
-		halrf_wreg(rf, 0x781c, 0x00100000, 0x0);
+		if (channel >= 1 && channel <= 14) {
+			halrf_wreg(rf, 0x7608, 0x07ffffff, 0x0801008);
+			halrf_wreg(rf, 0x760c, 0x07ffffff, 0x0201020);
+			halrf_wreg(rf, 0x7610, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x7614, 0x07ffffff, 0x0804008);
+			halrf_wreg(rf, 0x7618, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x761c, 0x000001ff, 0x008);
+			halrf_wreg(rf, 0x761c, 0xffff0000, 0x0808);
+			halrf_wreg(rf, 0x7620, 0xffffffff, 0x08081e28);
+			halrf_wreg(rf, 0x7624, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x7628, 0xffffffff, 0x08081e28);
+			halrf_wreg(rf, 0x762c, 0x0000ffff, 0x0808);
+			halrf_wreg(rf, 0x781c, 0x00100000, 0x1);
+		} else {
+			halrf_wreg(rf, 0x7608, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x760c, 0x07ffffff, 0x0201020);
+			halrf_wreg(rf, 0x7610, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x7614, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x7618, 0x07ffffff, 0x0201008);
+			halrf_wreg(rf, 0x761c, 0x000001ff, 0x008);
+			halrf_wreg(rf, 0x761c, 0xffff0000, 0x0808);
+			halrf_wreg(rf, 0x7620, 0xffffffff, 0x08081e08);
+			halrf_wreg(rf, 0x7624, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x7628, 0xffffffff, 0x08080808);
+			halrf_wreg(rf, 0x762c, 0x0000ffff, 0x0808);
+			halrf_wreg(rf, 0x781c, 0x00100000, 0x1);
+		}
 	}
 }
 
@@ -799,8 +842,9 @@ void _halrf_tssi_slope_cal_8852b(struct rf_info *rf,
 			power_low[i] = power_5g_low[i];
 		}
 	}
-
-	halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_TSSI, RFK_ONESHOT_START);
+	if(!rf->is_chl_rfk) {
+		halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_TSSI, RFK_ONESHOT_START);
+	}
 	for (j = 0; j < 4; j++) {
 		/*high power*/
 		halrf_wreg(rf, tssi_trigger[path], 0x80000000, 0x0);
@@ -886,141 +930,18 @@ void _halrf_tssi_slope_cal_8852b(struct rf_info *rf,
 
 	halrf_wreg(rf, 0x5860, 0x7fc00000, tssi_cw_rpt_offset[3]);
 	halrf_wreg(rf, 0x589c, 0xff000000, power_high[3] - power_low[3]);
-
-	halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_TSSI, RFK_ONESHOT_STOP);
-
-}
-
-void _halrf_tssi_set_rf_gap_tbl_8852b(struct rf_info *rf,
-					enum phl_phy_idx phy, enum rf_path path)
-{
-	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======>%s   path=%d\n", __func__, path);
-
-	if (path == RF_PATH_A) {	
-		halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
-		halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
-		halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-		halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-		halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);		
-	} else {
-		halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
-		halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
-		halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-		halrf_wreg(rf, 0x7630, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-		halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
-		halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
+	if(!rf->is_chl_rfk) {
+		halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_TSSI, RFK_ONESHOT_STOP);
 	}
 }
 
-void _halrf_tssi_alignment_default_8852ba(struct rf_info *rf,
-					enum phl_phy_idx phy, enum rf_path path)
-{
-	u8 channel = rf->hal_com->band[phy].cur_chandef.center_ch;
-
-	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   channel=%d   path=%d\n",
-		__func__, channel, path);
-
-	if (path == RF_PATH_A) {
-		if (channel >= 1 && channel <= 14) {
-			halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01cfb3d6);
-			halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000074);
-			halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x563c, 0x3fffffff, 0x01cfb3d6);
-			halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000074);
-			halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);			
-		} else if (channel >= 36 && channel <= 64) {
-			halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01e053ee);
-			halrf_wreg(rf, 0x5634, 0x3fffffff, 0x0000007b);
-			halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
-		} else if (channel >= 100 && channel <= 144) {
-			halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x5630, 0x3fffffff, 0x02807ff9);
-			halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000078);
-			halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
-		} else if (channel >= 149 && channel <= 177) {
-			halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x5630, 0x3fffffff, 0x025067f1);
-			halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
-			halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
-		}
-	} else {
-		if (channel >= 1 && channel <= 14) {
-			halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x7630, 0x3fffffff, 0x018fa3d2);
-			halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000079);
-			halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x763c, 0x3fffffff, 0x018fa3d2);
-			halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000079);
-			halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
-		} else if (channel >= 36 && channel <= 64) {
-			halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x7630, 0x3fffffff, 0x01a047eb);
-			halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000079);
-			halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
-		} else if (channel >= 100 && channel <= 144) {
-			halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x7630, 0x3fffffff, 0x02506ff7);
-			halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000076);
-			halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);			
-		} else if (channel >= 149 && channel <= 177) {
-			halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
-			halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
-			halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-			halrf_wreg(rf, 0x7630, 0x3fffffff, 0x01a04bf0);
-			halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000076);
-			halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-			halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
-			halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
-		}
-	}
-}
-
-void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
+void _halrf_tssi_alignment_default_8852b(struct rf_info *rf,
 					enum phl_phy_idx phy, enum rf_path path, bool all)
 {
 	u8 channel = rf->hal_com->band[phy].cur_chandef.center_ch;
 
-	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   channel=%d   path=%d\n",
-		__func__, channel, path);
+	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   channel=%d   path=%d   all=%d\n",
+		__func__, channel, path, all);
 
 	if (path == RF_PATH_A) {
 		if (channel >= 1 && channel <= 14) {
@@ -1028,32 +949,32 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
 				halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00ef77c3);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x0000007b);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01ef27af);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
 				halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
-				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x01cfb3d6);
-				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000074);
+				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x017f13ae);
+				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x0000006e);
 				halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
 			} else {
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00ef77c3);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x0000007b);
-				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x01cfb3d6);
-				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000074);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01ef27af);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x017f13ae);
+				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x0000006e);
 			}
 		} else if (channel >= 36 && channel <= 64) {
 			if (all == true) {
 				halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
 				halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x016037e7);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x0000006f);
 				halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
 			} else {
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x016037e7);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x0000006f);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 			}
@@ -1062,15 +983,15 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
 				halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00f013e1);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01f053f1);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000070);
 				halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
 			} else {
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00f013e1);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01f053f1);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000070);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 			}
@@ -1079,15 +1000,15 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x5604, 0x80000000, 0x1);
 				halrf_wreg(rf, 0x5600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x5604, 0x003fffff, 0x010101);
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00f013e1);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01c047ee);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000070);
 				halrf_wreg(rf, 0x5638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5644, 0x000fffff, 0x00000);
 			} else {
-				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x00f013e1);
-				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000075);
+				halrf_wreg(rf, 0x5630, 0x3fffffff, 0x01c047ee);
+				halrf_wreg(rf, 0x5634, 0x3fffffff, 0x00000070);
 				halrf_wreg(rf, 0x563c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x5640, 0x3fffffff, 0x00000000);
 			}
@@ -1098,17 +1019,17 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x7604, 0x80000000, 0x1);
 				halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
-				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009f4fbe);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000080);
+				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x01ff2bb5);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000078);
 				halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
-				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x018fa3d2);
-				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000079);
+				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x018f2bb0);
+				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000072);
 				halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
 			} else {
-				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009f4fbe);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000080);
-				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x018fa3d2);
-				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000079);
+				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x01ff2bb5);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000078);
+				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x018f2bb0);
+				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000072);
 			}
 		} else if (channel >= 36 && channel <= 64) {
 			if (all == true) {
@@ -1116,14 +1037,14 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
 			} else {
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 			}
@@ -1133,14 +1054,14 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x013027e6);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
 			} else {
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x013027e6);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 			}
@@ -1150,14 +1071,14 @@ void _halrf_tssi_alignment_default_8852bb(struct rf_info *rf,
 				halrf_wreg(rf, 0x7600, 0x3fffffff, 0x3f2d2721);
 				halrf_wreg(rf, 0x7604, 0x003fffff, 0x010101);
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x7638, 0x000fffff, 0x00000);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7644, 0x000fffff, 0x00000);
 			} else {
 				halrf_wreg(rf, 0x7630, 0x3fffffff, 0x009003da);
-				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000070);
+				halrf_wreg(rf, 0x7634, 0x3fffffff, 0x00000069);
 				halrf_wreg(rf, 0x763c, 0x3fffffff, 0x00000000);
 				halrf_wreg(rf, 0x7640, 0x3fffffff, 0x00000000);
 			}
@@ -1383,10 +1304,8 @@ u32 _halrf_tssi_get_tssi_trim_efuse_group_8852b(struct rf_info *rf,
 #if 0
 	else if (channel > 48 && channel < 52)
 		group_index = 0x0203;
-	else if (channel > 120 && channel < 124)
+	else if (channel > 112 && channel < 116)
 		group_index = 0x0405;
-	else if (channel > 161 && channel < 165)
-		group_index = 0x0607;
 #endif
 
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "[TSSI Trim] ======> %s offset_index=0x%x(%d) channel=%d\n",
@@ -1431,6 +1350,7 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 {
 	struct halrf_tssi_info *tssi_info = &rf->tssi;
 	u8 channel = rf->hal_com->band[phy].cur_chandef.center_ch;
+	u8 ch_idx = _halrf_ch_to_idx(rf, channel);
 	s16 power_2g[4] = {48, 20, 4, 4};
 	s16 power_5g[4] = {48, 20, 4, 4};
 	s16 power[4] = {0};
@@ -1465,10 +1385,31 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 
 	u32 start_time, finish_time;
 
-	phy_map = (BIT(phy) << 4) | BIT(path);
-
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   channel=%d   path=%d\n",
 		__func__, channel, path);
+
+	if (tssi_info->check_backup_aligmk[path][ch_idx] == true) {
+		halrf_wreg(rf, 0x5630 + (path << 13), 0xffffffff, tssi_info->alignment_backup_by_ch[path][ch_idx][0]);
+		halrf_wreg(rf, 0x5634 + (path << 13), 0xffffffff, tssi_info->alignment_backup_by_ch[path][ch_idx][1]);
+		halrf_wreg(rf, 0x563c + (path << 13), 0xffffffff, tssi_info->alignment_backup_by_ch[path][ch_idx][2]);
+		halrf_wreg(rf, 0x5640 + (path << 13), 0xffffffff, tssi_info->alignment_backup_by_ch[path][ch_idx][3]);
+
+		RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   Reload TSSI Alignment !!!\n", __func__);
+
+		RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
+			"[TSSI PA K]\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n0x%x = 0x%08x\n",
+			0x5600 + (path << 13), halrf_rreg(rf, 0x5600 + (path << 13), 0xffffffff),
+			0x5604 + (path << 13), halrf_rreg(rf, 0x5604 + (path << 13), 0xffffffff),
+			0x5630 + (path << 13), halrf_rreg(rf, 0x5630 + (path << 13), 0xffffffff),
+			0x5634 + (path << 13), halrf_rreg(rf, 0x5634 + (path << 13), 0xffffffff),
+			0x5638 + (path << 13), halrf_rreg(rf, 0x5638 + (path << 13), 0xffffffff),
+			0x563c + (path << 13), halrf_rreg(rf, 0x563c + (path << 13), 0xffffffff),
+			0x5640 + (path << 13), halrf_rreg(rf, 0x5640 + (path << 13), 0xffffffff),
+			0x5644 + (path << 13), halrf_rreg(rf, 0x5644 + (path << 13), 0xffffffff));
+		return;
+	}
+
+	phy_map = (BIT(phy) << 4) | BIT(path);
 
 	start_time = _os_get_cur_time_us();
 
@@ -1531,7 +1472,7 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 				retry = 30;
 			} else {
 				halrf_delay_us(rf, 30);
-				retry = 100;
+				retry = 50;
 			}
 
 			tx_couter_tmp = halrf_rreg(rf, 0x1a40, 0xffff) - tx_couter;
@@ -1542,9 +1483,19 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 			if (k > retry) {
 				RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "[TSSI PA K] TSSI finish bit k > %d mp:100ms normal:30us path=%d\n",
 					k, path);
+				
+				_halrf_tssi_hw_tx_8852b(rf, phy, path, 100, 5000, power[j], rate, bw, false);
+
 				_tssi_reload_bb_registers_8852b(rf, phy, bb_reg, bb_reg_backup,
 					backup_num);
-				_halrf_tssi_hw_tx_8852b(rf, phy, path, 100, 5000, power[j], rate, bw, false);
+
+				halrf_hal_bb_restore_info(rf, phy);
+
+				if (rf->phl_com->drv_mode != RTW_DRV_MODE_MP)
+					halrf_tx_mode_switch(rf, phy, 0);
+				
+				finish_time = _os_get_cur_time_us();
+				tssi_info->tssi_alimk_time = tssi_info->tssi_alimk_time + (finish_time - start_time);
 				return;
 			}
 		}
@@ -1638,6 +1589,12 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 	tssi_info->alignment_value[path][band][2] = halrf_rreg(rf, 0x563c + (path << 13), 0xffffffff);
 	tssi_info->alignment_value[path][band][3] = halrf_rreg(rf, 0x5640 + (path << 13), 0xffffffff);
 
+	tssi_info->check_backup_aligmk[path][ch_idx] = true;
+	tssi_info->alignment_backup_by_ch[path][ch_idx][0] = halrf_rreg(rf, 0x5630 + (path << 13), 0xffffffff);
+	tssi_info->alignment_backup_by_ch[path][ch_idx][1] = halrf_rreg(rf, 0x5634 + (path << 13), 0xffffffff);
+	tssi_info->alignment_backup_by_ch[path][ch_idx][2] = halrf_rreg(rf, 0x563c + (path << 13), 0xffffffff);
+	tssi_info->alignment_backup_by_ch[path][ch_idx][3] = halrf_rreg(rf, 0x5640 + (path << 13), 0xffffffff);
+
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
 		"[TSSI PA K] tssi_info->alignment_value[path=%d][band=%d][0], 0x%x = 0x%08x\n",
 		path, band, 0x5630 + (path << 13), tssi_info->alignment_value[path][band][0]);
@@ -1651,7 +1608,7 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 		path, band, 0x563c + (path << 13), tssi_info->alignment_value[path][band][2]);
 
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
-		"[TSSI PA K] tssi_info->alignment_value[path=%d][band=%d][2], 0x%x = 0x%08x\n",
+		"[TSSI PA K] tssi_info->alignment_value[path=%d][band=%d][3], 0x%x = 0x%08x\n",
 		path, band, 0x5640 + (path << 13), tssi_info->alignment_value[path][band][3]);
 
 
@@ -1664,6 +1621,7 @@ void _halrf_tssi_alimentk_8852b(struct rf_info *rf,
 		halrf_tx_mode_switch(rf, phy, 0);
 
 	finish_time = _os_get_cur_time_us();
+	tssi_info->tssi_alimk_time = tssi_info->tssi_alimk_time + (finish_time - start_time);
 
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "[TSSI PA K] %s processing time = %d.%dms\n",
 		__func__,
@@ -1739,6 +1697,13 @@ void halrf_tssi_backup_txagc_8852b(struct rf_info *rf, enum phl_phy_idx phy, boo
 		return;
 	}
 
+	if (!(rf->support_ability & HAL_RF_TX_PWR_TRACK)) {
+		RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
+			"======>%s   phy=%d   rf->support_ability=%d return!!!\n",
+			__func__, phy, rf->support_ability);
+		return;
+	}
+
 	if (enable == false) {
 		RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
 			"======>%s   phy=%d   enable=%d  return!!!\n",
@@ -1795,7 +1760,7 @@ void halrf_tssi_backup_txagc_8852b(struct rf_info *rf, enum phl_phy_idx phy, boo
 
 	power = halrf_get_power_limit(rf, phy, RF_PATH_A,
 		RTW_DATA_RATE_MCS0, CHANNEL_WIDTH_20,
-		PW_LMT_NONBF, PW_LMT_PH_1T, channel_tmp);
+		PW_LMT_NONBF, PW_LMT_PH_2T, channel_tmp);
 
 	if (power > 17 * 4)
 		power_tmp = 17 * 4;
@@ -1806,10 +1771,10 @@ void halrf_tssi_backup_txagc_8852b(struct rf_info *rf, enum phl_phy_idx phy, boo
 
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   phy=%d limit_table=%d  power_tmp=%d xdbm=%d\n",
 		__func__, phy, power, power_tmp, xdbm);
-
-	halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_START);
-	halrf_tmac_tx_pause(rf, phy, true);
-
+	if(!rf->is_chl_rfk) {
+		halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_START);
+		halrf_tmac_tx_pause(rf, phy, true);
+	}
 	/*Path A*/
 	tx_couter= halrf_rreg(rf, 0x1a40, 0xffff);
 
@@ -1896,10 +1861,10 @@ void halrf_tssi_backup_txagc_8852b(struct rf_info *rf, enum phl_phy_idx phy, boo
 
 	halrf_hal_bb_restore_info(rf, phy);
 	halrf_tx_mode_switch(rf, phy, 0);
-
-	halrf_tmac_tx_pause(rf, phy, false);
-	halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_STOP);
-
+	if(!rf->is_chl_rfk) {
+		halrf_tmac_tx_pause(rf, phy, false);
+		halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_STOP);
+	}
 	//_tssi_reload_bb_registers_8852b(rf, phy, bb_reg, bb_reg_backup, backup_num);
 }
 
@@ -1914,11 +1879,17 @@ void halrf_do_tssi_8852b(struct rf_info *rf,
 	RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s   phy=%d   ch=%d   ch_idx=%d\n",
 		__func__, phy, channel, ch_idx);
 
-	tssi_info->check_backup_txagc[ch_idx] = false;
+	tssi_info->tssi_alimk_time = 0;
+	tssi_info->high_pwr_rst_cnt = 0;
+	/*tssi_info->check_backup_txagc[ch_idx] = false;*/
+	ch_idx++;
+	ch_idx--;
 
 	halrf_tssi_disable_8852b(rf, phy);
 
 	for (i = RF_PATH_A; i < TSSI_PATH_MAX_8852B; i++) {
+		halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 		_halrf_tssi_rf_setting_8852b(rf, phy, i);
 		_halrf_tssi_set_sys_8852b(rf, phy, i);
 		_halrf_tssi_ini_txpwr_ctrl_bb_8852b(rf, phy, i);
@@ -1928,14 +1899,11 @@ void halrf_do_tssi_8852b(struct rf_info *rf,
 		_halrf_tssi_set_tmeter_tbl_8852b(rf, phy, i);
 		_halrf_tssi_set_dac_gain_tbl_8852b(rf, phy, i);
 		_halrf_tssi_slope_cal_org_8852b(rf, phy, i);
-		_halrf_tssi_set_rf_gap_tbl_8852b(rf, phy, i);
-
-		if (rf->hal_com->cv == CAV)
-			_halrf_tssi_alignment_default_8852ba(rf, phy, i);
-		else
-			_halrf_tssi_alignment_default_8852bb(rf, phy, i, true);
+		_halrf_tssi_alignment_default_8852b(rf, phy, i, true);
 
 		_halrf_tssi_set_tssi_slope_8852b(rf, phy, i);
+
+		halrf_write_fwofld_end(rf);		/*FW Offload End*/
 
 		//halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_START);
 		//halrf_tmac_tx_pause(rf, phy, true);
@@ -1945,25 +1913,37 @@ void halrf_do_tssi_8852b(struct rf_info *rf,
 
 		//halrf_tmac_tx_pause(rf, phy, false);
 		//halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_STOP);
-
-		halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_START);
-		halrf_tmac_tx_pause(rf, phy, true);
+		if(!rf->is_chl_rfk) {
+			halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_START);
+			halrf_tmac_tx_pause(rf, phy, true);
+		}
 		_halrf_tssi_alimentk_8852b(rf, phy, i);
-		halrf_tmac_tx_pause(rf, phy, false);
-		halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_STOP);
+		if(!rf->is_chl_rfk) {
+			halrf_tmac_tx_pause(rf, phy, false);
+			halrf_btc_rfk_ntfy(rf, (BIT(phy) << 4), RF_BTC_TSSI, RFK_STOP);
+		}
 	}
 
 	if (rf->phl_com->drv_mode == RTW_DRV_MODE_MP) {
 		if (tssi_info->tssi_type == TSSI_ON || tssi_info->tssi_type == TSSI_CAL) {
+			halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 			halrf_tssi_enable_8852b(rf, phy);
 			halrf_tssi_set_efuse_to_de_8852b(rf, phy);
+
+			halrf_write_fwofld_end(rf);		/*FW Offload End*/
 		} else
 			halrf_tssi_disable_8852b(rf, phy);
 
 	} else {
 		if (rf->support_ability & HAL_RF_TX_PWR_TRACK) {
+			halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 			halrf_tssi_enable_8852b(rf, phy);
 			halrf_tssi_set_efuse_to_de_8852b(rf, phy);
+
+			halrf_write_fwofld_end(rf);		/*FW Offload End*/
+
 			halrf_tssi_backup_txagc_8852b(rf, phy, true);
 		}
 	}
@@ -2000,7 +1980,7 @@ void halrf_do_tssi_scan_8852b(struct rf_info *rf,
 	else
 		band = TSSI_ALIMK_2G;
 
-	halrf_write_fwofld_start(rf);
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
 
 	halrf_tssi_disable_8852b(rf, phy);
 
@@ -2014,23 +1994,17 @@ void halrf_do_tssi_scan_8852b(struct rf_info *rf,
 		_halrf_tssi_set_tmeter_tbl_8852b(rf, phy, i);
 		//_halrf_tssi_set_dac_gain_tbl_8852b(rf, phy, i);
 		//_halrf_tssi_slope_cal_org_8852b(rf, phy, i);
-		//_halrf_tssi_set_rf_gap_tbl_8852b(rf, phy, i);
 		//_halrf_tssi_set_tssi_slope_8852b(rf, phy, i);
 
 		if (tssi_info->alignment_done[i][band] == true)
 			_halrf_tssi_alimentk_done_8852b(rf, phy, i);
-		else {
-			if (rf->hal_com->cv == CAV)
-				_halrf_tssi_alignment_default_8852ba(rf, phy, i);
-			else
-				_halrf_tssi_alignment_default_8852bb(rf, phy, i, false);
-		}
+		else
+			_halrf_tssi_alignment_default_8852b(rf, phy, i, false);
 	}
 
 	halrf_tssi_enable_8852b(rf, phy);
 	halrf_tssi_set_efuse_to_de_8852b(rf, phy);
-
-	halrf_write_fwofld_end(rf);
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 void halrf_tssi_get_efuse_8852b(struct rf_info *rf,
@@ -2340,6 +2314,29 @@ void halrf_tssi_disable_8852b(struct rf_info *rf,
 	rf->is_tssi_mode[RF_PATH_B] = false;
 }
 
+void halrf_tssi_ant_open_8852b(struct rf_info *rf)
+{
+	struct halrf_tssi_info *tssi_info = &rf->tssi;
+
+	if (rf->is_tssi_mode[RF_PATH_A] != true && rf->is_tssi_mode[RF_PATH_B] != true) {
+		RF_DBG(rf, DBG_RF_TX_PWR_TRACK,
+			"======>%s   rf->is_tssi_mode[A&B] != true  return!!!\n",
+			__func__);
+		return;
+	}
+
+	if (rf->phl_com->drv_mode == RTW_DRV_MODE_MP)
+		return;
+
+	if ((halrf_rreg(rf, 0x1c60, 0xff000000) == 0x7f) ||
+		(halrf_rreg(rf, 0x3c60, 0xff000000) == 0x7f)) {
+		RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "======> %s 0x1c60/0x3c60=0x7f Do TSSI Disable,Enable\n", __func__);
+		tssi_info->high_pwr_rst_cnt++;
+		halrf_tssi_disable_8852b(rf, HW_PHY_0);
+		halrf_tssi_enable_8852b(rf, HW_PHY_0);
+	}
+}
+
 s32 halrf_get_online_tssi_de_8852b(struct rf_info *rf, enum phl_phy_idx phy_idx,
 				u8 path, s32 dbm, s32 puot)
 {
@@ -2440,10 +2437,8 @@ void halrf_tssi_set_efuse_to_de_8852b(struct rf_info *rf,
 				addr_mcs_20m[i], halrf_rreg(rf, addr_mcs_20m[i], addr_mcs_bitmask[i]));
 
 			/*Save TSSI data for WINCLI*/
-			tssi_info->curr_tssi_cck_de[i] =
-				(s8)(halrf_rreg(rf, addr_cck_long[i], addr_cck_bitmask[i]) & 0xff);
-			tssi_info->curr_tssi_ofdm_de[i] =
-				(s8)(halrf_rreg(rf, addr_mcs_20m[i], addr_mcs_bitmask[i]) & 0xff);
+			tssi_info->curr_tssi_cck_de[i] = (s8)(tmp & 0xff);
+			tssi_info->curr_tssi_ofdm_de[i] = (s8)(tmp & 0xff);
 			tssi_info->curr_tssi_efuse_cck_de[i] = 0;
 			tssi_info->curr_tssi_efuse_ofdm_de[i] = 0;
 			tssi_info->curr_tssi_trim_de[i] = tssi_trim;
@@ -2468,6 +2463,9 @@ void halrf_tssi_set_efuse_to_de_8852b(struct rf_info *rf,
 				(u32)(tmp & 0x3ff));
 		halrf_wreg(rf, addr_cck_short[i], addr_cck_bitmask[i],
 				(u32)(tmp & 0x3ff));
+
+		/*Save TSSI data for WINCLI*/
+		tssi_info->curr_tssi_cck_de[i] = (s8)(tmp & 0xff);
 
 		RF_DBG(rf, DBG_RF_TX_PWR_TRACK, "[TSSI] Set TSSI CCK DE 0x%x[21:12]=0x%x\n",
 			addr_cck_long[i], halrf_rreg(rf, addr_cck_long[i], addr_cck_bitmask[i]));
@@ -2498,10 +2496,7 @@ void halrf_tssi_set_efuse_to_de_8852b(struct rf_info *rf,
 			addr_mcs_20m[i], halrf_rreg(rf, addr_mcs_20m[i], addr_mcs_bitmask[i]));
 		
 		/*Save TSSI data for WINCLI*/
-		tssi_info->curr_tssi_cck_de[i] =
-			(s8)(halrf_rreg(rf, addr_cck_long[i], addr_cck_bitmask[i]) & 0xff);
-		tssi_info->curr_tssi_ofdm_de[i] =
-			(s8)(halrf_rreg(rf, addr_mcs_20m[i], addr_mcs_bitmask[i]) & 0xff);
+		tssi_info->curr_tssi_ofdm_de[i] = (s8)(tmp & 0xff);
 		tssi_info->curr_tssi_efuse_cck_de[i] = tssi_info->tssi_efuse[i][EFUSE_TSSI_CCK][group_idx];
 		tssi_info->curr_tssi_efuse_ofdm_de[i] = ofmd_de;
 		tssi_info->curr_tssi_trim_de[i] = tssi_trim;
@@ -2603,12 +2598,9 @@ void halrf_tssi_scan_ch_8852b(struct rf_info *rf, enum rf_path path)
 
 		if (tssi_info->alignment_done[path][band] == true)
 			_halrf_tssi_alimentk_done_8852b(rf, 0, path);
-		else {
-			if (rf->hal_com->cv == CAV)
-				_halrf_tssi_alignment_default_8852ba(rf, 0, path);
-			else
-				_halrf_tssi_alignment_default_8852bb(rf, 0, path, false);
-		}
+		else
+			_halrf_tssi_alignment_default_8852b(rf, 0, path, false);
+
 
 		halrf_wreg(rf, tssi_en[path], BIT(31), 0x0);
 		halrf_wreg(rf, tssi_en[path], BIT(31), 0x1);

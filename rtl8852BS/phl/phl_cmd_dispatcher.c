@@ -883,6 +883,7 @@ void _handle_token_op_info(struct cmd_dispatcher *obj, struct phl_token_op_info 
 			if (op_info->data >= MAX_CMD_REQ_NUM)
 				return;
 			req_ex = &(obj->token_req_ex_pool[op_info->data]);
+			SET_STATUS_FLAG(req_ex->status, REQ_STATUS_CANCEL);
 			if (TEST_STATUS_FLAG(req_ex->status, REQ_STATUS_ENQ)) {
 				pq_del_node(d, &(obj->token_req_wait_q), &(req_ex->list), _bh);
 				/*
@@ -1147,7 +1148,7 @@ u8 get_cur_cmd_req_id(struct cmd_dispatcher *obj, u32 *req_status)
 		*req_status = cur_req->status;
 
 	if(!TEST_STATUS_FLAG(cur_req->status, REQ_STATUS_RUN) ||
-		TEST_STATUS_FLAG(cur_req->status, REQ_STATUS_CANCEL))
+	   TEST_STATUS_FLAG(cur_req->status, REQ_STATUS_CANCEL))
 		return (u8)PHL_MDL_ID_MAX;
 	else
 		return cur_req->req.module_id;
@@ -1997,7 +1998,7 @@ dispr_send_msg(void *dispr,
 	}
 
 	if(TEST_STATUS_FLAG(msg_ex->status, MSG_STATUS_OWNER_REQ) &&
-		TEST_STATUS_FLAG(req_status,REQ_STATUS_LAST_PERMIT) &&
+	   TEST_STATUS_FLAG(req_status,REQ_STATUS_LAST_PERMIT) &&
 	   (attr == NULL || !TEST_STATUS_FLAG(attr->opt, MSG_OPT_SEND_IN_ABORT))) {
 		PHL_TRACE(COMP_PHL_CMDDISP, _PHL_ERR_,
 			"%s msg not allow since cur req is going to unload\n", __FUNCTION__);
@@ -2008,7 +2009,7 @@ dispr_send_msg(void *dispr,
 	}
 
 	if (TEST_STATUS_FLAG(msg_ex->status, MSG_STATUS_OWNER_REQ) &&
-		TEST_STATUS_FLAG(req_status,REQ_STATUS_LAST_PERMIT)) {
+	    TEST_STATUS_FLAG(req_status,REQ_STATUS_LAST_PERMIT)) {
 		SET_STATUS_FLAG(msg_ex->status, MSG_STATUS_FOR_ABORT);
 		SET_STATUS_FLAG(obj->status, DISPR_WAIT_ABORT_MSG_DONE);
 	}
@@ -2136,7 +2137,7 @@ enum rtw_phl_status dispr_cancel_token_req(void *dispr, u32 *req_hdl)
 			"%s, HDL(0x%x) status err\n", __FUNCTION__, *req_hdl);
 		return RTW_PHL_STATUS_FAILURE;
 	}
-	SET_STATUS_FLAG(req_ex->status, REQ_STATUS_CANCEL);
+
 	if (dispr_enqueue_token_op_info(obj, &req_ex->free_req_info, TOKEN_OP_CANCEL_CMD_REQ, req_ex->idx))
 		return RTW_PHL_STATUS_SUCCESS;
 	else

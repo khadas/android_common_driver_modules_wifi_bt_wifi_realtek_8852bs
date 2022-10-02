@@ -21,6 +21,7 @@
 #include "fwcmd.h"
 #include "fwofld.h"
 #include "trx_desc.h"
+#include "common.h"
 
 #define READ_OFLD_MAX_LEN 2000
 #define WRITE_OFLD_MAX_LEN 2000
@@ -29,10 +30,6 @@
 
 #define CONF_OFLD_RESTORE 0
 #define CONF_OFLD_BACKUP 1
-
-#define SCAN_OP_STOP	0
-#define SCAN_OP_START	1
-#define SCAN_OP_SETPARM	2
 
 #define CMD_OFLD_SIZE sizeof(struct fwcmd_cmd_ofld)
 
@@ -56,12 +53,19 @@
 #define MAC_REG_W_OFLD(offset, mask, val, lc) \
 	write_mac_reg_ofld(adapter, offset, mask, val, lc)
 
+#define MAC_REG_W_OFLD2(offset, mask, val, lc) \
+	write_mac_reg_ofld(adapter, offset, mask, val >> shift_mask(mask), lc)
+
 #define MAC_REG_P_OFLD(offset, mask, val, lc) \
 	poll_mac_reg_ofld(adapter, offset, mask, val, lc)
 
-#define DELAY_OFLD(val, lc) \
-	poll_mac_reg_ofld(adapter, val, lc)
+#define MAC_REG_P_OFLD2(offset, mask, val, lc) \
+	poll_mac_reg_ofld(adapter, offset, mask, val >> shift_mask(mask), lc)
 
+#define DELAY_OFLD(val, lc) \
+	delay_ofld(adapter, val, lc)
+#define CMD_OFLD \
+	mac_cmd_ofld(adapter)
 /**
  * @enum PKT_OFLD_OP
  *
@@ -678,6 +682,31 @@ u32 mac_general_pkt_ids(struct mac_ax_adapter *adapter,
  */
 
 /**
+ * @brief mac_cmd_ofld
+ *
+ * This is the function for FW IO offload.
+ * Users could call the function to add write BB/RF/MAC REG command.
+ * When the aggregated commands are full or the command is last,
+ * FW would receive a H2C containing aggreated IO command.
+ *
+ * @param *adapter
+ * @return 0 for success. Others are fail.
+ * @retval u32
+ */
+u32 mac_cmd_ofld(struct mac_ax_adapter *adapter);
+/**
+ * @}
+ * @}
+ */
+
+/**
+ * @addtogroup Firmware
+ * @{
+ * @addtogroup FW_Offload
+ * @{
+ */
+
+/**
  * @brief mac_add_cmd_ofld
  *
  * This is the function for FW IO offload.
@@ -747,6 +776,14 @@ u32 get_ccxrpt_event(struct mac_ax_adapter *adapter,
  * @addtogroup FW_Offload
  * @{
  */
+
+u32 get_ftmrpt_event(struct mac_ax_adapter *adapter,
+		     struct rtw_c2h_info *c2h,
+		     enum phl_msg_evt_id *id, u8 *c2h_info);
+
+u32 get_ftmackrpt_event(struct mac_ax_adapter *adapter,
+			struct rtw_c2h_info *c2h,
+			enum phl_msg_evt_id *id, u8 *c2h_info);
 
 /**
  * @brief mac_scanofld_ch_list_clear
@@ -882,6 +919,25 @@ u32 mac_scanofld_fw_busy(struct mac_ax_adapter *adapter);
  * @retval u32
  */
 u32 mac_scanofld_chlist_busy(struct mac_ax_adapter *adapter);
+/**
+ * @}
+ * @}
+ */
+
+/**
+ * @brief mac_scanofld_hst_ctrl
+ *
+ * check whether halmac chlist or fw chlist are busy or not
+ *
+ * @param *adapter
+ * @param pri_ch
+ * @param ch_band
+ * @param op
+ * @return 0 for idle. Others are busy.
+ * @retval u32
+ */
+u32 mac_scanofld_hst_ctrl(struct mac_ax_adapter *adapter, u8 pri_ch, u8 ch_band,
+			  enum mac_ax_scanofld_ctrl op);
 /**
  * @}
  * @}

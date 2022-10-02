@@ -71,7 +71,10 @@ enum HALBB_CMD_ID {
 	HALBB_DCR_DBG,
 	HALBB_RX_GAIN_TABLE,
 	HALBB_HW_SETTING,
-	HALBB_MAC_PHY_INTF
+	HALBB_MAC_PHY_INTF,
+	HALBB_PATH_DIV,
+	HALBB_CMN_INFO,
+	HALBB_DTR_DBG
 };
 
 /*@--------------------------[Structure]-------------------------------------*/
@@ -129,8 +132,11 @@ static const struct halbb_cmd_info halbb_cmd_i[] = {
 	{"ant_div", HALBB_ANT_DIV},
 	{"dcr", HALBB_DCR_DBG},
 	{"gain_table", HALBB_RX_GAIN_TABLE},
+	{"dtr", HALBB_DTR_DBG},
 	{"hw_set", HALBB_HW_SETTING},
-	{"txinfo", HALBB_MAC_PHY_INTF}
+	{"path_div", HALBB_PATH_DIV},
+	{"txinfo", HALBB_MAC_PHY_INTF},
+	{"cmn_info", HALBB_CMN_INFO}
 	};
 
 /*@--------------------------[Prptotype]-------------------------------------*/

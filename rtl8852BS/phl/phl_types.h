@@ -153,6 +153,20 @@ enum lock_type {
 	#define s64 long long
 	#define MAC_ALEN 6
 
+	#ifndef fallthrough
+	#if __GNUC__ >= 5 || defined(__clang__)
+	#ifndef __has_attribute
+	#define __has_attribute(x) 0
+	#endif
+	#if __has_attribute(__fallthrough__)
+	#define fallthrough __attribute__((__fallthrough__))
+	#endif
+	#endif
+	#ifndef fallthrough
+	#define fallthrough do {} while (0) /* fallthrough */
+	#endif
+	#endif
+
 	/* keep define name then delete if osdep ready */
 	#define _dma unsigned long
 
@@ -186,8 +200,8 @@ struct _os_handler {
 		_os_workitem	workitem;
 		_os_thread thread;
 	} u;
-	_os_sema os_sema;
-	u8 created;
+	_os_sema hdlr_sema;
+	bool hdlr_created;
 };
 
 #ifndef PHL_PLATFORM_LINUX

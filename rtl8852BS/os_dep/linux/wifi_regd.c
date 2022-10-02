@@ -23,17 +23,10 @@ void rtw_chset_hook_os_channels(struct rf_ctl_t *rfctl)
 	u8 max_chan_nums = rfctl->max_chan_nums;
 	struct ieee80211_channel *ch;
 	unsigned int i;
-	u16 channel;
 	u32 freq;
 
 	for (i = 0; i < max_chan_nums; i++) {
-		channel = channel_set[i].ChannelNum;
-		#if CONFIG_IEEE80211_BAND_6GHZ
-		if (channel_set[i].band == BAND_ON_6G)
-			continue; /* TODO: wiphy with 6G band */
-		else
-		#endif
-			freq = rtw_ch2freq(channel);
+		freq = rtw_bch2freq(channel_set[i].band, channel_set[i].ChannelNum);
 		ch = ieee80211_get_channel(wiphy, freq);
 		if (!ch) {
 			rtw_warn_on(1);
@@ -109,9 +102,9 @@ loop:
 	last_end_freq = 0;
 	for (i = 0; i < chplan->chset_num; i++) {
 		chinfo = &chplan->chset[i];
-		freq = rtw_ch2freq_by_band(chinfo->band, chinfo->ChannelNum);
+		freq = rtw_bch2freq(chinfo->band, chinfo->ChannelNum);
 		if (!freq) {
-			RTW_WARN(FUNC_WIPHY_FMT" rtw_ch2freq_by_band(%s, %u) fail\n"
+			RTW_WARN(FUNC_WIPHY_FMT" rtw_bch2freq(%s, %u) fail\n"
 				, FUNC_WIPHY_ARG(wiphy), band_str(chinfo->band), chinfo->ChannelNum);
 			continue;
 		}
@@ -409,7 +402,7 @@ u8 rtw_os_init_channel_set(_adapter *padapter, RT_CHANNEL_INFO *channel_set)
 	return chanset_size;
 }
 
-s16 rtw_os_get_total_txpwr_regd_lmt_mbm(_adapter *adapter, u8 cch, enum channel_width bw)
+s16 rtw_os_get_total_txpwr_regd_lmt_mbm(_adapter *adapter, enum band_type band, u8 cch, enum channel_width bw)
 {
 	struct wiphy *wiphy = adapter_to_wiphy(adapter);
 	s16 mbm = UNSPECIFIED_MBM;
@@ -419,11 +412,11 @@ s16 rtw_os_get_total_txpwr_regd_lmt_mbm(_adapter *adapter, u8 cch, enum channel_
 	u32 freq;
 	struct ieee80211_channel *ch;
 
-	if (!rtw_get_op_chs_by_cch_bw(cch, bw, &op_chs, &op_ch_num))
+	if (!rtw_get_op_chs_by_bcch_bw(band, cch, bw, &op_chs, &op_ch_num))
 		goto exit;
 
 	for (i = 0; i < op_ch_num; i++) {
-		freq = rtw_ch2freq(op_chs[i]);
+		freq = rtw_bch2freq(band, op_chs[i]);
 		ch = ieee80211_get_channel(wiphy, freq);
 		if (!ch) {
 			rtw_warn_on(1);

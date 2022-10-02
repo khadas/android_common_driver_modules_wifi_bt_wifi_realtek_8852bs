@@ -729,9 +729,9 @@ static void dump_err_status_cmac(struct mac_ax_adapter *adapter, u8 band)
 	}
 
 	if (cmac_err & B_AX_PHYINTF_ERR_IND) {
-		PLTFM_MSG_ERR("R_AX_PHYINFO_ERR_IMR=0x%04x\n",
-			      MAC_REG_R16(band == MAC_AX_BAND_0 ?
-			      R_AX_PHYINFO_ERR_IMR : R_AX_PHYINFO_ERR_IMR_C1));
+		PLTFM_MSG_ERR("R_AX_PHYINFO_ERR_ISR_IMR=0x%04x\n",
+			      MAC_REG_R32(band == MAC_AX_BAND_0 ?
+			      R_AX_PHYINFO_ERR_ISR_IMR : R_AX_PHYINFO_ERR_ISR_IMR_C1));
 	}
 
 	if (cmac_err & B_AX_TXPWR_CTRL_ERR_IND) {
@@ -747,9 +747,9 @@ static void dump_err_status_cmac(struct mac_ax_adapter *adapter, u8 band)
 		PLTFM_MSG_ERR("R_AX_DBGSEL_TRXPTCL=0x%08x\n",
 			      MAC_REG_R32(band == MAC_AX_BAND_0 ?
 			      R_AX_DBGSEL_TRXPTCL : R_AX_DBGSEL_TRXPTCL_C1));
-		PLTFM_MSG_ERR("R_AX_PHYINFO_ERR_ISR=0x%08x\n",
+		PLTFM_MSG_ERR("R_AX_PHYINFO_ERR_ISR_IMR=0x%08x\n",
 			      MAC_REG_R32(band == MAC_AX_BAND_0 ?
-			      R_AX_PHYINFO_ERR_ISR : R_AX_PHYINFO_ERR_ISR_C1));
+			      R_AX_PHYINFO_ERR_ISR_IMR : R_AX_PHYINFO_ERR_ISR_IMR_C1));
 	}
 
 	if (cmac_err & B_AX_WMAC_TX_ERR_IND) {

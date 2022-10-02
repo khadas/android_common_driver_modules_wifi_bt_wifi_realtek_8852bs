@@ -131,6 +131,10 @@ struct bb_dig_cr_info {
 	u32 seg0r_pd_spatial_reuse_en_a_m;
 	u32 seg0r_pd_lower_bound_a;
 	u32 seg0r_pd_lower_bound_a_m;
+	u32 rssi_nocca_low_th_a;
+	u32 rssi_nocca_low_th_a_m;
+	u32 cca_rssi_lmt_en_a;
+	u32 cca_rssi_lmt_en_a_m;
 	u32 path0_p20_follow_by_pagcugc_en_a;
 	u32 path0_s20_follow_by_pagcugc_en_a;
 	u32 path1_p20_follow_by_pagcugc_en_a;
@@ -268,6 +272,7 @@ struct bb_dig_op_unit {
 };
 
 struct bb_dig_info {
+	bool init_dig_cr_success;
 	enum dig_op_mode 	dig_mode;
 	enum dig_op_mode 	pre_dig_mode;
 	struct bb_dig_cr_info	bb_dig_cr_i;

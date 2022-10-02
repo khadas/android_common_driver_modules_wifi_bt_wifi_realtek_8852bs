@@ -31,6 +31,16 @@ u32 mac_pinmux_set_func_8852b(struct mac_ax_adapter *adapter,
 			      enum mac_ax_gpio_func func);
 
 /**
+ * @brief mac_gpio_init_8852b
+ *
+ * @param *adapter
+ * @return Please Place Description here.
+ * @retval u32
+ */
+
+u32 mac_gpio_init_8852b(struct mac_ax_adapter *adapter);
+
+/**
  * @brief mac_set_gpio_func_8852b
  *
  * @param *adapter

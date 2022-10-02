@@ -398,7 +398,7 @@ enum rtw_hal_status rtw_hal_sdio_tx(void *hal, u8 dma_ch, u8 *buf, u32 buf_len,
 #endif /* CONFIG_SDIO_HCI */
 
 #define TX_DBG_STATUS_DUMP_INTERVAL 30000 /* ms */
-void rtw_hal_tx_dbg_status_dump(void *hal)
+void rtw_hal_tx_dbg_status_dump(void *hal, enum phl_band_idx hwband)
 {
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
 	struct hal_mac_dbg_dump_cfg cfg = {0};
@@ -407,6 +407,7 @@ void rtw_hal_tx_dbg_status_dump(void *hal)
 	cfg.tx_flow_dbg = 1;
 
 	if (phl_get_passing_time_ms(last_dump_t) >= TX_DBG_STATUS_DUMP_INTERVAL) {
+		rtw_hal_notification(hal_info, MSG_EVT_DBG_TX_DUMP, hwband);
 		rtw_hal_mac_dbg_status_dump(hal_info, &cfg);
 		last_dump_t = _os_get_cur_time_ms();
 	}

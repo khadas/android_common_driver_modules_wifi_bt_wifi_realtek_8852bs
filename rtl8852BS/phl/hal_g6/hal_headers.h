@@ -31,6 +31,7 @@
 #include "../phl_ser_def.h"
 #include "../phl_regulation_def.h"
 #include "../phl_led_def.h"
+#include "../phl_acs_def.h"
 #include "../custom/phl_custom_def.h"
 #include "../custom/phl_custom_api.h"
 
@@ -45,8 +46,10 @@
 #endif
 
 #include "hal_general_def.h"
-#include "hal_def.h"
 #include "hal_config.h"
+#include "hal_def.h"
+#include "mac/mac_exp_def.h"
+#include "mac/mac_outsrc_def.h"
 #include "../phl_api_drv.h"
 #include "hal_struct.h"
 #include "hal_io.h"
@@ -80,6 +83,8 @@
 #include "hal_ps.h"
 #include "hal_custom.h"
 #include "hal_txpwr.h"
+#include "hal_com_i.h"
+#include "hal_dfs.h"
 
 #define hal_to_drvpriv(_halinfo) (_halinfo->hal_com->drv_priv)
 

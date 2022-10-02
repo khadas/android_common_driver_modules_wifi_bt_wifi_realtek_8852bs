@@ -19,6 +19,9 @@ const char *rtw_phl_get_pw_lmt_regu_type_str(void *phl, enum band_type band);
 
 bool rtw_phl_get_pwr_lmt_en(void *phl, u8 band_idx);
 
-enum rtw_phl_status rtw_phl_set_tx_power(void *phl, u8 band_idx);
+enum rtw_phl_status
+phl_cmd_txpwr_ctl_hdl(void *phl, u8 *param_buf);
+
+enum rtw_phl_status rtw_phl_get_txinfo_pwr(void *phl, s16 *pwr_dbm);
 
 #endif /*_PHL_TXPWR_H_*/

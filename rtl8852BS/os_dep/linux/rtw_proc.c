@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2019 Realtek Corporation.
+ * Copyright(c) 2007 - 2022 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -1184,7 +1184,7 @@ static int proc_get_tx_info_msg(struct seq_file *m, void *v)
 	struct sta_priv *pstapriv = &padapter->stapriv;
 	int i;
 	_list	*plist, *phead;
-	u8 current_rate_id = 0, current_sgi = 0;
+	u16 current_rate_id = 0, current_sgi = 0;
 
 	char *BW, *status;
 
@@ -1235,7 +1235,7 @@ static int proc_get_tx_info_msg(struct seq_file *m, void *v)
 					BW = "";
 					break;
 				}
-				current_rate_id = rtw_hal_get_current_tx_rate(adapter, psta);
+				current_rate_id = rtw_get_current_tx_rate(adapter, psta);
 				current_sgi = rtw_get_current_tx_sgi(adapter, psta);
 
 				RTW_PRINT_SEL(m, "==============================\n");
@@ -1300,16 +1300,6 @@ static ssize_t proc_set_false_alarm_accumulated(struct file *file,
 }
 
 #ifdef ROKU_PRIVATE
-static u32 rtw_tx_sts_total(u32 *tx_sts, u8 num)
-{
-	u32 ret = 0;
-	int i = 0;
-
-	for (i = 0; i < num; i++)
-		ret += tx_sts[i];
-	return ret;
-}
-
 static int proc_get_roku_trx_info_msg(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
@@ -1328,17 +1318,6 @@ static int proc_get_roku_trx_info_msg(struct seq_file *m, void *v)
 	u32 tx_retry_cnt[PHL_AC_QUEUE_TOTAL] = {0};
 	u32 tx_fail_cnt[PHL_AC_QUEUE_TOTAL] = {0};
 	u32 tx_ok_cnt[PHL_AC_QUEUE_TOTAL] = {0};
-
-#if 0
-	struct hal_spec_t *hal_spec = GET_HAL_SPEC(adapter);
-	struct sta_recv_dframe_info *psta_dframe_info;
-	char cnt_str[168] = {0};
-	char tmp_str[21] = {0};
-	u8 rx_nss_num = hal_spec->rx_nss_num;
-	char *BW;
-	u8 isCCKrate = 0, rf_path = 0;
-	u8 tx_stats_category = 1; /* 0: pass, 1:drop */
-#endif
 
 #if 0
 	psta = rtw_get_stainfo(pstapriv, get_bssid(pmlmepriv));
@@ -1472,17 +1451,8 @@ static int proc_get_roku_trx_info_msg(struct seq_file *m, void *v)
 #endif
 
 		if(psta) {
-			rtw_phl_get_tx_retry_rpt(GET_PHL_INFO(adapter_to_dvobj(adapter)),psta->phl_sta,
-				tx_retry_cnt, PHL_AC_QUEUE_TOTAL);
-			rtw_phl_get_tx_fail_rpt(GET_PHL_INFO(adapter_to_dvobj(adapter)), psta->phl_sta,
-				tx_fail_cnt, PHL_AC_QUEUE_TOTAL);
-			rtw_phl_get_tx_ok_rpt(GET_PHL_INFO(adapter_to_dvobj(adapter)), psta->phl_sta,
-				tx_ok_cnt, PHL_AC_QUEUE_TOTAL);
+			rtw_get_sta_tx_stat(adapter, psta);
 			pstats = &psta->sta_stats;
-			pstats->tx_retry_cnt = rtw_tx_sts_total(tx_retry_cnt, PHL_AC_QUEUE_TOTAL);
-			pstats->tx_fail_cnt = rtw_tx_sts_total(tx_fail_cnt, PHL_AC_QUEUE_TOTAL);
-			pstats->tx_ok_cnt =  rtw_tx_sts_total(tx_ok_cnt, PHL_AC_QUEUE_TOTAL);
-			pstats->total_tx_retry_cnt += pstats->tx_retry_cnt;
 
 			RTW_PRINT_SEL(m, "MAC: " MAC_FMT " sent: %u fail: %u retry: %u\n",
 			MAC_ARG(&sta_mac[i][0]), pstats->tx_ok_cnt, pstats->tx_fail_cnt, pstats->tx_retry_cnt);
@@ -2259,7 +2229,7 @@ ssize_t proc_set_update_non_ocp(struct file *file, const char __user *buffer, si
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 	char tmp[32];
-	u8 ch, bw = CHANNEL_WIDTH_20, offset = CHAN_OFFSET_NO_EXT;
+	u8 band, ch, bw = CHANNEL_WIDTH_20, offset = CHAN_OFFSET_NO_EXT;
 	int ms = -1;
 	bool updated = 0;
 
@@ -2273,22 +2243,24 @@ ssize_t proc_set_update_non_ocp(struct file *file, const char __user *buffer, si
 
 	if (buffer && !copy_from_user(tmp, buffer, count)) {
 
-		int num = sscanf(tmp, "%hhu %hhu %hhu %d", &ch, &bw, &offset, &ms);
+		int num = sscanf(tmp, "%hhu %hhu %hhu %hhu %d", &band, &ch, &bw, &offset, &ms);
 
-		if (num < 1 || (bw != CHANNEL_WIDTH_20 && num < 3))
+		if (num < 1 || (bw != CHANNEL_WIDTH_20 && num < 4))
 			goto exit;
 
 		if (bw == CHANNEL_WIDTH_20)
-			updated = rtw_chset_update_non_ocp_ms(rfctl->channel_set
-				, ch, bw, CHAN_OFFSET_NO_EXT, ms);
+			updated = rtw_chset_update_non_ocp_ms_by_band(rfctl->channel_set
+				, band, ch, bw, CHAN_OFFSET_NO_EXT, ms);
 		else
-			updated = rtw_chset_update_non_ocp_ms(rfctl->channel_set
-				, ch, bw, offset, ms);
+			updated = rtw_chset_update_non_ocp_ms_by_band(rfctl->channel_set
+				, band, ch, bw, offset, ms);
 
 		if (updated) {
-			u8 cch = rtw_get_center_ch(ch, bw, offset);
+			u8 i;
+			u8 cch = rtw_get_center_ch_by_band(band, ch, bw, offset);
 
-			rtw_nlrtw_nop_start_event(adapter, cch, bw);
+			for (i = HW_BAND_0; i < HW_BAND_MAX; i++)
+				rtw_nlrtw_nop_start_event(adapter_to_rfctl(adapter), i, band, cch, bw);
 		}
 	}
 
@@ -2447,8 +2419,11 @@ static ssize_t proc_set_dfs_slave_with_rd(struct file *file, const char __user *
 	rd = rd ? 1 : 0;
 
 	if (rfctl->dfs_slave_with_rd != rd) {
+		int i;
+
 		rfctl->dfs_slave_with_rd = rd;
-		rtw_dfs_rd_en_decision_cmd(adapter);
+		for (i = HW_BAND_0; i < HW_BAND_MAX; i++)
+			rtw_dfs_rd_en_decision_cmd(adapter_to_dvobj(adapter), i);
 	}
 
 exit:
@@ -2961,12 +2936,59 @@ static int proc_get_tx_power_limit(struct seq_file *m, void *v)
 }
 #endif /* CONFIG_TXPWR_LIMIT */
 
+static int proc_get_tpc_settings(struct seq_file *m, void *v)
+{
+	struct net_device *dev = m->private;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+
+	dump_txpwr_tpc_settings(m, adapter_to_dvobj(adapter));
+
+	return 0;
+}
+
+static ssize_t proc_set_tpc_settings(struct file *file, const char __user *buffer, size_t count, loff_t *pos, void *data)
+{
+	struct net_device *dev = data;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
+	struct rf_ctl_t *rfctl = dvobj_to_rfctl(dvobj);
+
+	char tmp[32] = {0};
+	u8 mode;
+	u16 m_constraint;
+
+	if (count > sizeof(tmp)) {
+		rtw_warn_on(1);
+		return -EFAULT;
+	}
+
+	if (buffer && !copy_from_user(tmp, buffer, count)) {
+
+		int num = sscanf(tmp, "%hhu %hu", &mode, &m_constraint);
+
+		if (num < 1)
+			return count;
+
+		if (mode >= TPC_MODE_INVALID)
+			return count;
+
+		if (mode == TPC_MODE_MANUAL && num >= 2)
+			rfctl->tpc_manual_constraint = rtw_min(m_constraint, TPC_MANUAL_CONSTRAINT_MAX);
+		rfctl->tpc_mode = mode;
+
+		if (rtw_hw_is_init_completed(dvobj))
+			rtw_run_in_thread_cmd_wait(adapter, (void *)rtw_update_txpwr_level_all_hwband, dvobj, 2000);
+	}
+
+	return count;
+}
+
 static int proc_get_tx_power_ext_info(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 
-	rtw_dump_phl_tx_power_ext_info(m, adapter);
+	dump_tx_power_ext_info(m, adapter_to_dvobj(adapter));
 
 	return 0;
 }
@@ -3382,7 +3404,7 @@ int proc_get_mac_addr(struct seq_file *m, void *v)
 	struct net_device *dev = m->private;
 	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
 
-	rtw_hal_dump_macaddr(m, adapter);
+	rtw_dump_macaddr(m, adapter);
 	return 0;
 }
 
@@ -5048,6 +5070,10 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("led_config", proc_get_led_config, proc_set_led_config),
 #endif
 
+#ifdef CONFIG_POWER_SAVE
+	RTW_PROC_HDL_SSEQ("ps_info", NULL, proc_set_ps_info),
+#endif /* CONFIG_POWER_SAVE */
+
 #ifdef CONFIG_AP_MODE
 	RTW_PROC_HDL_SSEQ("aid_status", proc_get_aid_status, proc_set_aid_status),
 	RTW_PROC_HDL_SSEQ("all_sta_info", proc_get_all_sta_info, NULL),
@@ -5078,7 +5104,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("rx_ampdu_factor", proc_get_rx_ampdu_factor, proc_set_rx_ampdu_factor),
 	RTW_PROC_HDL_SSEQ("rx_ampdu_density", proc_get_rx_ampdu_density, proc_set_rx_ampdu_density),
 	RTW_PROC_HDL_SSEQ("tx_ampdu_density", proc_get_tx_ampdu_density, proc_set_tx_ampdu_density),
-	RTW_PROC_HDL_SSEQ("tx_max_agg_num", proc_get_tx_max_agg_num, proc_set_tx_max_agg_num),
+	RTW_PROC_HDL_SSEQ("tx_ampdu_num", proc_get_tx_ampdu_num, proc_set_tx_ampdu_num),
 	RTW_PROC_HDL_SSEQ("tx_quick_addba_req", proc_get_tx_quick_addba_req, proc_set_tx_quick_addba_req),
 #ifdef CONFIG_TX_AMSDU
 	RTW_PROC_HDL_SSEQ("tx_amsdu", proc_get_tx_amsdu, proc_set_tx_amsdu),
@@ -5211,6 +5237,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 #if CONFIG_TXPWR_LIMIT
 	RTW_PROC_HDL_SSEQ("tx_power_limit", proc_get_tx_power_limit, NULL),
 #endif
+	RTW_PROC_HDL_SSEQ("tpc_settings", proc_get_tpc_settings, proc_set_tpc_settings),
 	RTW_PROC_HDL_SSEQ("tx_power_ext_info", proc_get_tx_power_ext_info, proc_set_tx_power_ext_info),
 #ifdef GEORGIA_TODO_TX_PWR
 	RTW_PROC_HDL_SEQ("tx_power_idx", &seq_ops_tx_power_idx, NULL),
@@ -5252,6 +5279,7 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("rx_stat", proc_get_rx_stat, NULL),
 
 	RTW_PROC_HDL_SSEQ("tx_stat", proc_get_tx_stat, NULL),
+	RTW_PROC_HDL_SSEQ("sta_tx_stat", proc_get_sta_tx_stat, proc_set_sta_tx_stat),
 	/**** PHY Capability ****/
 	RTW_PROC_HDL_SSEQ("phy_cap", proc_get_phy_cap, NULL),
 #ifdef CONFIG_80211N_HT

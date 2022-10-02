@@ -44,7 +44,7 @@ void halbb_dbg_comp_init(struct bb_info *bb)
 		/*DBG_EDCCA |		*/
 		/*DBG_ENV_MNTR |	*/
 		/*DBG_CFO_TRK |		*/
-		/*DBG_PHY_STATUS |	*/
+		/*DBG_PHY_STS |	*/
 		/*DBG_COMMON_FLOW |	*/
 		/*DBG_IC_API |		*/
 		/*DBG_DBG_API |		*/
@@ -326,6 +326,165 @@ void halbb_dbgport_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 #endif
 
 #if HALBB_DBG_DVLP_FLAG /*Common debug message - relative*/
+void halbb_crc32_cnt2_cmn_log(struct bb_info *bb)
+{
+	struct bb_stat_info *stat_t = &bb->bb_stat_i;
+	struct bb_crc2_info *crc2 = &stat_t->bb_crc2_i;
+	struct bb_usr_set_info *usr_set = &stat_t->bb_usr_set_i;
+	char dbg_buf[4][HALBB_SNPRINT_SIZE] = {0};
+
+	halbb_print_rate_2_buff(bb, usr_set->ofdm2_rate_idx,
+				RTW_GILTF_LGI_4XHE32, dbg_buf[0], HALBB_SNPRINT_SIZE);
+	halbb_print_rate_2_buff(bb, usr_set->ht2_rate_idx,
+				RTW_GILTF_LGI_4XHE32, dbg_buf[1], HALBB_SNPRINT_SIZE);
+	halbb_print_rate_2_buff(bb, usr_set->vht2_rate_idx,
+				RTW_GILTF_LGI_4XHE32, dbg_buf[2], HALBB_SNPRINT_SIZE);
+	halbb_print_rate_2_buff(bb, usr_set->he2_rate_idx,
+				RTW_GILTF_LGI_4XHE32, dbg_buf[3], HALBB_SNPRINT_SIZE);
+
+	BB_DBG(bb, DBG_CMN,
+	       "[CRC32 OK Cnt] {%s, %s, %s, %s}= {%d, %d, %d, %d}\n",
+	       dbg_buf[0], dbg_buf[1], dbg_buf[2], dbg_buf[3],
+	       crc2->cnt_ofdm2_crc32_ok, crc2->cnt_ht2_crc32_ok,
+	       crc2->cnt_vht2_crc32_ok, crc2->cnt_he2_crc32_ok);
+
+	BB_DBG(bb, DBG_CMN,
+	       "[CRC32 Err Cnt] {%s, %s, %s , %s}= {%d, %d, %d, %d}\n",
+	       dbg_buf[0], dbg_buf[1], dbg_buf[2], dbg_buf[3],
+	       crc2->cnt_ofdm2_crc32_error, crc2->cnt_ht2_crc32_error,
+	       crc2->cnt_vht2_crc32_error, crc2->cnt_he2_crc32_error);
+}
+
+void halbb_crc32_cnt3_cmn_log(struct bb_info *bb)
+{
+	struct bb_stat_info *stat_t = &bb->bb_stat_i;
+	struct bb_usr_set_info *usr_set = &stat_t->bb_usr_set_i;
+	struct bb_crc2_info *crc2 = &stat_t->bb_crc2_i;
+
+	u32 total_cnt = 0;
+	u8 pcr = 0;
+	total_cnt = crc2->cnt_ofdm3_crc32_ok + crc2->cnt_ofdm3_crc32_error;
+	pcr = (u8)HALBB_DIV(crc2->cnt_ofdm3_crc32_ok * 100, total_cnt);
+
+	switch(usr_set->stat_type_sel_i) {
+	case STATE_PROBE_RESP:
+		BB_DBG(bb, DBG_CMN,
+		  "[Probe Response Data CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_BEACON:
+		BB_DBG(bb, DBG_CMN,
+		  "[Beacon CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_ACTION:
+		BB_DBG(bb, DBG_CMN,
+		  "[Action CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_BFRP:
+		BB_DBG(bb, DBG_CMN,
+		  "[BFRP CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_NDPA:
+		BB_DBG(bb, DBG_CMN,
+		  "[NDPA CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_BA:
+		BB_DBG(bb, DBG_CMN,
+		  "[BA CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_RTS:
+		BB_DBG(bb, DBG_CMN,
+		  "[RTS CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_CTS:
+		BB_DBG(bb, DBG_CMN,
+		  "[CTS CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_ACK:
+		BB_DBG(bb, DBG_CMN,
+		  "[ACK CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_DATA:
+		BB_DBG(bb, DBG_CMN,
+		  "[DATA CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_NULL:
+		BB_DBG(bb, DBG_CMN,
+		  "[Null CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	case STATE_QOS:
+		BB_DBG(bb, DBG_CMN,
+		  "[QoS CRC32 Cnt(OFDM only)] {error, ok}= {%d, %d} (PCR=%d percent)\n",
+		  crc2->cnt_ofdm3_crc32_error,
+		  crc2->cnt_ofdm3_crc32_ok, pcr);
+		break;
+	default:
+		break;
+	}
+}
+
+void halbb_dig_cmn_log(struct bb_info *bb)
+{
+	struct bb_dig_cr_info *cr = &bb->bb_dig_i.bb_dig_cr_i;
+	u8 i = 0;
+	u8 lna = 0, tia = 0, rxbb = 0;
+	u8 ofdm_pd_th = 0, ofdm_pd_th_en = 0, cck_pd_th_en = 0;
+	u8 rx_num_path = bb->hal_com->rfpath_rx_num;
+	s8 cck_pd_th = 0;
+
+	if (bb->bb_watchdog_mode != BB_WATCHDOG_NORMAL)
+		return;
+
+	for (i = 0; i < rx_num_path; i++) {
+		lna = halbb_get_lna_idx(bb, i);
+		tia = halbb_get_tia_idx(bb, i);
+		rxbb = halbb_get_rxb_idx(bb, i);
+		BB_DBG(bb, DBG_CMN, "[DIG][Path-%d] Get(lna,tia,rxb)=(%d,%d,%d)\n",
+		       i, lna, tia, rxbb);
+	}
+
+	ofdm_pd_th = (u8)halbb_get_reg_cmn(bb, cr->seg0r_pd_lower_bound_a,
+					   cr->seg0r_pd_lower_bound_a_m,
+					   bb->bb_phy_idx);
+	ofdm_pd_th_en = (u8)halbb_get_reg_cmn(bb, cr->seg0r_pd_spatial_reuse_en_a,
+					      cr->seg0r_pd_spatial_reuse_en_a_m,
+					      bb->bb_phy_idx);
+	cck_pd_th = (s8)halbb_get_reg(bb, cr->rssi_nocca_low_th_a,
+				      cr->rssi_nocca_low_th_a_m);
+	cck_pd_th_en = (u8)halbb_get_reg(bb, cr->cca_rssi_lmt_en_a,
+					 cr->cca_rssi_lmt_en_a_m);
+
+	if ((bb->ic_type == BB_RTL8852A && bb->hal_com->cv < CCV) ||
+	    (bb->ic_type == BB_RTL8852B && bb->hal_com->cv < CBV))
+		BB_DBG(bb, DBG_CMN, "PD_low_bd_en(ofdm) : (%d), PD_low_bd(ofdm) = (-%d) dBm\n",
+		       ofdm_pd_th_en, 102 - (ofdm_pd_th << 1));
+	else
+		BB_DBG(bb, DBG_CMN, "PD_low_bd_en(ofdm, cck) : (%d, %d), PD_low_bd(ofdm, cck) = (-%d, %d) dBm\n",
+		       ofdm_pd_th_en, cck_pd_th_en, 102 - (ofdm_pd_th << 1),
+		       cck_pd_th);
+}
+
 void halbb_rx_rate_distribution_su_cnsl(struct bb_info *bb, u32 *_used,
 			      char *output, u32 *_out_len)
 {
@@ -1112,18 +1271,14 @@ void halbb_basic_dbg_message(struct bb_info *bb)
 	struct bb_ch_info	*ch = &bb->bb_ch_i;
 	struct bb_dbg_info	*dbg = &bb->bb_dbg_i;
 	struct bb_physts_info	*physts = &bb->bb_physts_i;
-	struct bb_dig_cr_info *cr = &bb->bb_dig_i.bb_dig_cr_i;
+struct bb_cmn_dbg_info *cmn_dbg = &bb->bb_cmn_hooker->bb_cmn_dbg_i;
 	enum channel_width bw = bb->hal_com->band[0].cur_chandef.bw;
 	u8 fc = bb->hal_com->band[0].cur_chandef.center_ch;
 	u8 sta_cnt = 0;
-	u8 i;
-	u8 lna = 0, tia = 0, rxbb = 0;
-	u8 pd_low_bd = 0, pd_low_bd_en = 0;
-	u8 rx_num_path = bb->hal_com->rfpath_rx_num;
-	u32 pd_low_bd_a = cr->seg0r_pd_lower_bound_a;
-	u32 pd_low_bd_a_m = cr->seg0r_pd_lower_bound_a_m;
-	u32 pd_sr_en_a = cr->seg0r_pd_spatial_reuse_en_a;
-	u32 pd_sr_en_a_m = cr->seg0r_pd_spatial_reuse_en_a_m;
+	u8 i = 0;
+	char ext_loss[HALBB_MAX_PATH][HALBB_SNPRINT_SIZE];
+	if (cmn_dbg->cmn_log_2_cnsl_en)
+		return;
 
 #ifdef HALBB_DBG_TRACE_SUPPORT
 	if (!(bb->dbg_component & DBG_CMN))
@@ -1151,7 +1306,34 @@ void halbb_basic_dbg_message(struct bb_info *bb)
 	       ch->rssi_max >> 1, (ch->rssi_max & 1) * 5,
 	       ch->rssi_min >> 1, (ch->rssi_min & 1) * 5,
 	       ch->is_noisy);
-	BB_DBG(bb, DBG_CMN, "physts_cnt{all, 2_self, err_len, ok_ie, err_ie}={%d,%d,%d,%d,%d}\n",
+
+	for (i = 0; i < HALBB_MAX_PATH; i++)
+		halbb_print_sign_frac_digit(bb, ch->ext_loss[i], 8, 2,
+					    ext_loss[i], HALBB_SNPRINT_SIZE);
+
+	halbb_print_sign_frac_digit(bb, ch->ext_loss_avg, 8, 2, bb->dbg_buf,
+				    HALBB_SNPRINT_SIZE);
+
+#if (defined(HALBB_COMPILE_ABOVE_4SS))
+	BB_DBG(bb, DBG_CMN,
+	       "ext_loss{avg, a, b, c, d} = {%s, %s, %s, %s, %s} dB, int rssi_max/min = {%02d.%d, %02d.%d}\n",
+	       bb->dbg_buf, ext_loss[0], ext_loss[1], ext_loss[2], ext_loss[3],
+	       ch->int_rssi_max >> 1, (ch->int_rssi_max & 1) * 5,
+	       ch->int_rssi_min >> 1, (ch->int_rssi_min & 1) * 5);
+#elif (defined(HALBB_COMPILE_ABOVE_2SS))
+	BB_DBG(bb, DBG_CMN,
+	       "ext_loss{avg, a, b} = {%s, %s, %s} dB, int rssi_max/min = {%02d.%d, %02d.%d}\n",
+	       bb->dbg_buf, ext_loss[0], ext_loss[1], ch->int_rssi_max >> 1,
+	       (ch->int_rssi_max & 1) * 5, ch->int_rssi_min >> 1,
+	       (ch->int_rssi_min & 1) * 5);
+#else
+	BB_DBG(bb, DBG_CMN,
+	       "ext_loss=%s dB, int rssi_max/min = {%02d.%d, %02d.%d}\n",
+	       ext_loss[0], ch->int_rssi_max >> 1, (ch->int_rssi_max & 1) * 5,
+	       ch->int_rssi_min >> 1, (ch->int_rssi_min & 1) * 5);
+#endif
+
+	BB_DBG(bb, DBG_CMN, "physts_cnt{all, 2_self, ok_ie, err_ie, err_len}={%d,%d,%d,%d,%d}\n",
 	       physts->bb_physts_cnt_i.all_cnt, physts->bb_physts_cnt_i.is_2_self_cnt,
 	       physts->bb_physts_cnt_i.ok_ie_cnt, physts->bb_physts_cnt_i.err_ie_cnt,
 	       physts->bb_physts_cnt_i.err_len_cnt);
@@ -1170,6 +1352,8 @@ void halbb_basic_dbg_message(struct bb_info *bb)
 	BB_DBG(bb, DBG_CMN, "\n");
 	BB_DBG(bb, DBG_CMN, "====[3. PMAC]\n");
 	halbb_basic_dbg_msg_pmac(bb);
+	halbb_crc32_cnt2_cmn_log(bb);
+	halbb_crc32_cnt3_cmn_log(bb);
 	BB_DBG(bb, DBG_CMN, "\n");
 	BB_DBG(bb, DBG_CMN, "====[4. TX General]\n");
 	halbb_basic_dbg_msg_mac_phy_intf(bb);
@@ -1191,18 +1375,7 @@ void halbb_basic_dbg_message(struct bb_info *bb)
 	}
 	BB_DBG(bb, DBG_CMN, "\n");
 	BB_DBG(bb, DBG_CMN, "====[9. DIG]\n");
-	for (i = 0; i < rx_num_path; i++) {
-		lna = halbb_get_lna_idx(bb, i);
-		tia = halbb_get_tia_idx(bb, i);
-		rxbb = halbb_get_rxb_idx(bb, i);
-		BB_DBG(bb, DBG_CMN, "[DIG][Path-%d] Get(lna,tia,rxb)=(%d,%d,%d)\n",
-		       i, lna, tia, rxbb);
-	}
-
-	pd_low_bd = (u8)halbb_get_reg(bb, pd_low_bd_a, pd_low_bd_a_m);
-	pd_low_bd_en = (u8)halbb_get_reg(bb, pd_sr_en_a, pd_sr_en_a_m);
-	BB_DBG(bb, DBG_CMN, "PD_low_bd_en : %d, PD_low_bd = %d\n", pd_low_bd_en,
-	       pd_low_bd);
+	halbb_dig_cmn_log(bb);
 
 	BB_DBG(bb, DBG_CMN, "============================================\n");
 	BB_DBG(bb, DBG_CMN, "\n");
@@ -1421,6 +1594,13 @@ void halbb_basic_profile_dbg(struct bb_info *bb, u32 *_used, char *output, u32 *
 	#endif
 	BB_DBG_CNSL(out_len, used, output + used, out_len - used, "  %-25s: %s\n",
 		    "DBCC", support);
+	#ifdef HALBB_PATH_DIV_SUPPORT
+	support = "Y";
+	#else
+	support = ".";
+	#endif
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used, "  %-25s: %s\n",
+		    "PATH_DIV", support);
 
 	*_used = used;
 	*_out_len = out_len;
@@ -1841,6 +2021,8 @@ void halbb_dbg_setting_init(struct bb_info *bb)
 
 	bb->bb_dbg_i.cr_recorder_en = false;
 	bb->bb_dbg_i.cr_dbg_mode_en = false;
+
+	bb->bb_cmn_hooker->bb_cmn_dbg_i.cmn_log_2_cnsl_en = false;
 }
 
 void halbb_cr_cfg_dbg_init(struct bb_info *bb)

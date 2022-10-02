@@ -347,6 +347,8 @@ struct halrf_pwr_info {
 	s8 fix_power_dbm[MAX_HALRF_PATH];
 	bool set_tx_ptrn_shap_en;
 	u8 set_tx_ptrn_shap_idx[PW_LMT_MAX_BAND][TX_SHAPE_MAX];
+	u8 power_constraint[HW_PHY_MAX];
+	s8 dpk_mcc_power;
 };
 
 extern const char * const _pw_lmt_regu_type_str[PW_LMT_MAX_REGULATION_NUM];
@@ -374,5 +376,14 @@ void halrf_power_limit_ru_store_to_array(struct rf_info *rf,
 void halrf_power_limit_ru_set_worldwide(struct rf_info *rf);
 
 u8 halrf_get_power_limit_extra(struct rf_info *rf);
+
+void halrf_modify_pwr_table_bitmask(struct rf_info *rf,
+	enum phl_phy_idx phy, enum phl_pwr_table pwr_table);
+
+s8 halrf_get_pwr_control(struct rf_info *rf, enum phl_phy_idx phy);
+
+bool halrf_pwr_is_minus(struct rf_info *rf, u32 reg_tmp);
+
+s32 halrf_show_pwr_table(struct rf_info *rf, u32 reg_tmp);
 
 #endif

@@ -19,6 +19,7 @@ void phl_datapath_deinit(struct phl_info_t *phl_info);
 enum rtw_phl_status phl_datapath_init(struct phl_info_t *phl_info);
 enum rtw_phl_status phl_datapath_start(struct phl_info_t *phl_info);
 void phl_datapath_stop(struct phl_info_t *phl_info);
+void phl_datapath_reset(struct phl_info_t *phl_info, u8 type);
 void phl_trx_free_handler(void *phl);
 void phl_trx_free_sw_rsc(void *phl);
 
@@ -89,5 +90,9 @@ phl_data_ctrler(struct phl_info_t *phl_info, struct phl_data_ctl_t *ctl,
 
 void rtw_phl_tx_stop(void *phl);
 void rtw_phl_tx_resume(void *phl);
+
+void rtw_phl_packet_event_notify(void *phl,
+                                 struct rtw_wifi_role_t *wifi_role,
+                                 enum phl_pkt_evt_type pkt_type);
 
 #endif	/* __PHL_TX_H_ */

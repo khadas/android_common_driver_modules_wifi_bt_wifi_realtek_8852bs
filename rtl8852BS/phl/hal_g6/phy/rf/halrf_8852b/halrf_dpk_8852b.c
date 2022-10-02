@@ -25,7 +25,7 @@
 #include "../halrf_precomp.h"
 #ifdef RF_8852B_SUPPORT
 
-/*8852B DPK ver:0x9 20210713*/
+/*8852B DPK ver:0xc 20220421*/
 
 void _dpk_bkup_kip_8852b(
 	struct rf_info *rf,
@@ -126,36 +126,60 @@ u8 _dpk_one_shot_8852b(
 	enum dpk_id id)
 {
 	u8 r_bff8 = 0x0, phy_map;
-	u16 dpk_cmd = 0x0, count = 0;
+	u16 dpk_cmd = 0x0;
+	u32 r_80fc = 0x0, cnt1 = 0, cnt2 = 0;
 
 	phy_map = (BIT(phy) << 4) | BIT(path);
 
 	dpk_cmd = (u16)((id << 8) | (0x19 + (path << 4)));
-
+#if 0
 	halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_DPK, RFK_ONESHOT_START);
-
+#endif
 	halrf_wreg(rf, 0x8000, MASKDWORD, dpk_cmd);
 
+#ifdef HALRF_CONFIG_FW_IO_OFLD_SUPPORT
+	if (!halrf_polling_bb(rf, 0xbff8, MASKBYTE0, 0x55, 20000))
+		RF_DBG(rf, DBG_RF_DPK, " %s 0xbff8 == 0x55 Timeout !!!\n", __func__);
+	r_bff8 = 0x0;
+#else
 	r_bff8 = (u8)halrf_rreg(rf, 0xbff8, MASKBYTE0);
-	while (r_bff8 != 0x55 && count < 2000) {
-		halrf_delay_us(rf, 10);
+	while (r_bff8 != 0x55 && cnt1 < 20000) {
+		halrf_delay_us(rf, 1);
 		r_bff8 = (u8)halrf_rreg(rf, 0xbff8, MASKBYTE0);
-		count++;
+		cnt1++;
 	}
+#endif
+
+	halrf_delay_us(rf, 1);
+
+	halrf_wreg(rf, 0x80d4, MASKDWORD, 0x00030000);	/*rpt_sel*/
+
+#ifdef HALRF_CONFIG_FW_IO_OFLD_SUPPORT
+	if (!halrf_polling_bb(rf, 0x80fc, MASKLWORD, 0x8000, 2000))
+		RF_DBG(rf, DBG_RF_DPK, " %s 0x80fc == 0x8000 Timeout !!!\n", __func__);
+	r_80fc = 0x0;
+#else
+	r_80fc = halrf_rreg(rf, 0x80fc, MASKLWORD);
+	while (r_80fc != 0x8000 && cnt2 < 2000) {
+		halrf_delay_us(rf, 1);
+		r_80fc = halrf_rreg(rf, 0x80fc, MASKLWORD);
+		cnt2++;
+	}
+#endif
 
 	halrf_wreg(rf, 0x8010, MASKBYTE0, 0x0);
-
+#if 0
 	halrf_btc_rfk_ntfy(rf, phy_map, RF_BTC_DPK, RFK_ONESHOT_STOP);
-
-	RF_DBG(rf, DBG_RF_DPK, "[DPK] one-shot for %s = 0x%04x (count=%d)\n",
+#endif
+	RF_DBG(rf, DBG_RF_DPK, "[DPK] one-shot for %s = 0x%04x (cnt:%d/%d)\n",
 	       id == 0x06 ? "LBK_RXIQK" : (id == 0x10 ? "SYNC" :
 	       (id == 0x11 ? "MDPK_IDL" : (id == 0x12 ? "MDPK_MPA" :
 	        (id == 0x13 ? "GAIN_LOSS" : (id == 0x14 ? "PWR_CAL" :
 		(id == 0x15 ? "DPK_RXAGC" : (id == 0x16 ? "KIP_PRESET" :
 		(id == 0x17 ? "KIP_RESOTRE" : "DPK_TXAGC")))))))),
-	       dpk_cmd, count);
+	       dpk_cmd, cnt1, cnt2);
 
-	if (count == 2000) {
+	if (cnt1 == 20000 || cnt2 == 20000) {
 		RF_DBG(rf, DBG_RF_DPK, "[DPK] one-shot over 20ms!!!!\n");
 		return 1;
 	} else
@@ -176,11 +200,13 @@ void _dpk_information_8852b(
 	dpk->bp[path][kidx].bw = rf->hal_com->band[phy].cur_chandef.bw;
 
 	RF_DBG(rf, DBG_RF_DPK, "[DPK] S%d[%d] (PHY%d): TSSI %s/ DBCC %s/ %s/ CH%d/ %s\n",
-	       path, dpk->cur_idx[path], phy, rf->is_tssi_mode[path] ? "on" : "off",
-	       rf->hal_com->dbcc_en ? "on" : "off",
-	       dpk->bp[path][kidx].band == 0 ? "2G" : (dpk->bp[path][kidx].band == 1 ? "5G" : "6G"),
-	       dpk->bp[path][kidx].ch,
-	       dpk->bp[path][kidx].bw == 0 ? "20M" : (dpk->bp[path][kidx].bw == 1 ? "40M" : "80M"));
+	        path, dpk->cur_idx[path], phy, rf->is_tssi_mode[path] ? "on" : "off",
+	        rf->hal_com->dbcc_en ? "on" : "off",
+	        dpk->bp[path][kidx].band == 0 ? "2G" : (dpk->bp[path][kidx].band == 1 ? "5G" : "6G"),
+	        dpk->bp[path][kidx].ch,
+	        dpk->bp[path][kidx].bw == 1 ? "40M" : (dpk->bp[path][kidx].bw == 2 ? "80M" :
+	        (rf->hal_com->dev_hw_cap.nb_config == CHANNEL_WIDTH_10 ? "10M" :
+	        (rf->hal_com->dev_hw_cap.nb_config == CHANNEL_WIDTH_5 ? "5M" : "20M"))));
 }
 
 void _dpk_bb_afe_setting_8852b(
@@ -189,6 +215,8 @@ void _dpk_bb_afe_setting_8852b(
 	enum rf_path path,
 	u8 kpath)
 {
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	halrf_wreg(rf, 0x20fc, MASKHWORD, 0x0303);
 	halrf_wreg(rf, 0x12b8, BIT(30), 0x1);
 	halrf_wreg(rf, 0x32b8, BIT(30), 0x1);
@@ -232,6 +260,8 @@ void _dpk_bb_afe_setting_8852b(
 		halrf_wreg(rf, 0xc0d8, BIT(13), 0x1);
 		halrf_wreg(rf, 0xc1d8, BIT(13), 0x1);
 	}
+	
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 void _dpk_bb_afe_restore_8852b(
@@ -352,10 +382,14 @@ void _dpk_kip_set_txagc_8852b(
 	enum rf_path path,
 	u8 txagc)
 {
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	halrf_wrf(rf, path, 0x10001, MASKRF, txagc);
 	halrf_wreg(rf, 0x5864, BIT(29), 0x1);
 	_dpk_one_shot_8852b(rf, phy, path, DPK_TXAGC);
 	halrf_wreg(rf, 0x5864, BIT(29), 0x0);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 
 	RF_DBG(rf, DBG_RF_DPK, "[DPK] set TXAGC = 0x%x\n", txagc);
 }
@@ -410,6 +444,9 @@ void _dpk_lbk_rxiqk_8852b(
 
 	/*RF setting*/
 	halrf_wrf(rf, path, 0x1f, MASKRF, halrf_rrf(rf, path, 0x18, MASKRF));
+
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	halrf_wrf(rf, path, 0x00, MASKRFMODE, 0xd);
 	halrf_wrf(rf, path, 0x20, BIT(5), 0x1); /*IQKPLL_EN_BCN_A*/
 
@@ -425,8 +462,8 @@ void _dpk_lbk_rxiqk_8852b(
 	halrf_wrf(rf, path, 0x1e, BIT(19), 0x0);
 	halrf_wrf(rf, path, 0x1e, MASKRF, 0x80014); /*POW IQKPLL, 9.25MHz offset for IQKPLL*/
 
-	for (i = 0; i < 7; i++)
-		halrf_delay_us(rf, 10); /*IQKPLL's settling time*/	
+	for (i = 0; i < 70; i++)
+		halrf_delay_us(rf, 1); /*IQKPLL's settling time*/	
 
 	halrf_wreg(rf, 0x5864, BIT(29), 0x1);
 	halrf_wreg(rf, 0x802c, 0x0FFF0000, 0x025); /*[27:16] Rx_tone_idx=0x025 (9.25MHz)*/
@@ -444,6 +481,8 @@ void _dpk_lbk_rxiqk_8852b(
 	halrf_wreg(rf, 0x80d0, BIT(21) | BIT(20), 0x0);
 	halrf_wreg(rf, 0x81dc + (path << 8), BIT(1), 0x1); /*auto*/
 	halrf_wrf(rf, path, 0x00, MASKRFMODE, 0x5);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 void _dpk_get_thermal_8852b(struct rf_info *rf, u8 kidx, enum rf_path path)
@@ -561,6 +600,8 @@ void _dpk_bypass_rxcfir_8852b(
 	enum rf_path path,
 	bool is_bypass)
 {
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	if (is_bypass) {
 		halrf_wreg(rf, 0x813c + (path << 8), BIT(2), 0x1);
 		halrf_wreg(rf, 0x813c + (path << 8), BIT(0), 0x1);
@@ -573,6 +614,8 @@ void _dpk_bypass_rxcfir_8852b(
 		RF_DBG(rf, DBG_RF_DPK, "[DPK] restore 0x8%d3c = 0x%x\n",
 		       1 + path, halrf_rreg(rf, 0x813c + (path << 8), MASKDWORD));
 	}
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 void _dpk_table_select_8852b(
@@ -639,7 +682,11 @@ bool _dpk_sync_8852b(
 	enum rf_path path,
 	u8 kidx)
 {
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	_dpk_one_shot_8852b(rf, phy, path, SYNC);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 
 	return _dpk_sync_check_8852b(rf, path, kidx); /*1= fail*/
 }
@@ -748,7 +795,11 @@ void _dpk_gainloss_8852b(
 {
 	//_dpk_table_select_8852b(rf, path, kidx, 1);
 
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+	
 	_dpk_one_shot_8852b(rf, phy, path, GAIN_LOSS);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 u8 _dpk_set_offset_8852b(
@@ -1001,6 +1052,8 @@ void _dpk_idl_mpa_8852b(
 {
 	struct halrf_dpk_info *dpk = &rf->dpk;
 
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	/*IDL*/
 	if (dpk->bp[path][kidx].bw < CHANNEL_WIDTH_80 &&
 	    dpk->bp[path][kidx].band == BAND_ON_5G)
@@ -1010,6 +1063,8 @@ void _dpk_idl_mpa_8852b(
 	//_dpk_table_select_8852b(rf, path, kidx, 1);
 
 	_dpk_one_shot_8852b(rf, phy, path, MDPK_IDL);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 u8 _dpk_order_convert_8852b(
@@ -1102,6 +1157,8 @@ void _dpk_fill_result_8852b(
 
 	u16 pwsf = 0x78;
 	u8 gs = dpk->dpk_gs[phy];
+
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
 
 	halrf_wreg(rf, 0x8104 + (path << 8), BIT(8), kidx);
 
@@ -1196,6 +1253,8 @@ void _dpk_fill_result_8852b(
 
 	halrf_wreg(rf, 0x8070, 0x80000000, 0x0); /*BIT(31)*/
 
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
+
 	//_dpk_gs_normalize_8852b(rf, path, txagc, gs, pwsf);
 }
 
@@ -1261,17 +1320,27 @@ bool _dpk_main_8852b(
 
 	RF_DBG(rf, DBG_RF_DPK, "[DPK] ========= S%d[%d] DPK Start =========\n", path, kidx);
 
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	halrf_rf_direct_cntrl_8852b(rf, path, false); /*switch control to direct write*/
 	halrf_drf_direct_cntrl_8852b(rf, path, false); /*switch control to direct write*/
 
 	_dpk_kip_pwr_clk_on_8852b(rf, path);
 	_dpk_kip_set_txagc_8852b(rf, phy, path, txagc);
 	_dpk_rf_setting_8852b(rf, gain, path, kidx);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
+
 	halrf_set_rx_dck_8852b(rf, phy, path, false);
+
+	
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
 
 	_dpk_kip_preset_8852b(rf, phy, path, kidx);
 	_dpk_kip_set_rxagc_8852b(rf, phy, path);
 	_dpk_table_select_8852b(rf, path, kidx, gain);
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 #if 0
 	is_fail = _dpk_sync_8852b(rf, phy, path, kidx);
 
@@ -1364,6 +1433,8 @@ void _dpk_cal_select_8852b(
 		halrf_dpk_onoff_8852b(rf, path, is_fail);
 	}
 
+	halrf_write_fwofld_start(rf);		/*FW Offload Start*/
+
 	_dpk_bb_afe_restore_8852b(rf, phy, path, kpath);
 	_dpk_reload_bb_8852b(rf, bb_reg, bb_bkup);
 
@@ -1374,6 +1445,8 @@ void _dpk_cal_select_8852b(
 		if (rf->is_tssi_mode[path])
 			_dpk_tssi_pause_8852b(rf, path, false);
 	}
+
+	halrf_write_fwofld_end(rf);		/*FW Offload End*/
 }
 
 u8 _dpk_bypass_check_8852b(

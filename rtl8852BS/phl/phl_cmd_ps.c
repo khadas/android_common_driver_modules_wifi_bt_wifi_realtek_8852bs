@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2021 Realtek Corporation.
+ * Copyright(c) 2019 - 2022 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -25,6 +25,27 @@ struct rt_ps {
 	enum phl_ps_rt_rson rt_rson;
 	bool ps_allow;
 };
+
+/**
+ * +----------------------+-------------------+-----------------------+
+ * |       ps_mode        |      ps_state     |        pwr_lvl        |
+ * +----------------------+-------------------+-----------------------+
+ * |     PS_MODE_LPS      |  PS_STATE_LEAVED  |  PS_PWR_LVL_PWRON     |
+ * |                      +-------------------+-----------------------+
+ * |                      |  PS_STATE_PROTO   |  PS_PWR_LVL_PWRON     |
+ * |                      +-------------------+-----------------------+
+ * |                      |  PS_STATE_ENTERED |  PS_PWR_LVL_PWR_GATED |
+ * |                      |                   |  PS_PWR_LVL_CLK_GATED |
+ * |                      |                   |  PS_PWR_LVL_RF_OFF    |
+ * +----------------------+-------------------+-----------------------+
+ * |     PS_MODE_IPS      |  PS_STATE_LEAVED  |  PS_PWR_LVL_PWRON     |
+ * |                      +-------------------+-----------------------+
+ * |                      |  PS_STATE_ENTERED |  PS_PWR_LVL_PWROFF    |
+ * |                      |                   |  PS_PWR_LVL_PWR_GATED |
+ * |                      |                   |  PS_PWR_LVL_CLK_GATED |
+ * |                      |                   |  PS_PWR_LVL_RF_OFF    |
+ * +----------------------+-------------------+-----------------------+
+ */
 
 enum {
 	PS_STATE_NONE = 0,
@@ -60,6 +81,29 @@ struct _ps_mr_info {
 	bool gc_active;
 };
 
+struct _ps_time_info {
+	/* last tx pint time */
+	u32 last_tx_ping_time;
+	/* reserved for dhcp */
+	u32 last_tx_dhcp_time;
+};
+
+struct _lps_adv_cfg {
+	bool pvb_wait_rx;
+};
+
+#define case_defer_rson(src) \
+		case PS_DEFER_##src: return #src
+const char *_defer_rson_to_str(u8 defer_rson)
+{
+	switch (defer_rson) {
+	case_defer_rson(DHCP_PKT);
+	case_defer_rson(PING_PKT);
+	default:
+		return "Undefined";
+	}
+}
+
 #define CMD_PS_TIMER_PERIOD 100
 #define MAX_PWE_REQ_NUM 16
 struct cmd_ps {
@@ -89,10 +133,13 @@ struct cmd_ps {
 	u32 null_token;
 	bool wdg_leave_ps;
 
+	struct _ps_time_info time_info;
+
 	/* refs. enum "phl_ps_rt_rson" */
 	enum phl_ps_rt_rson rt_stop_rson;
 
 	struct _ps_mr_info mr_info;
+	struct _lps_adv_cfg adv_cfg;
 
 	/* rssi */
 	u8 rssi_bcn_min;
@@ -225,6 +272,35 @@ _lps_state_judge_changed(struct cmd_ps *ps, u16 macid, u8 cur_state, u8 target_s
 	return change_state;
 }
 
+/**
+ * check whether to enter lps
+ * return true if related defer rson is set and check related time info
+ * @ps: see cmd_ps
+ */
+static bool
+_ps_chk_defer(struct cmd_ps *ps)
+{
+	struct rtw_ps_cap_t *ps_cap = _get_ps_cap(ps->phl_info);
+	u32 pass_time = 0;
+
+	if (!ps_cap->defer_para.defer_rson)
+		return false;
+
+	if (ps_cap->defer_para.defer_rson & PS_DEFER_PING_PKT) {
+		pass_time = phl_get_passing_time_ms(ps->time_info.last_tx_ping_time);
+		if (pass_time < ps_cap->defer_para.lps_ping_defer_time)
+			return true;
+	}
+
+	if (ps_cap->defer_para.defer_rson & PS_DEFER_DHCP_PKT) {
+		pass_time = phl_get_passing_time_ms(ps->time_info.last_tx_dhcp_time);
+		if (pass_time < ps_cap->defer_para.lps_dhcp_defer_time)
+			return true;
+	}
+
+	return false;
+}
+
 static void _set_ps_rson(struct cmd_ps *ps, u8 enter, char *rson)
 {
 	if (enter) {
@@ -234,6 +310,25 @@ static void _set_ps_rson(struct cmd_ps *ps, u8 enter, char *rson)
 		_os_mem_set(phl_to_drvpriv(ps->phl_info), ps->leave_rson, 0, MAX_CMD_PS_RSON_LENGTH);
 		_os_mem_cpy(phl_to_drvpriv(ps->phl_info), ps->leave_rson, rson, MAX_CMD_PS_RSON_LENGTH);
 	}
+}
+
+static void _ps_cofig_pvb_wait_rx(struct cmd_ps *ps, bool pvb_wait_rx)
+{
+	if (ps->ps_mode == PS_MODE_LPS && ps->ps_state != PS_STATE_LEAVED) {
+		if (ps->adv_cfg.pvb_wait_rx == pvb_wait_rx) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): Already %s PVB wait for rx mode, skip config\n",
+			          __func__, (pvb_wait_rx) ? "Enter" : "Leave");
+			return;
+		}
+
+		rtw_hal_lps_pvb_wait_rx(ps->phl_info->hal, ps->macid,
+		                        pvb_wait_rx);
+		ps->adv_cfg.pvb_wait_rx = pvb_wait_rx;
+		PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): %s PVB wait for rx mode\n",
+		          __func__, (pvb_wait_rx) ? "Enter" : "Leave");
+	}
+
+	return;
 }
 
 /**
@@ -283,12 +378,17 @@ enum rtw_phl_status _leave_ps(struct cmd_ps *ps, bool leave_proto, char *rson)
 	} else if (ps->ps_mode == PS_MODE_IPS) {
 		cfg.macid = ps->macid;
 		cfg.pwr_lvl = PS_PWR_LVL_PWRON;
+		cfg.proto_cfg = (cfg.cur_pwr_lvl == PS_PWR_LVL_PWROFF) ? false : true;
+		cfg.pwr_cfg = true;
 		cfg.ps_mode = ps->ps_mode;
 	} else {
 		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS_CMD], %s(): unknown ps mode!\n", __func__);
 	}
 
 	_set_ps_rson(ps, false, rson);
+
+	if (cfg.proto_cfg)
+		_ps_cofig_pvb_wait_rx(ps, false);
 
 	status = phl_ps_leave_ps(phl_info, &cfg);
 
@@ -354,6 +454,8 @@ enum rtw_phl_status _enter_ps(struct cmd_ps *ps, u8 ps_mode, u16 macid, char *rs
 			cfg.pwr_lvl = PS_PWR_LVL_PWROFF;
 		else
 			cfg.pwr_lvl = phl_ps_judge_pwr_lvl(ps_cap->ips_cap, ps_mode, true);
+		cfg.pwr_cfg = true;
+		cfg.proto_cfg = (cfg.pwr_lvl == PS_PWR_LVL_PWROFF) ? false : true;
 		cfg.ps_mode = ps_mode;
 	} else {
 		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS_CMD], %s(): unknown ps mode!\n", __func__);
@@ -535,7 +637,10 @@ static void _init_ps_dflt_sw_cap(struct cmd_ps *ps)
 	sw_cap->lps_smart_ps_mode = RTW_LPS_TRX_PWR0;
 	sw_cap->lps_rssi_enter_threshold = 40;
 	sw_cap->lps_rssi_leave_threshold = 35;
-	sw_cap->lps_rssi_diff_threshold = 5;
+	sw_cap->lps_rssi_diff_threshold = 7;
+	sw_cap->defer_para.defer_rson = PS_DEFER_RSON_NONE;
+	sw_cap->defer_para.lps_ping_defer_time = 0;
+	sw_cap->defer_para.lps_dhcp_defer_time = 0;
 
 	sw_cap->lps_wow_en = PS_OP_MODE_DISABLED;
 	sw_cap->lps_wow_cap = 0;
@@ -619,6 +724,8 @@ static enum phl_mdl_ret_code _ps_mdl_init(void *phl, void *dispr, void **priv)
 	ps->ps_mode = PS_MODE_NONE;
 	ps->rej_pwr_req = false;
 	ps->rt_stop_rson = PS_RT_RSON_NONE;
+	ps->time_info.last_tx_ping_time = _os_get_cur_time_ms();
+	ps->time_info.last_tx_dhcp_time = _os_get_cur_time_ms();
 
 	_os_init_timer(phl_to_drvpriv(phl_info),
 	               &ps->ps_timer,
@@ -673,6 +780,9 @@ static void _dump_ps_cap(struct cmd_ps *ps)
 	PHL_INFO("[PS_CMD], lps_rssi_enter_threshold: %d\n", ps_cap->lps_rssi_enter_threshold);
 	PHL_INFO("[PS_CMD], lps_rssi_leave_threshold: %d\n", ps_cap->lps_rssi_leave_threshold);
 	PHL_INFO("[PS_CMD], lps_rssi_diff_threshold: %d\n", ps_cap->lps_rssi_diff_threshold);
+	PHL_INFO("[PS_CMD], defer_rson: 0x%x\n", ps_cap->defer_para.defer_rson);
+	PHL_INFO("[PS_CMD], lps_ping_defer_time: %d\n", ps_cap->defer_para.lps_ping_defer_time);
+	PHL_INFO("[PS_CMD], lps_dhcp_defer_time: %d\n", ps_cap->defer_para.lps_dhcp_defer_time);
 	PHL_INFO("[PS_CMD], lps_wow_en: %d\n", ps_cap->lps_wow_en);
 	PHL_INFO("[PS_CMD], lps_wow_cap: %d\n", ps_cap->lps_wow_cap);
 	PHL_INFO("[PS_CMD], lps_wow_awake_interval: %d\n", ps_cap->lps_wow_awake_interval);
@@ -1015,6 +1125,9 @@ static bool _chk_lps_enter(struct cmd_ps *ps, u16 *macid)
 		return false;
 	}
 
+	if (_ps_chk_defer(ps))
+		return false;
+
 	/* check wifi role */
 	if (!_chk_wrole_with_ps_mode(ps, PS_MODE_LPS, macid)) {
 		PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): no need to enter lps.\n", __func__);
@@ -1023,7 +1136,7 @@ static bool _chk_lps_enter(struct cmd_ps *ps, u16 *macid)
 
 	/* lps */
 	if (_lps_state_judge_changed(ps, *macid, ps->ps_state, PS_STATE_ENTERED)) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): lps state changed.\n", __func__);
+		PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): lps state changed, going to enter...\n", __func__);
 		/* check data path stop or not */
 		if (ps_cap->lps_pause_tx) {
 			if (!_is_datapath_active(ps)) {
@@ -1042,6 +1155,8 @@ static bool _chk_lps_enter(struct cmd_ps *ps, u16 *macid)
 
 static void _ps_watchdog_info_dump(struct cmd_ps *ps)
 {
+	struct rtw_ps_cap_t *ps_cap = _get_ps_cap(ps->phl_info);
+
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "========== CMD PS Info ========== \n");
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "ps mode(%s), pwr lvl(%s), ps state(%s)\n",
 			phl_ps_ps_mode_to_str(ps->ps_mode),
@@ -1053,6 +1168,14 @@ static void _ps_watchdog_info_dump(struct cmd_ps *ps)
 			(ps->mr_info.ap_active ? "yes" : "no"), (ps->mr_info.gc_active ? "yes" : "no"));
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "reject all pwr req(%s), btc req pwr(%s), runtime stop reason(0x%x)\n",
 			(ps->rej_pwr_req ? "yes" : "no"), (ps->btc_req_pwr ? "yes" : "no"), ps->rt_stop_rson);
+	if (ps_cap->defer_para.defer_rson & PS_DEFER_PING_PKT) {
+		PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "tx ping pass time(ms): %d\n",
+			phl_get_passing_time_ms(ps->time_info.last_tx_ping_time));
+	}
+	if (ps_cap->defer_para.defer_rson & PS_DEFER_DHCP_PKT) {
+		PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "tx dhcp pass time(ms): %d\n",
+			phl_get_passing_time_ms(ps->time_info.last_tx_dhcp_time));
+	}
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "========== CMD PS Info ========== \n");
 }
 
@@ -1076,7 +1199,7 @@ _ps_watchdog_pre_hdlr(struct cmd_ps *ps)
 	}
 
 	if (ps->ps_mode == PS_MODE_IPS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): power off.\n", __func__);
+		PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): under inactive ps.\n", __func__);
 		return MDL_RET_CANNOT_IO;
 	}
 
@@ -1085,7 +1208,7 @@ _ps_watchdog_pre_hdlr(struct cmd_ps *ps)
 		return MDL_RET_SUCCESS;
 	} else {
 		if (_lps_state_judge_changed(ps, ps->macid, ps->ps_state, PS_STATE_LEAVED)) {
-			PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): lps state changed.\n", __func__);
+			PHL_TRACE(COMP_PHL_PS, _PHL_DEBUG_, "[PS_CMD], %s(): lps state changed, going to leave...\n", __func__);
 			if (_leave_ps(ps, true, "watchdog") == RTW_PHL_STATUS_SUCCESS) {
 				ps->wdg_leave_ps = true;
 				_leave_success_hdlr(ps);
@@ -1096,6 +1219,10 @@ _ps_watchdog_pre_hdlr(struct cmd_ps *ps)
 				return MDL_RET_CANNOT_IO;
 			}
 		}
+		/**
+		 * if _lps_state_judge_changed decide not to leave lps and currrent lps
+		 * state is in protocol only, i/o operation is allowable.
+		 */
 		if (ps->ps_state == PS_STATE_PROTO)
 			return MDL_RET_SUCCESS;
 		else
@@ -1123,6 +1250,182 @@ _ps_watchdog_post_hdlr(struct cmd_ps *ps)
 	_ps_watchdog_info_dump(ps);
 
 	return MDL_RET_SUCCESS;
+}
+
+/**
+ * leave ps in pre-phase, caller need to check defer time is set
+ * @ps: see cmd_ps
+ * @msg: see phl_msg
+ * @rson: see phl_ps_defer_rson
+ */
+static enum phl_mdl_ret_code _ps_leave_defer_rson(struct cmd_ps *ps, struct phl_msg *msg, u8 rson)
+{
+	if (ps->rej_pwr_req == true) {
+		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS_CMD], %s(): reject pwr req.\n", __func__);
+		return MDL_RET_CANNOT_IO;
+	}
+
+	if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+		if (_leave_ps(ps, true, (char *)_defer_rson_to_str(rson)) == RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): reason %s\n", __func__, (char *)_defer_rson_to_str(rson));
+			_leave_success_hdlr(ps);
+			return MDL_RET_SUCCESS;
+		} else {
+			_leave_fail_hdlr(ps);
+		}
+	} else {
+		return MDL_RET_SUCCESS;
+	}
+
+	return MDL_RET_CANNOT_IO;
+}
+
+/**
+ * update related time info, caller need to check defer time is set
+ * @ps: see cmd_ps
+ * @rson: see phl_ps_defer_rson
+ */
+static void _ps_update_defer_time_cmn(struct cmd_ps *ps, u8 rson)
+{
+	switch (rson) {
+	case PS_DEFER_PING_PKT:
+		ps->time_info.last_tx_ping_time = _os_get_cur_time_ms();
+		break;
+	default:
+		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS_CMD], %s(): unknown ps defer rson.\n", __func__);
+	}
+}
+
+static enum phl_mdl_ret_code _ps_ping_pkt_hdlr(struct cmd_ps *ps,
+                                               struct phl_msg *msg,
+                                               enum phl_pkt_evt_type type)
+{
+	enum phl_mdl_ret_code ret = MDL_RET_FAIL;
+	struct rtw_ps_cap_t *ps_cap = _get_ps_cap(ps->phl_info);
+
+	switch (type) {
+	case PKT_EVT_TX_PING_REQ:
+		if (!(ps_cap->defer_para.defer_rson & PS_DEFER_PING_PKT)) {
+			if (IS_MSG_IN_PRE_PHASE(msg->msg_id))
+				_ps_cofig_pvb_wait_rx(ps, true);
+			ret = MDL_RET_SUCCESS;
+		} else {
+			_ps_update_defer_time_cmn(ps, PS_DEFER_PING_PKT);
+			ret = _ps_leave_defer_rson(ps, msg, PS_DEFER_PING_PKT);
+		}
+		break;
+	case PKT_EVT_RX_PING_RSP:
+		if (!(ps_cap->defer_para.defer_rson & PS_DEFER_PING_PKT)) {
+			if (IS_MSG_IN_PRE_PHASE(msg->msg_id))
+				_ps_cofig_pvb_wait_rx(ps, false);
+			ret = MDL_RET_SUCCESS;
+		}
+		break;
+	default:
+		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS_CMD], %s(): unknown ps evt type(%d)\n",
+		          __func__, type);
+		break;
+	}
+
+	return ret;
+}
+
+static enum phl_mdl_ret_code _ps_add_pwr_req_cmn(struct cmd_ps *ps, struct phl_msg *msg, char *rson)
+{
+	enum phl_mdl_ret_code ret = MDL_RET_CANNOT_IO;
+
+	if (ps->rej_pwr_req == true) {
+		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS_CMD], %s(): reject pwr req.\n", __func__);
+		return MDL_RET_CANNOT_IO;
+	}
+
+	if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+		if (_leave_ps(ps, true, rson) == RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): reason %s\n", __func__, rson);
+			_add_pwr_req(ps, MSG_EVT_ID_FIELD(msg->msg_id));
+			_leave_success_hdlr(ps);
+			ret = MDL_RET_SUCCESS;
+		} else {
+			_leave_fail_hdlr(ps);
+		}
+	} else {
+		ret = MDL_RET_SUCCESS;
+	}
+
+	return ret;
+}
+
+static enum phl_mdl_ret_code _ps_cancel_pwr_req_cmn(struct cmd_ps *ps, struct phl_msg *msg, char *rson)
+{
+	enum phl_mdl_ret_code ret = MDL_RET_CANNOT_IO;
+	u16 macid = PS_MACID_NONE;
+
+	if (!IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+		PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): reason %s\n", __func__, rson);
+		_cancel_pwr_req(ps, MSG_EVT_ID_FIELD(msg->msg_id));
+		if (_chk_ips_enter(ps, &macid)) {
+			_enter_ps(ps, PS_MODE_IPS, macid, rson);
+		}
+		ret = MDL_RET_SUCCESS;
+	} else {
+		ret = MDL_RET_SUCCESS;
+	}
+
+	return ret;
+}
+
+#define case_pkt_evt(src) \
+	case PKT_EVT_##src: return #src
+const char *_ps_pkt_evt_to_str(u8 pkt_evt)
+{
+	switch (pkt_evt) {
+	case_pkt_evt(DHCP);
+	case_pkt_evt(ARP);
+	case_pkt_evt(TX_PING_REQ);
+	case_pkt_evt(RX_PING_RSP);
+	case_pkt_evt(EAPOL_START);
+	case_pkt_evt(EAPOL_END);
+	case_pkt_evt(MAX);
+	default:
+		return "Undefined";
+	}
+}
+
+static enum phl_mdl_ret_code
+_ps_pkt_evt_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
+{
+	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+	enum phl_mdl_ret_code ret = MDL_RET_CANNOT_IO;
+	enum phl_pkt_evt_type *pkt_evt_type = NULL;
+	u8 *cmd = NULL;
+	u32 cmd_len = 0;
+
+	pstatus = phl_cmd_get_cur_cmdinfo(ps->phl_info,
+			msg->band_idx, msg, &cmd, &cmd_len);
+	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+		PHL_ERR("%s: get cmd info fail!\n", __func__);
+		return MDL_RET_FAIL;
+	}
+
+	pkt_evt_type = (enum phl_pkt_evt_type *)cmd;
+
+	switch (*pkt_evt_type) {
+	case PKT_EVT_TX_PING_REQ:
+	case PKT_EVT_RX_PING_RSP:
+		ret = _ps_ping_pkt_hdlr(ps, msg, *pkt_evt_type);
+		break;
+	case PKT_EVT_EAPOL_START:
+		ret = _ps_add_pwr_req_cmn(ps, msg, (char *)_ps_pkt_evt_to_str(*pkt_evt_type));
+		break;
+	case PKT_EVT_EAPOL_END:
+		ret = _ps_cancel_pwr_req_cmn(ps, msg, (char *)_ps_pkt_evt_to_str(*pkt_evt_type));
+		break;
+	default:
+		ret = MDL_RET_SUCCESS;
+		break;
+	}
+
+	return ret;
 }
 
 static enum phl_mdl_ret_code _phy_on_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
@@ -1423,6 +1726,9 @@ _general_mdl_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
 	case MSG_EVT_STA_MEDIA_STATUS_UPT:
 	case MSG_EVT_CFG_CHINFO:
 	case MSG_EVT_STA_CHG_STAINFO:
+	case MSG_EVT_DFS_RD_IS_DETECTING:
+	case MSG_EVT_DFS_RD_SETUP:
+	case MSG_EVT_TXPWR_SETUP:
 #ifdef RTW_WKARD_LINUX_CMD_WKARD
 	case MSG_EVT_LINUX_CMD_WRK_TRI_PS:
 #endif /* RTW_WKARD_LINUX_CMD_WKARD */
@@ -1464,6 +1770,13 @@ _general_mdl_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
 	case MSG_EVT_RF_OFF:
 		if (!IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
 			PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], MSG_EVT_RF_OFF\n");
+			if (_leave_ps(ps, true, "msg rf off") == RTW_PHL_STATUS_SUCCESS) {
+				_leave_success_hdlr(ps);
+			} else {
+				_leave_fail_hdlr(ps);
+				ret = MDL_RET_CANNOT_IO;
+				break;
+			}
 			ps->rej_pwr_req = true;
 			_enter_ps(ps, PS_MODE_IPS, PS_MACID_NONE, "msg rf off");
 		}
@@ -1474,6 +1787,9 @@ _general_mdl_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
 		break;
 	case MSG_EVT_PHY_IDLE:
 		ret = _phy_idle_msg_hdlr(ps, msg);
+		break;
+	case MSG_EVT_PKT_EVT_NTFY:
+		ret = _ps_pkt_evt_hdlr(ps, msg);
 		break;
 	default:
 		if (ps->cur_pwr_lvl != PS_PWR_LVL_PWRON) {
@@ -1661,31 +1977,97 @@ static enum phl_mdl_ret_code _ps_period_chk_hdlr(struct cmd_ps *ps, struct phl_m
 	return MDL_RET_SUCCESS;
 }
 
-static enum phl_mdl_ret_code _ps_dbg_lps_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
+static enum phl_mdl_ret_code _ps_dbg_cmd_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
 {
+	struct rtw_ps_cap_t *ps_cap = _get_ps_cap(ps->phl_info);
+	struct rtw_ps_cap_t *ps_sw_cap = _get_ps_sw_cap(ps->phl_info);
+	struct ps_mdl_dbg_info *dbg_info = NULL;
 	u16 macid = PS_MACID_NONE;
-	u16 evt_id = MSG_EVT_ID_FIELD(msg->msg_id);
+	u8 op = 0;
 
-	if (evt_id == MSG_EVT_PS_DBG_LPS_ENTER) {
+	dbg_info = (struct ps_mdl_dbg_info *)msg->inbuf;
+	op = dbg_info->op;
+
+	switch (op) {
+	case FORCE_LPS_ENTER:
 		if (!IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
 			if (!_chk_wrole_with_ps_mode(ps, PS_MODE_LPS, &macid))
 				return MDL_RET_SUCCESS;
 			_enter_ps(ps, PS_MODE_LPS, macid, "dbg lps enter");
 			ps->rej_pwr_req = true;
 		}
-	} else { /* MSG_EVT_PS_DBG_LPS_LEAVE */
+		break;
+	case FORCE_LPS_LEAVE:
 		if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
 			_leave_ps(ps, true, "dbg lps leave");
 			ps->rej_pwr_req = false;
 		}
+		break;
+	case FORCE_IPS_ENTER:
+		if (!IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+			if (!_chk_wrole_with_ps_mode(ps, PS_MODE_IPS, &macid))
+				return MDL_RET_SUCCESS;
+			_enter_ps(ps, PS_MODE_IPS, macid, "dbg ips enter");
+			ps->rej_pwr_req = true;
+		}
+		break;
+	case FORCE_IPS_LEAVE:
+		if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+			_leave_ps(ps, true, "dbg ips leave");
+			ps->rej_pwr_req = false;
+		}
+		break;
+	case SET_LPS_MODE:
+		if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+			if (ps_cap->lps_en != dbg_info->val) {
+				ps_cap->lps_en = ps_sw_cap->lps_en = dbg_info->val;
+				if (ps->ps_mode == PS_MODE_LPS) {
+					if (_leave_ps(ps, true, "dbg lps mode") == RTW_PHL_STATUS_SUCCESS) {
+						_leave_success_hdlr(ps);
+						return MDL_RET_SUCCESS;
+					} else {
+						_leave_fail_hdlr(ps);
+						return MDL_RET_CANNOT_IO;
+					}
+				}
+			}
+		}
+		break;
+	case SET_IPS_MODE:
+		if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+			if (ps_cap->ips_en != dbg_info->val) {
+				ps_cap->ips_en = ps_sw_cap->ips_en = dbg_info->val;
+				if (ps->ps_mode == PS_MODE_IPS)
+					_leave_ps(ps, true, "dbg ips mode");
+
+				if (ps_cap->ips_en != PS_OP_MODE_DISABLED) {
+					if (_chk_ips_enter(ps, &macid))
+						_enter_ps(ps, PS_MODE_IPS, macid, "dbg ips enter");
+				}
+			}
+		}
+		break;
+	case SET_LPS_CAP:
+		if (IS_MSG_IN_PRE_PHASE(msg->msg_id)) {
+			u8 lps_cap = dbg_info->val;
+			if (ps_cap->lps_cap != lps_cap) {
+				ps_cap->lps_cap = ps_sw_cap->lps_cap = lps_cap;
+				if (ps->ps_mode == PS_MODE_LPS) {
+					if (_leave_ps(ps, true, "dbg lps cap") == RTW_PHL_STATUS_SUCCESS) {
+						_leave_success_hdlr(ps);
+						return MDL_RET_SUCCESS;
+					} else {
+						_leave_fail_hdlr(ps);
+						return MDL_RET_CANNOT_IO;
+					}
+				}
+			}
+		}
+		break;
+	default:
+		break;
 	}
 
-	return MDL_RET_SUCCESS;
-}
-
-static enum phl_mdl_ret_code _ps_dbg_ips_msg_hdlr(struct cmd_ps *ps, struct phl_msg *msg)
-{
-	/* fw do not support ips currently */
 	return MDL_RET_SUCCESS;
 }
 
@@ -1707,13 +2089,8 @@ _ps_mdl_hdl_internal_evt(void *dispr, struct cmd_ps *ps, struct phl_msg *msg)
 	case MSG_EVT_PS_PERIOD_CHK:
 		ret = _ps_period_chk_hdlr(ps, msg);
 		break;
-	case MSG_EVT_PS_DBG_LPS_ENTER:
-	case MSG_EVT_PS_DBG_LPS_LEAVE:
-		ret = _ps_dbg_lps_msg_hdlr(ps, msg);
-		break;
-	case MSG_EVT_PS_DBG_IPS_ENTER:
-	case MSG_EVT_PS_DBG_IPS_LEAVE:
-		ret = _ps_dbg_ips_msg_hdlr(ps, msg);
+	case MSG_EVT_PS_DBG_CMD:
+		ret = _ps_dbg_cmd_hdlr(ps, msg);
 		break;
 	case MSG_EVT_TX_PKT_NTFY:
 		ret = _tx_pkt_ntfy_msg_hdlr(ps, msg);
@@ -1795,6 +2172,8 @@ _ps_mdl_query_info(void *dispr, void *priv, struct phl_module_op_info *info)
 		basic_info->ap_active = ps->mr_info.ap_active;
 		basic_info->gc_active = ps->mr_info.gc_active;
 		basic_info->sta = ps->sta;
+		basic_info->last_tx_ping_time = ps->time_info.last_tx_ping_time;
+		basic_info->last_tx_dhcp_time = ps->time_info.last_tx_dhcp_time;
 		/* enter/leave ps reason */
 		_os_mem_set(phl_to_drvpriv(ps->phl_info), basic_info->enter_rson, 0, MAX_CMD_PS_RSON_LENGTH);
 		_os_mem_cpy(phl_to_drvpriv(ps->phl_info), basic_info->enter_rson, ps->enter_rson, MAX_CMD_PS_RSON_LENGTH);
@@ -1966,36 +2345,6 @@ void rtw_phl_ps_set_rt_cap(void *phl, u8 band_idx, bool ps_allow, enum phl_ps_rt
 
 cmd_fail:
 	_os_mem_free(phl_to_drvpriv(phl_info), ps_rt_info, sizeof(ps_rt_info));
-}
-
-void phl_ps_dbg_set_ps(struct phl_info_t *phl_info, u8 ps_mode, bool enter)
-{
-	struct phl_msg msg = {0};
-	struct phl_msg_attribute attr = {0};
-	u16 evt_id = 0;
-
-	if (ps_mode == PS_MODE_LPS) {
-		evt_id = (enter ? MSG_EVT_PS_DBG_LPS_ENTER : MSG_EVT_PS_DBG_LPS_LEAVE);
-	} else if (ps_mode == PS_MODE_IPS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS_CMD], %s(): dbg ips is not support now.\n", __func__);
-		/* evt_id = (enter ? MSG_EVT_PS_DBG_IPS_ENTER : MSG_EVT_PS_DBG_IPS_LEAVE); */
-	} else {
-		return;
-	}
-
-	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS_CMD], %s(): debug set %s %s\n", __func__,
-			phl_ps_ps_mode_to_str(ps_mode), (enter ? "enter" : "leave"));
-
-	SET_MSG_MDL_ID_FIELD(msg.msg_id, PHL_MDL_POWER_MGNT);
-	SET_MSG_EVT_ID_FIELD(msg.msg_id, evt_id);
-	msg.band_idx = HW_BAND_0;
-
-	if (phl_disp_eng_send_msg(phl_info, &msg, &attr, NULL) !=
-				RTW_PHL_STATUS_SUCCESS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS_CMD], %s(): fail to set dbg ps.\n", __func__);
-	}
-
-	return;
 }
 
 enum rtw_phl_status

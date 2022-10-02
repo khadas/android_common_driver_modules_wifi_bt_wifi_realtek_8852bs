@@ -27,6 +27,7 @@
 #include "phl_types.h"
 #include "phl_util.h"
 #include "phl_def.h"
+#include "hal_g6/mac/mac_exp_def.h"
 #include "phl_debug.h"
 /*
  * PHL Feature headers start
@@ -87,6 +88,7 @@
 #include "phl_pkt_ofld.h"
 #include "test/phl_dbg_cmd.h"
 #include "phl_chan.h"
+#include "phl_acs_def.h"
 #include "phl_acs.h"
 #include "phl_led_def.h"
 #include "phl_led.h"
@@ -102,6 +104,7 @@
 #include "phl_thermal.h"
 #include "phl_txpwr.h"
 #include "phl_ext_tx_pwr_lmt_def.h"
+#include "phl_dfs.h"
 
 #ifdef CONFIG_PHL_CHANNEL_INFO
 #include "phl_chan_info.h"

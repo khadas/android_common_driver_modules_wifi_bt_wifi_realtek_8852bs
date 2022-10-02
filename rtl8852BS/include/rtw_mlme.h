@@ -23,7 +23,9 @@
 
 /*	Commented by Albert 20101105
  *	Increase the scanning timeout because of increasing the SURVEY_TO value. */
+#ifndef SCANQUEUE_LIFETIME
 #define	SCANQUEUE_LIFETIME 20000 /* 20sec, unit:msec */
+#endif /*SCANQUEUE_LIFETIME*/
 
 #define MAX_UNASSOC_STA_CNT 128
 #define UNASSOC_STA_LIFETIME_MS 60000
@@ -424,22 +426,6 @@ enum {
 	RTW_ROAM_ACTIVE = BIT2,
 };
 
-struct beacon_keys {
-	u8 ssid[IW_ESSID_MAX_SIZE];
-	u32 ssid_len;
-	u8 ch;
-	u8 bw;
-	u8 offset;
-	u8 proto_cap; /* PROTO_CAP_XXX */
-	u8 rate_set[12];
-	u8 rate_num;
-	int encryp_protocol;
-	int pairwise_cipher;
-	int group_cipher;
-	u32 akm;
-};
-
-
 #define UNASOC_STA_SRC_RX_BMC		0
 #define UNASOC_STA_SRC_RX_NMY_UC	1
 #define UNASOC_STA_SRC_NUM			2
@@ -558,6 +544,9 @@ struct mlme_priv {
 	struct ht_priv	htpriv;
 
 #endif
+
+	/* VHT or HE IE is configured by upper layer or not (hostapd or wpa_supplicant) */
+	u8 upper_layer_setting;
 
 #ifdef CONFIG_80211AC_VHT
 	struct vht_priv	vhtpriv;
@@ -961,6 +950,8 @@ extern void _rtw_free_network(struct mlme_priv *pmlmepriv, struct wlan_network *
 extern void _rtw_free_network_nolock(struct mlme_priv *pmlmepriv, struct wlan_network *pnetwork);
 
 extern void _rtw_free_network_queue(_adapter *padapter, u8 isfreeall);
+
+struct _ADAPTER_LINK *rtw_get_adapter_link_by_hwband(_adapter *padapter, u8 band_idx);
 
 extern sint rtw_if_up(_adapter *padapter);
 

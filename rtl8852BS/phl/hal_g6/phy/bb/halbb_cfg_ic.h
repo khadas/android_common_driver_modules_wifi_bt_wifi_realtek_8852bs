@@ -30,7 +30,7 @@
 	#define BB_8852A_2_SUPPORT /*> CBV*/
 #endif
 
-#ifdef CONFIG_RTL8852B
+#if defined(CONFIG_RTL8852B) || defined(CONFIG_RTL8852BVS)
 	#define BB_8852B_SUPPORT
 #endif
 

@@ -149,6 +149,18 @@ enum rtw_hal_status rtw_hal_rf_read_pwr_table(
 	return ret;
 }
 
+enum rtw_hal_status rtw_hal_rf_wlan_tx_power_control(struct rtw_hal_com_t *hal_com,
+	enum phl_phy_idx phy, enum phl_pwr_ctrl pwr_ctrl_idx, u32 tx_power_val, bool enable)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal_com->hal_priv;
+
+	PHL_INFO("%s\n", __FUNCTION__);
+
+	halrf_wlan_tx_power_control(hal_info->rf, phy, pwr_ctrl_idx, tx_power_val, enable);
+
+	return RTW_HAL_STATUS_SUCCESS;
+}
+
 enum rtw_hal_status rtw_hal_rf_wl_tx_power_control(struct rtw_hal_com_t *hal_com,
 	u32 tx_power_val)
 {
@@ -612,6 +624,18 @@ rtw_hal_rf_set_power(struct hal_info_t *hal_info, enum phl_phy_idx phy,
 	return hal_status;
 }
 
+enum rtw_hal_status
+rtw_hal_rf_set_power_constraint(struct hal_info_t *hal_info, enum phl_phy_idx phy,
+					u16 mb)
+{
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
+
+	/* here we choose to have software configuration only */
+	halrf_set_power_constraint(hal_info->rf, phy, mb, false);
+
+	return hal_status;
+}
+
 enum rtw_hal_status rtw_hal_rf_set_gain_offset(struct hal_info_t *hal_info, u8 cur_phy_idx,
 						s8 offset, u8 rf_path)
 {
@@ -717,7 +741,9 @@ rtw_hal_rf_dpk_switch(void *hal, bool enable)
 
 	PHL_TRACE(COMP_PHL_MCC, _PHL_INFO_, "rtw_hal_rf_dpk_switch(): enable(%d)\n",
 		enable);
+	rtw_hal_mac_ser_ctrl(hal, false);
 	halrf_dpk_switch(hal_info->rf, enable);
+	rtw_hal_mac_ser_ctrl(hal, true);
 }
 
 void
@@ -832,7 +858,10 @@ void rtw_hal_rf_notification(struct hal_info_t *hal_info,
 			     enum phl_msg_evt_id event,
 			     enum phl_phy_idx phy_idx)
 {
+	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s >>: event(%d), phy_idx(%d)\n",
+		__func__, event, phy_idx);
 	halrf_wifi_event_notify(hal_info->rf, event, phy_idx);
+	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s <<\n", __func__);
 }
 
 void
@@ -860,6 +889,14 @@ void rtw_hal_rf_cmd_notification(struct hal_info_t *hal_info,
                              enum phl_phy_idx phy_idx)
 {
 	/*to do*/
+}
+
+void
+rtw_hal_rf_rfe_ant_num_chk(struct rtw_hal_com_t *hal_com)
+{
+	struct hal_info_t *hal_info = hal_com->hal_priv;
+
+	halrf_rfe_ant_num_chk(hal_info->rf);
 }
 
 #else /*ifdef USE_TRUE_PHY*/
@@ -893,6 +930,13 @@ enum rtw_hal_status
 rtw_hal_rf_read_pwr_table(struct rtw_hal_com_t *hal_com, u8 rf_path, u16 rate,
 				u8 bandwidth, u8 channel, u8 offset, u8 dcm,
 				u8 beamforming, s16 *get_item)
+{
+	return RTW_HAL_STATUS_SUCCESS;
+}
+
+enum rtw_hal_status
+rtw_hal_rf_wlan_tx_power_control(struct rtw_hal_com_t *hal_com,
+	enum phl_phy_idx phy, enum phl_pwr_ctrl pwr_ctrl_idx, u32 tx_power_val, bool enable)
 {
 	return RTW_HAL_STATUS_SUCCESS;
 }
@@ -1131,6 +1175,13 @@ rtw_hal_rf_set_power(struct hal_info_t *hal_info, enum phl_phy_idx phy,
 	return RTW_HAL_STATUS_SUCCESS;
 }
 
+enum rtw_hal_status
+rtw_hal_rf_set_power_constraint(struct hal_info_t *hal_info, enum phl_phy_idx phy,
+					u16 mb)
+{
+	return RTW_HAL_STATUS_SUCCESS;
+}
+
 enum rtw_hal_status rtw_hal_rf_set_gain_offset(struct hal_info_t *hal_info, u8 cur_phy_idx,
 						s8 offset, u8 rf_path)
 {
@@ -1289,4 +1340,10 @@ void rtw_hal_rf_cmd_notification(struct hal_info_t *hal_info,
 {
 
 }
+
+void
+rtw_hal_rf_rfe_ant_num_chk(struct rtw_hal_com_t *hal_com)
+{
+}
+
 #endif /*ifdef USE_TRUE_PHY*/

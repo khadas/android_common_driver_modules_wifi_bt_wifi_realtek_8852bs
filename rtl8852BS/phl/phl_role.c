@@ -395,6 +395,8 @@ _phl_wifi_role_free_sw(struct phl_info_t *phl_info, struct rtw_wifi_role_t *wrol
 	mr_ctl->role_map &= ~BIT(wrole->id);
 	_os_spinunlock(phl_to_drvpriv(phl_info), &mr_ctl->lock, _ps, NULL);
 	wrole->active = false;
+	wrole->mstate = MLME_NO_LINK;
+	wrole->type = PHL_RTYPE_NONE;
 	return RTW_PHL_STATUS_SUCCESS;
 }
 
@@ -639,6 +641,8 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 	enum phl_upd_mode mode = PHL_UPD_ROLE_MAX;
 	void *drv = phl_to_drvpriv(phl_info);
 
+	PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "%s Rid(%d) chg_id(%d)\n",
+			__func__, wrole->id, chg_id);
 	switch (chg_id) {
 	case WR_CHG_TYPE:
 	{
@@ -747,6 +751,31 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 			pstate = RTW_PHL_STATUS_SUCCESS;
 	}
 		break;
+	case WR_CHG_MULTI_EDCA_PARAM:
+	{
+		struct rtw_multi_edca_param *param_q =
+					(struct rtw_multi_edca_param *)chg_info;
+		struct rtw_edca_param *param = NULL;
+		u8 idx = 0;
+
+		if (param_q->num > ACQ_MAX) {
+			PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "WR_CHG_MULTI_EDCA_PARAM: Invalid param_q->num(%d)\n",
+				param_q->num);
+			goto exit;
+		}
+		for (idx = 0; idx < param_q->num; idx++) {
+			param = &param_q->edca[idx];
+			hstate = rtw_hal_set_edca(phl_info->hal, wrole, param->ac,
+						param->param);
+			if (hstate != RTW_HAL_STATUS_SUCCESS) {
+				PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "WR_CHG_MULTI_EDCA_PARAM: cfg edca[%d] fail\n",
+					idx);
+				goto exit;
+			}
+		}
+		pstate = RTW_PHL_STATUS_SUCCESS;
+	}
+		break;
 	case WR_CHG_MU_EDCA_PARAM:
 	{
 		struct rtw_mu_edca_param *param = (struct rtw_mu_edca_param*)chg_info;
@@ -810,6 +839,11 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 			pstate = RTW_PHL_STATUS_SUCCESS;
 	}
 	break;
+	case WR_CHG_STBC_CFG:
+	{
+		phl_init_proto_stbc_cap(wrole, phl_info, &wrole->proto_role_cap);
+	}
+	break;
 	case WR_CHG_MAX:
 		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_,
 				"%s: Unsupported case:%d, please check it\n",
@@ -821,6 +855,7 @@ phl_wifi_role_change(struct phl_info_t *phl_info,
 				__func__, chg_id);
 		break;
 	};
+exit:
 	return pstate;
 }
 
@@ -915,14 +950,17 @@ rtw_phl_cmd_wrole_change(void *phl,
 	if (is_cmd_failure(psts)) {
 		/* Send cmd success, but wait cmd fail*/
 		psts = RTW_PHL_STATUS_FAILURE;
-		PHL_INFO("%s wr-id:%d failure\n", __func__, wrole->id);
+		PHL_INFO("%s wr-id(%d) chg_id(%d) failure\n",
+			__func__, wrole->id, chg_id);
 	} else if (psts != RTW_PHL_STATUS_SUCCESS) {
 		/* Send cmd fail */
 		psts = RTW_PHL_STATUS_FAILURE;
-		PHL_INFO("%s wr-id:%d failure\n", __func__, wrole->id);
+		PHL_INFO("%s wr-id(%d) chg_id(%d) failure\n",
+			__func__, wrole->id, chg_id);
 		goto _err_cmd;
 	} else {
-		PHL_INFO("%s wr-id:%d success\n", __func__, wrole->id);
+		PHL_INFO("%s wr-id(%d) chg_id(%d) success\n",
+			__func__, wrole->id, chg_id);
 	}
 
 	return psts;
@@ -1182,15 +1220,6 @@ phl_cmd_role_suspend(struct phl_info_t *phl_info)
 	pstatus = phl_role_suspend(phl_info);
 #endif
 	return pstatus;
-}
-
-bool rtw_phl_role_is_client_category(struct rtw_wifi_role_t *wrole)
-{
-	bool ret = false;
-
-	if (wrole->type == PHL_RTYPE_STATION || wrole->type == PHL_RTYPE_P2P_GC)
-		ret = true;
-	return ret;
 }
 
 u16 phl_role_get_bcn_intvl(struct phl_info_t *phl, struct rtw_wifi_role_t *wrole)

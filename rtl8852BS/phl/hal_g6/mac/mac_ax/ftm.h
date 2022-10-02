@@ -28,6 +28,9 @@
 /*--------------------DSecurity cam type declaration-----------------*/
 struct fwcmd_ftm_info {
 	u32 dword0;
+	u32 dword1;
+	u32 dword2;
+	u32 dword3;
 };
 
 /*--------------------Funciton declaration----------------------------*/
@@ -58,16 +61,8 @@ u32 mac_ista_ftm_proc(struct mac_ax_adapter *adapter,
  * @{
  */
 
-/**
- * @brief mac_sta_del_key
- *
- * @param *adapter
- * @param mac_id
- * @param key_id
- * @param key_type
- * @return Please Place Description here.
- * @retval u32
- */
+u32 mac_ista_ftm_enable(struct mac_ax_adapter *adapter,
+			u8 macid, bool enable);
 
 #endif
 

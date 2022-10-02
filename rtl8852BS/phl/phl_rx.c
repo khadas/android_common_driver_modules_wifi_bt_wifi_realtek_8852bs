@@ -404,7 +404,7 @@ phl_sta_ps_enter(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta,
                  struct rtw_wifi_role_t *role)
 {
 	void *d = phl_to_drvpriv(phl_info);
-	/* enum rtw_hal_status hal_status; */
+	enum rtw_hal_status hal_status;
 	struct rtw_phl_evt_ops *ops = &phl_info->phl_com->evt_ops;
 
 	_os_atomic_set(d, &sta->ps_sta, 1);
@@ -415,13 +415,12 @@ phl_sta_ps_enter(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta,
 	          sta->mac_addr[3], sta->mac_addr[4], sta->mac_addr[5],
 	          sta->aid, sta->macid, sta);
 
-	/* TODO: comment out because beacon may stop if we do this frequently */
-	/* hal_status = rtw_hal_set_macid_pause(phl_info->hal, */
-	/*                                         sta->macid, true); */
-	/* if (RTW_HAL_STATUS_SUCCESS != hal_status) { */
-	/*         PHL_WARN("%s(): failed to pause macid tx, macid=%u\n", */
-	/*                  __FUNCTION__, sta->macid); */
-	/* } */
+	hal_status = rtw_hal_set_macid_pause(phl_info->hal,
+	                                     sta->macid, true);
+	if (RTW_HAL_STATUS_SUCCESS != hal_status) {
+	        PHL_WARN("%s(): failed to pause macid tx, macid=%u\n",
+	                 __FUNCTION__, sta->macid);
+	}
 
 	if (ops->ap_ps_sta_ps_change)
 		ops->ap_ps_sta_ps_change(d, role->id, sta->mac_addr, true);
@@ -432,7 +431,7 @@ phl_sta_ps_exit(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta,
                 struct rtw_wifi_role_t *role)
 {
 	void *d = phl_to_drvpriv(phl_info);
-	/* enum rtw_hal_status hal_status; */
+	enum rtw_hal_status hal_status;
 	struct rtw_phl_evt_ops *ops = &phl_info->phl_com->evt_ops;
 
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_,
@@ -443,13 +442,12 @@ phl_sta_ps_exit(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta,
 
 	_os_atomic_set(d, &sta->ps_sta, 0);
 
-	/* TODO: comment out because beacon may stop if we do this frequently */
-	/* hal_status = rtw_hal_set_macid_pause(phl_info->hal, */
-	/*                                         sta->macid, false); */
-	/* if (RTW_HAL_STATUS_SUCCESS != hal_status) { */
-	/*         PHL_WARN("%s(): failed to resume macid tx, macid=%u\n", */
-	/*                  __FUNCTION__, sta->macid); */
-	/* } */
+	hal_status = rtw_hal_set_macid_pause(phl_info->hal,
+	                                     sta->macid, false);
+	if (RTW_HAL_STATUS_SUCCESS != hal_status) {
+	        PHL_WARN("%s(): failed to resume macid tx, macid=%u\n",
+	                 __FUNCTION__, sta->macid);
+	}
 
 	if (ops->ap_ps_sta_ps_change)
 		ops->ap_ps_sta_ps_change(d, role->id, sta->mac_addr, false);
@@ -495,9 +493,16 @@ phl_rx_handle_sta_process(struct phl_info_t *phl_info,
 	 */
 	if (!m->more_frag &&
 	    (m->frame_type == RTW_FRAME_TYPE_DATA ||
-	     m->frame_type == RTW_FRAME_TYPE_CTRL) &&
+	     m->frame_type == RTW_FRAME_TYPE_MGNT) &&
 	    (role->type == PHL_RTYPE_AP ||
 	     role->type == PHL_RTYPE_P2P_GO)) {
+		/* May get a @rx with macid set to our self macid, check if that
+		 * happens here to avoid pausing self macid. This is put here so
+		 * we wouldn't do it on our normal rx path, which degrades rx
+		 * throughput significantly. */
+		if (phl_self_stainfo_chk(phl_info, role, sta))
+			return;
+
 		if (_os_atomic_read(d, &sta->ps_sta)) {
 			if (!m->pwr_bit)
 				phl_sta_ps_exit(phl_info, sta, role);
@@ -551,7 +556,7 @@ static inline u16 seq_sub(u16 sq1, u16 sq2)
 
 static inline u16 reorder_index(struct phl_tid_ampdu_rx *r, u16 seq)
 {
-	return seq_sub(seq, r->ssn) % r->buf_size;
+	return seq % r->buf_size;
 }
 
 static void phl_release_reorder_frame(struct phl_info_t *phl_info,
@@ -604,8 +609,7 @@ static void phl_reorder_release(struct phl_info_t *phl_info,
 {
 	/* ref ieee80211_sta_reorder_release() and wil_reorder_release() */
 
-	int index, i, j;
-	u32 cur_time = _os_get_cur_time_ms();
+	int index, j;
 
 	/* release the buffer until next missing frame */
 	index = reorder_index(r, r->head_seq_num);
@@ -614,6 +618,7 @@ static void phl_reorder_release(struct phl_info_t *phl_info,
 		 * No buffers ready to be released, but check whether any
 		 * frames in the reorder buffer have timed out.
 		 */
+		u32 cur_time = _os_get_cur_time_ms();
 		int skipped = 1;
 		for (j = (index + 1) % r->buf_size; j != index;
 			j = (j + 1) % r->buf_size) {
@@ -621,14 +626,9 @@ static void phl_reorder_release(struct phl_info_t *phl_info,
 				skipped++;
 				continue;
 			}
-			if (skipped && cur_time < r->reorder_time[j] +
-				HT_RX_REORDER_BUF_TIMEOUT_MS)
+			if (skipped && (s32)(r->reorder_time[j] +
+				HT_RX_REORDER_BUF_TIMEOUT_MS - cur_time) > 0)
 				goto set_release_timer;
-
-			/* don't leave incomplete A-MSDUs around */
-			for (i = (index + 1) % r->buf_size; i != j;
-				i = (i + 1) % r->buf_size)
-				phl_recycle_rx_buf(phl_info, r->reorder_buf[i]);
 
 			PHL_TRACE(COMP_PHL_RECV, _PHL_INFO_, "release an RX reorder frame due to timeout on earlier frames\n");
 
@@ -647,25 +647,12 @@ static void phl_reorder_release(struct phl_info_t *phl_info,
 	}
 
 	if (r->stored_mpdu_num) {
-		j = index = r->head_seq_num % r->buf_size;
-
-		for (; j != (index - 1) % r->buf_size;
-			j = (j + 1) % r->buf_size) {
-			if (r->reorder_buf[j])
-				break;
-		}
 
 set_release_timer:
 
 		if (!r->removed)
 			_os_set_timer(r->drv_priv, &r->sta->reorder_timer,
 			              HT_RX_REORDER_BUF_TIMEOUT_MS);
-	} else {
-		/* TODO: implementation of cancel timer on Linux is
-			del_timer_sync(), it can't be called with same spinlock
-			held with the expiration callback, that causes a potential
-			deadlock. */
-		_os_cancel_timer_async(r->drv_priv, &r->sta->reorder_timer);
 	}
 }
 
@@ -677,25 +664,24 @@ void phl_sta_rx_reorder_timer_expired(void *t)
 	struct rtw_phl_com_t *phl_com = sta->wrole->phl_com;
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
 	void *drv_priv = phl_to_drvpriv(phl_info);
+	_os_list frames;
 	u8 i = 0;
 
 	PHL_INFO("Rx reorder timer expired, sta=0x%p\n", sta);
 
+	INIT_LIST_HEAD(&frames);
+
+	_os_spinlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 	for (i = 0; i < ARRAY_SIZE(sta->tid_rx); i++) {
-		_os_list frames;
-
-		INIT_LIST_HEAD(&frames);
-
-		_os_spinlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 		if (sta->tid_rx[i])
 			phl_reorder_release(phl_info, sta->tid_rx[i], &frames);
-		_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
-
-		phl_handle_rx_frame_list(phl_info, &frames);
-#ifdef PHL_RX_BATCH_IND
-		_phl_indic_new_rxpkt(phl_info);
-#endif
 	}
+	_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
+
+	phl_handle_rx_frame_list(phl_info, &frames);
+#ifdef PHL_RX_BATCH_IND
+	_phl_indic_new_rxpkt(phl_info);
+#endif
 
 	_os_event_set(drv_priv, &sta->comp_sync);
 }
@@ -896,19 +882,11 @@ enum rtw_phl_status phl_rx_reorder(struct phl_info_t *phl_info,
 	if (meta->addr_cam_vld)
 		sta = rtw_phl_get_stainfo_by_macid(phl_info, meta->macid);
 
-	/* Otherwise, search STA by TA */
-	if (!sta || !sta->wrole) {
-		struct rtw_wifi_role_t *wrole;
-		wrole = phl_get_wrole_by_addr(phl_info, meta->mac_addr);
-		if (wrole)
-			sta = rtw_phl_get_stainfo_by_addr(phl_info,
-			                                  wrole, meta->ta);
-		if (!wrole || !sta) {
-			PHL_TRACE(COMP_PHL_RECV, _PHL_WARNING_,
-			          "%s(): stainfo or wrole not found, cam=%u, macid=%u\n",
-			          __FUNCTION__, meta->addr_cam, meta->macid);
-			goto dont_reorder;
-		}
+	if (!sta) {
+		PHL_TRACE(COMP_PHL_RECV, _PHL_WARNING_,
+		          "%s(): stainfo not found, cam=%u, macid=%u\n",
+		          __FUNCTION__, meta->addr_cam, meta->macid);
+		goto dont_reorder;
 	}
 
 	phl_rx->r.tx_sta = sta;
@@ -917,8 +895,9 @@ enum rtw_phl_status phl_rx_reorder(struct phl_info_t *phl_info,
 	rtw_hal_set_sta_rx_sts(sta, false, meta);
 
 	if (tid >= ARRAY_SIZE(sta->tid_rx)) {
-		PHL_TRACE(COMP_PHL_RECV, _PHL_ERR_, "Fail: tid (%u) index out of range (%u)\n", tid, 8);
-		goto drop_frame;
+		PHL_TRACE(COMP_PHL_RECV, _PHL_ERR_, "Fail: tid (%u) index out of range (%u)\n",
+			tid, (u32)ARRAY_SIZE(sta->tid_rx));
+		goto dont_reorder;
 	}
 
 	_os_spinlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
@@ -1175,33 +1154,35 @@ void rtw_phl_rx_bar(void *phl, struct rtw_phl_stainfo_t *sta, u8 tid, u16 seq)
 	struct phl_tid_ampdu_rx *r;
 	_os_list frames;
 
-	INIT_LIST_HEAD(&frames);
+	if (tid >= ARRAY_SIZE(sta->tid_rx) || tid >= RTW_MAX_TID_NUM)
+		return;
 
-	if (tid >= RTW_MAX_TID_NUM)
-		goto out;
+	INIT_LIST_HEAD(&frames);
 
 	_os_spinlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 
 	r = sta->tid_rx[tid];
 	if (!r) {
+		_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 		PHL_TRACE(COMP_PHL_RECV, _PHL_ERR_, "BAR for non-existing TID %d\n", tid);
-		goto out;
+		return;
 	}
 
 	if (seq_less(seq, r->head_seq_num)) {
+		_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
 		PHL_TRACE(COMP_PHL_RECV, _PHL_ERR_, "BAR Seq 0x%03x preceding head 0x%03x\n",
 					seq, r->head_seq_num);
-		goto out;
+		return;
 	}
 
 	PHL_TRACE(COMP_PHL_RECV, _PHL_INFO_, "BAR: TID %d Seq 0x%03x head 0x%03x\n",
 				tid, seq, r->head_seq_num);
 
 	phl_release_reorder_frames(phl_info, r, seq, &frames);
-	phl_handle_rx_frame_list(phl_info, &frames);
 
-out:
 	_os_spinunlock(drv_priv, &sta->tid_rx_lock, _bh, NULL);
+
+	phl_handle_rx_frame_list(phl_info, &frames);
 }
 
 enum rtw_rx_status rtw_phl_get_rx_status(void *phl)
@@ -1639,6 +1620,56 @@ phl_rx_proc_ppdu_sts(struct phl_info_t *phl_info, struct rtw_phl_rx_pkt *phl_rx)
 #endif
 }
 
+void phl_rx_wp_report_record_sts(struct phl_info_t *phl_info,
+				 u8 macid, u16 ac_queue, u8 txsts)
+{
+	struct rtw_phl_stainfo_t *phl_sta = NULL;
+	struct rtw_hal_stainfo_t *hal_sta = NULL;
+	struct rtw_wp_rpt_stats *wp_rpt_stats= NULL;
+
+	phl_sta = rtw_phl_get_stainfo_by_macid(phl_info, macid);
+
+	if (phl_sta) {
+		hal_sta = phl_sta->hal_sta;
+
+		if (hal_sta->trx_stat.wp_rpt_stats == NULL) {
+			PHL_ERR("rtp_stats NULL\n");
+			return;
+		}
+		/* Record Per ac queue statistics */
+		wp_rpt_stats = &hal_sta->trx_stat.wp_rpt_stats[ac_queue];
+
+		_os_spinlock(phl_to_drvpriv(phl_info), &hal_sta->trx_stat.tx_sts_lock, _bh, NULL);
+		if (TX_STATUS_TX_DONE == txsts) {
+			/* record total tx ok*/
+			hal_sta->trx_stat.tx_ok_cnt++;
+			/* record per ac queue tx ok*/
+			wp_rpt_stats->tx_ok_cnt++;
+		} else {
+			/* record total tx fail*/
+			hal_sta->trx_stat.tx_fail_cnt++;
+			/* record per ac queue tx fail*/
+			if (TX_STATUS_TX_FAIL_REACH_RTY_LMT == txsts)
+				wp_rpt_stats->rty_fail_cnt++;
+			else if (TX_STATUS_TX_FAIL_LIFETIME_DROP == txsts)
+				wp_rpt_stats->lifetime_drop_cnt++;
+			else if (TX_STATUS_TX_FAIL_MACID_DROP == txsts)
+				wp_rpt_stats->macid_drop_cnt++;
+		}
+		_os_spinunlock(phl_to_drvpriv(phl_info), &hal_sta->trx_stat.tx_sts_lock, _bh, NULL);
+
+		PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_,"macid: %u, ac_queue: %u, tx_ok_cnt: %u, rty_fail_cnt: %u, "
+			"lifetime_drop_cnt: %u, macid_drop_cnt: %u\n"
+			, macid, ac_queue, wp_rpt_stats->tx_ok_cnt, wp_rpt_stats->rty_fail_cnt
+			, wp_rpt_stats->lifetime_drop_cnt, wp_rpt_stats->macid_drop_cnt);
+		PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_,"totoal tx ok: %u \n totoal tx fail: %u\n"
+			, hal_sta->trx_stat.tx_ok_cnt, hal_sta->trx_stat.tx_fail_cnt);
+	} else {
+		PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_, "%s: PHL_STA not found\n",
+				__FUNCTION__);
+	}
+}
+
 static void _dump_rx_reorder_info(struct phl_info_t *phl_info,
 				  struct rtw_phl_stainfo_t *sta)
 {
@@ -1718,5 +1749,4 @@ void phl_rx_dbg_dump(struct phl_info_t *phl_info, u8 band_idx)
 		PHL_TRACE(COMP_PHL_DBG, _PHL_ERR_, "%s: cmd enqueue fail!\n",
 			  __func__);
 	}
-
 }

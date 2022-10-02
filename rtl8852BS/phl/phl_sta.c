@@ -361,6 +361,9 @@ _phl_stainfo_init(struct phl_info_t *phl_info,
 		return RTW_PHL_STATUS_FAILURE;
 	}
 	phl_sta->active = false;
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+	phl_sta->allocated = false;
+#endif
 	return RTW_PHL_STATUS_SUCCESS;
 }
 
@@ -854,6 +857,13 @@ __phl_free_stainfo_sw(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta
 		goto _exit;
 	}
 
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+	if (!sta->allocated) {
+		PHL_INFO("%s sta has not been allocated\n", __func__);
+		goto _exit;
+	}
+#endif
+
 	wrole = sta->wrole;
 
 	if (!is_broadcast_mac_addr(sta->mac_addr)) {
@@ -867,6 +877,10 @@ __phl_free_stainfo_sw(struct phl_info_t *phl_info, struct rtw_phl_stainfo_t *sta
 	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
 		PHL_ERR("phl_stainfo_queue_del failed\n");
 	}
+
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+	sta->allocated = false;
+#endif
 
 	pstatus = phl_free_stainfo_sw(phl_info, sta);
 	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
@@ -957,12 +971,10 @@ _phl_alloc_stainfo_sw(struct phl_info_t *phl_info,struct rtw_phl_stainfo_t *sta)
 		PHL_ERR("%s allocate macid failure!\n", __func__);
 		goto error_alloc_macid;
 	}
-	pstatus = phl_register_tx_ring(phl_info, sta->macid,
-				       sta->wrole->hw_band,
-				       sta->wrole->hw_wmm,
-				       sta->wrole->hw_port);
 
-	if (pstatus != RTW_PHL_STATUS_SUCCESS) {
+	if (phl_register_tx_ring(phl_info, sta->macid,
+		sta->wrole->hw_band, sta->wrole->hw_wmm, sta->wrole->hw_port) !=
+					RTW_PHL_STATUS_SUCCESS) {
 		PHL_ERR("%s register_tx_ring failure!\n", __func__);
 		goto error_register_tx_ring;
 	}
@@ -1043,6 +1055,9 @@ phl_alloc_stainfo_sw(struct phl_info_t *phl_info,
 	_phl_sta_set_default_value(phl_info, phl_sta);
 
 	phl_stainfo_enqueue(phl_info, &wrole->assoc_sta_queue, phl_sta);
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+	phl_sta->allocated = true;
+#endif
 
 	#ifdef RTW_WKARD_AP_CLIENT_ADD_DEL_NTY
 	if (_phl_self_stainfo_chk(phl_info, wrole, phl_sta) == false) {
@@ -1314,6 +1329,9 @@ phl_wifi_role_free_stainfo_sw(struct phl_info_t *phl_info,
 		phl_sta = phl_stainfo_dequeue(phl_info, &role->assoc_sta_queue);
 
 		if (phl_sta) {
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+			phl_sta->allocated = false;
+#endif
 			phl_free_stainfo_sw(phl_info, phl_sta);
 			phl_stainfo_enqueue(phl_info,
 						&sta_ctrl->free_sta_queue, phl_sta);
@@ -1335,6 +1353,9 @@ phl_wifi_role_free_stainfo(struct phl_info_t *phl_info,
 		phl_sta = phl_stainfo_dequeue(phl_info, &role->assoc_sta_queue);
 
 		if (phl_sta) {
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+			phl_sta->allocated = false;
+#endif
 			phl_free_stainfo_hw(phl_info, phl_sta);
 			phl_free_stainfo_sw(phl_info, phl_sta);
 			phl_stainfo_enqueue(phl_info,
@@ -1823,16 +1844,13 @@ rtw_phl_get_stainfo_by_macid(void *phl, u16 macid)
 
 	if (phl_sta == NULL) {
 		PHL_TRACE(COMP_PHL_DBG, _PHL_DEBUG_,"%s sta info (macid:%d) is NULL\n", __func__, macid);
-		#ifdef CONFIG_PHL_USB_RELEASE_RPT_ENABLE
+		#ifdef CONFIG_PHL_RELEASE_RPT_ENABLE
 		/* comment temporarily since release report may report unused macid */
 		/* and trigger call tracing */
 		/* _os_warn_on(1); */
 		#else
-		#ifdef CONFIG_RTW_DEBUG
-		if (_PHL_DEBUG_ <= phl_log_level)
 		_os_warn_on(1);
-		#endif /*CONFIG_RTW_DEBUG*/
-		#endif /* CONFIG_PHL_USB_RELEASE_RPT_ENABLE */
+		#endif /* CONFIG_PHL_RELEASE_RPT_ENABLE */
 	}
 	_os_spinunlock(phl_to_drvpriv(phl_info), &macid_ctl->lock, _bh, NULL);
 
@@ -2006,6 +2024,24 @@ rtw_phl_query_rainfo(void *phl, struct rtw_phl_stainfo_t *phl_sta,
 	return phl_sts;
 }
 
+enum rtw_phl_status
+rtw_phl_get_rx_stat(void *phl, struct rtw_phl_stainfo_t *phl_sta,
+		     u16 *rx_rate, u8 *bw, u8 *gi_ltf)
+{
+	enum rtw_phl_status phl_sts = RTW_PHL_STATUS_FAILURE;
+	struct rtw_hal_stainfo_t *hal_sta;
+
+	if(phl_sta) {
+		hal_sta = phl_sta->hal_sta;
+		*rx_rate = hal_sta->trx_stat.rx_rate;
+		*gi_ltf = hal_sta->trx_stat.rx_gi_ltf;
+		*bw = hal_sta->trx_stat.rx_bw;
+		phl_sts = RTW_PHL_STATUS_SUCCESS;
+	}
+
+	return phl_sts;
+}
+
 /**
  * rtw_phl_txsts_rpt_config() - issue h2c for txok and tx retry info
  * @phl:		struct phl_info_t *
@@ -2025,7 +2061,7 @@ rtw_phl_txsts_rpt_config(void *phl, struct rtw_phl_stainfo_t *phl_sta)
 	return phl_sts;
 }
 
-#ifdef CONFIG_USB_HCI
+#if defined(CONFIG_USB_HCI) || defined(CONFIG_PCI_HCI)
 /**
  * rtw_phl_get_tx_ok_rpt() - get txok info.
  * @phl:		struct phl_info_t *
@@ -2201,7 +2237,7 @@ rtw_phl_get_tx_retry_rpt(void *phl, struct rtw_phl_stainfo_t *phl_sta, u32 *tx_r
 	}
 	return phl_sts;
 }
-#endif /* CONFIG_USB_HCI */
+#endif /* defined(CONFIG_USB_HCI) || defined(CONFIG_PCI_HCI) */
 
 /*
  * Get next idx
@@ -2352,7 +2388,7 @@ void phl_bcn_watchdog(struct phl_info_t *phl)
 
 	for (ridx = 0; ridx < MAX_WIFI_ROLE_NUMBER; ridx++) {
 		wrole = rtw_phl_get_wrole_by_ridx(phl->phl_com, ridx);
-		if (wrole == NULL)
+		if (wrole->active == false)
 			continue;
 
 		if (rtw_phl_role_is_client_category(wrole) && wrole->mstate == MLME_LINKED) {
@@ -2486,3 +2522,9 @@ exit:
 
 }
 
+bool phl_self_stainfo_chk(struct phl_info_t *phl_info,
+                          struct rtw_wifi_role_t *wrole,
+                          struct rtw_phl_stainfo_t *sta)
+{
+	return _phl_self_stainfo_chk(phl_info, wrole, sta);
+}

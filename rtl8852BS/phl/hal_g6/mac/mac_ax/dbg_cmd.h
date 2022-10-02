@@ -54,8 +54,13 @@
 #define eMallocMAX	23
 #define eMallocTypeMAX	3
 
+#define OPCODE_HDR_LEN 2
+#define MAX_FWSTATSUS_PKT_LEN 12
 //STR_BUF_SIZE , -128 for driver stack size warning
 #define STR_BUF_SIZE (1024 - 128)
+
+#define FWQC_SLOW_HEAP_TH 0
+#define FWQC_FAST_HEAP_TH 0
 
 #define GET_FIELD_OPCODE(opcode) ((opcode) & (FWSTATUS_OPCODE_MASK))
 #define	MAC_DBG_MSG(max_buff_len, used_len, buff_addr, remain_len, fmt, ...)\
@@ -84,6 +89,10 @@
  * Please Place Description here.
  * @var mac_hal_cmd_id::MAC_MAC_FW_INFO
  * Please Place Description here.
+ * @var mac_hal_cmd_id::MAC_MAC_QC_START
+ * Please Place Description here.
+ * @var mac_hal_cmd_id::MAC_MAC_QC_END
+ * Please Place Description here.
  */
 enum mac_hal_cmd_id {
 	MAC_HAL_HELP = 0,
@@ -94,6 +103,8 @@ enum mac_hal_cmd_id {
 	MAC_MAC_FW_CURTCB,
 	MAC_MAC_FW_INFO,
 	MAC_MAC_DL_SYM,
+	MAC_MAC_QC_START,
+	MAC_MAC_QC_END,
 };
 
 /**
@@ -620,6 +631,34 @@ u32 cmd_mac_fw_status_parser(struct mac_ax_adapter *adapter, char input[][MAC_MA
 
 u32 cmd_mac_dl_sym(struct mac_ax_adapter *adapter, char input[][MAC_MAX_ARGV],
 		   u32 input_num, char *output, u32 out_len, u32 *used);
+
+/**
+ * @brief cmd_mac_qc_start
+ *
+ * @param *adapter
+ * @param *input
+ * @param *input_num
+ * @return Please Place Description here.
+ * @retval void
+ */
+u32 cmd_mac_qc_start(struct mac_ax_adapter *adapter,
+		     char input[][MAC_MAX_ARGV],
+		     u32 input_num,
+		     char *output, u32 out_len, u32 *used);
+
+/**
+ * @brief cmd_mac_qc_end
+ *
+ * @param *adapter
+ * @param *input
+ * @param *input_num
+ * @return Please Place Description here.
+ * @retval void
+ */
+u32 cmd_mac_qc_end(struct mac_ax_adapter *adapter,
+		   char input[][MAC_MAX_ARGV],
+		   u32 input_num,
+		   char *output, u32 out_len, u32 *used);
 
 /**
  * @brief fw_log_int_dump

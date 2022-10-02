@@ -38,8 +38,11 @@ void rtw_init_wow(_adapter *padapter)
 	void *phl = GET_PHL_INFO(dvobj);
 	enum rtw_phl_status status = RTW_PHL_STATUS_FAILURE;
 	struct rtw_wow_gpio_info *wow_gpio = &wowpriv->wow_gpio;
-	u8 toggle_pulse = DEV2HST_TOGGLE, gpio_time_unit = 1, gpio_pulse_count = 3, gpio_pulse_period = 10, gpio_pulse_dura = 5;
-	u8 gpio_pulse_en_a = 0, customer_id = 0, gpio_duration_unit_a = 0, gpio_pulse_count_a = 0, gpio_duration_a = 0, special_reason_a = 0;
+	struct rtw_dev2hst_gpio_info *d2h_gpio_info = &wow_gpio->d2h_gpio_info;
+	u8 toggle_pulse = DEV2HST_TOGGLE, gpio_time_unit = 1, gpio_pulse_count = 3;
+	u8 gpio_pulse_period = 20, gpio_pulse_dura = 10;
+	u8 rsn_a_en = 0, rsn_a = 0, rsn_a_time_unit = 0, rsn_a_toggle_pulse = DEV2HST_TOGGLE;
+	u8 rsn_a_pulse_count = 0, rsn_a_pulse_period = 0, rsn_a_pulse_duration = 0;
 #endif
 
 #if defined(CONFIG_HAS_EARLYSUSPEND) || defined(CONFIG_ANDROID_POWER)
@@ -54,29 +57,32 @@ void rtw_init_wow(_adapter *padapter)
 
 #ifdef CONFIG_GPIO_WAKEUP
 #ifdef ROKU_PRIVATE
-	gpio_pulse_en_a = DEV2HST_PULSE;
-	customer_id = 0x3f;
-	gpio_duration_unit_a = 1;
-	gpio_pulse_count_a = 1;
-	gpio_duration_a = 5;
-	special_reason_a = 0x21;
+	rsn_a_en = 1;
+	rsn_a_toggle_pulse = DEV2HST_PULSE;
+	rsn_a_time_unit = 1;
+	rsn_a_pulse_count = 1;
+	rsn_a_pulse_duration = 5;
+	rsn_a_pulse_period = 10;
+	rsn_a = 0x21;
 #endif /* ROKU_PRIVATE */
-	/*default low active*/
-	wow_gpio->gpio_active = HIGH_ACTIVE_DEV2HST;
 	pwrctrlpriv->hst2dev_high_active = HIGH_ACTIVE_HST2DEV;
-	wow_gpio->dev2hst_gpio = WAKEUP_GPIO_IDX;
-	wow_gpio->toggle_pulse = toggle_pulse;
-	wow_gpio->gpio_time_unit = gpio_time_unit;
-	wow_gpio->gpio_pulse_dura = gpio_pulse_dura;
-	wow_gpio->gpio_pulse_period = gpio_pulse_period;
-	wow_gpio->gpio_pulse_count = gpio_pulse_count;
+	/*default low active*/
+	d2h_gpio_info->gpio_active = HIGH_ACTIVE_DEV2HST;
 
-	wow_gpio->customer_id = customer_id;
-	wow_gpio->gpio_pulse_en_a = gpio_pulse_en_a;
-	wow_gpio->gpio_duration_unit_a = gpio_duration_unit_a;
-	wow_gpio->gpio_duration_a = gpio_duration_a;
-	wow_gpio->special_reason_a = special_reason_a;
-	wow_gpio->gpio_pulse_count_a = gpio_pulse_count_a;
+	d2h_gpio_info->toggle_pulse = toggle_pulse;
+	d2h_gpio_info->gpio_time_unit = gpio_time_unit;
+	d2h_gpio_info->gpio_pulse_dura = gpio_pulse_dura;
+	d2h_gpio_info->gpio_pulse_period = gpio_pulse_period;
+	d2h_gpio_info->gpio_pulse_count = gpio_pulse_count;
+
+	wow_gpio->dev2hst_gpio = WAKEUP_GPIO_IDX;
+	d2h_gpio_info->rsn_a_en = rsn_a_en;
+	d2h_gpio_info->rsn_a_toggle_pulse = rsn_a_toggle_pulse;
+	d2h_gpio_info->rsn_a_time_unit = rsn_a_time_unit;
+	d2h_gpio_info->rsn_a = rsn_a;
+	d2h_gpio_info->rsn_a_pulse_duration = rsn_a_pulse_duration;
+	d2h_gpio_info->rsn_a_pulse_period = rsn_a_pulse_period;
+	d2h_gpio_info->rsn_a_pulse_count = rsn_a_pulse_count;
 
 #ifdef CONFIG_RTW_ONE_PIN_GPIO
 	wow_gpio->dev2hst_gpio_mode = RTW_AX_SW_IO_MODE_INPUT;
@@ -89,7 +95,7 @@ void rtw_init_wow(_adapter *padapter)
 	#endif /*CONFIG_WAKEUP_GPIO_INPUT_MODE*/
 	/* switch GPIO to open-drain or push-pull */
 	status = rtw_phl_cfg_wow_set_sw_gpio_mode(phl, wow_gpio);
-	wow_gpio->dev2hst_high = wow_gpio->gpio_active == 0 ? 1 : 0;
+	wow_gpio->dev2hst_high = d2h_gpio_info->gpio_active == 0 ? 1 : 0;
 	status = rtw_phl_cfg_wow_sw_gpio_ctrl(phl, wow_gpio);
 	RTW_INFO("%s: set GPIO_%d %d as default. status=%d\n",
 		 __func__, WAKEUP_GPIO_IDX, wow_gpio->dev2hst_high, status);
@@ -596,6 +602,14 @@ void _update_aoac_rpt_phase_0(_adapter *adapter, struct rtw_aoac_report *aoac_in
 		_rtw_memcpy(securitypriv->iv_seq[gtk_key_idx], pn, 8);
 		RTW_INFO("[wow] gtk_rx_pn[%u] = " PN_FMT "\n", gtk_key_idx, PN_ARG(pn));
 	}
+
+#ifdef CONFIG_IEEE80211W
+	/* handle igtk rx ipn */
+	if (SEC_IS_BIP_KEY_INSTALLED(securitypriv)) {
+		securitypriv->dot11wBIPrxpn.val = RTW_GET_LE64(aoac_info->igtk_ipn);
+		RTW_INFO("[wow] igtk_rx_pn = " PN_FMT "\n", PN_ARG(aoac_info->igtk_ipn));
+	}
+#endif
 }
 
 void _update_aoac_rpt_phase_1(_adapter *adapter, struct rtw_aoac_report *aoac_info)
@@ -655,6 +669,32 @@ void _update_aoac_rpt_phase_1(_adapter *adapter, struct rtw_aoac_report *aoac_in
 		/* update eapol replay_counter */
 		_rtw_memcpy(sta->replay_ctr, aoac_info->eapol_key_replay_count,
 			    RTW_REPLAY_CTR_LEN);
+#ifdef CONFIG_IEEE80211W
+		if (SEC_IS_BIP_KEY_INSTALLED(securitypriv)) {
+			switch (securitypriv->dot11wCipher) {
+			case _BIP_CMAC_128_:
+			case _BIP_GMAC_128_:
+				key_len = 16;
+				break;
+			case _BIP_CMAC_256_:
+			case _BIP_GMAC_256_:
+				key_len = 32;
+				break;
+			default:
+				key_len = 0;
+			}
+
+			/*
+			 * The Rx IPN has already been updated in
+			 * _update_aoac_rpt_phase_0(), so no update is done here
+			 * unless WoWLAN FW updates the Rx IPN before sending
+			 * out the phase1 AOAC report.
+			 */
+			securitypriv->dot11wBIPKeyid = RTW_GET_LE32(aoac_info->igtk_key_id);
+			_rtw_memcpy(securitypriv->dot11wBIPKey[securitypriv->dot11wBIPKeyid].skey,
+				    &aoac_info->igtk, key_len);
+		}
+#endif
 	} else {
 		RTW_INFO("[wow] no rekey event\n");
 	}

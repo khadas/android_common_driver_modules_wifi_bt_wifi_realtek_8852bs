@@ -45,6 +45,12 @@
 /* Debug Log Decode */
 #define MAC_AX_FEATURE_DBGDEC		1
 
+# /* For USB IO Offload Accelerate*/
+#define MAC_USB_IO_ACC 		0
+
+# /* For USB IO Offload Accelerate enable*/
+#define MAC_USB_IO_ACC_ON	1
+
 #ifdef CONFIG_BTCOEX
 #define MAC_AX_COEX_INIT_EN	0
 #else
@@ -81,6 +87,13 @@
 
 /* Debug Log Decode */
 #define MAC_AX_FEATURE_DBGDEC		1
+
+# /* For USB IO Offload Accelerate*/
+#define MAC_USB_IO_ACC 		0
+
+# /* For USB IO Offload Accelerate enable*/
+#define MAC_USB_IO_ACC_ON	1
+
 #endif // #else /* for WD1 test program */
 
 #endif

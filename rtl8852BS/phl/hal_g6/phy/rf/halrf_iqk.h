@@ -87,6 +87,7 @@ struct halrf_iqk_info {
 	u8 iqk_mcc_ch[2][NUM];
 	u8 iqk_table_idx[NUM];
 	bool is_fw_iqk;
+	u32	time;
 };
 
 void halrf_iqk_init(struct rf_info *rf);

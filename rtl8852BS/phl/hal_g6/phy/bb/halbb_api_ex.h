@@ -25,6 +25,10 @@ struct bb_mcc_i {
 	u8 macid_map_len;
 	u8 self_macid;
 };
+u8 halbb_ex_cn_report(struct bb_info * bb);
+u8 halbb_ex_evm_1ss_report(struct bb_info *bb);
+u8 halbb_ex_evm_max_report(struct bb_info *bb);
+u8 halbb_ex_evm_min_report(struct bb_info *bb);
 void halbb_dyn_1r_cca_en(struct bb_info *bb, bool en);
 u8 halbb_wifi_event_notify(struct bb_info *bb, enum phl_msg_evt_id event, enum phl_phy_idx phy_idx);
 u16 halbb_get_csi_buf_idx(struct bb_info *bb, u8 buf_idx, u8 txsc_idx);
@@ -44,6 +48,8 @@ bool halbb_write_rf_reg(struct bb_info *bb, enum rf_path path, u32 addr, u32 mas
 bool halbb_rf_set_bb_reg(struct bb_info *bb, u32 addr, u32 bit_mask, u32 data);
 u32 halbb_rf_get_bb_reg(struct bb_info *bb, u32 addr, u32 mask);
 void halbb_ctrl_rf_mode(struct bb_info *bb, enum phl_rf_mode mode);
+
+void halbb_ctrl_rf_mode_rx_path(struct bb_info *bb, enum rf_path rx_path);
 
 bool halbb_ctrl_rx_path(struct bb_info *bb, enum rf_path rx_path);
 

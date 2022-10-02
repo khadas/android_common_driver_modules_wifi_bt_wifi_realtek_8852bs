@@ -522,6 +522,12 @@ u32 mac_hal_init(struct mac_ax_adapter *adapter,
 		goto end;
 	}
 
+	ret = mac_ops->gpio_init(adapter);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("[ERR]gpio_init %d\n", ret);
+		goto end;
+	}
+
 end:
 	if (ret != MACSUCCESS) {
 		adapter->sm.mac_rdy = MAC_AX_MAC_INIT_ERR;

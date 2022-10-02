@@ -26,7 +26,8 @@
 #define EFUSE_WAIT_CNT_PLUS	30000
 #define EFUSE_C2HREG_WAIT_CNT	10000
 #define EFUSE_C2HREG_RETRY_WAIT_US 1
-#define EFUSE_FW_DUMP_WAIT_CNT	100000
+#define EFUSE_FW_DUMP_WAIT_CNT	100
+#define EFUSE_FW_DUMP_WAIT_CNT_V1 400
 #define OTP_PHY_SIZE		0x800
 #define CHK_OTP_ADDR		0x4
 #define CHK_OTP_WAIT_CNT	50000
@@ -108,6 +109,7 @@ enum efuse_map_sel {
 	EFUSE_MAP_SEL_PHY_OTP,
 	EFUSE_MAP_SEL_PHY_DAV,
 	EFUSE_MAP_SEL_LOG_DAV,
+	EFUSE_MAP_SEL_HIDDEN_RF,
 
 	/* keep last */
 	EFUSE_MAP_SEL_LAST,
@@ -142,20 +144,43 @@ struct efuse_info_item {
 };
 
 /**
+ * @struct efuse_info_def_val
+ * @brief efuse_info_def_val
+ *
+ * @var efuse_info_def_val::*mac_addr_val
+ * MAC Address
+ * @var efuse_info_def_val::*pid_val
+ * Product ID
+ * @var efuse_info_def_val::*did_val
+ * Device ID
+ * @var efuse_info_def_val::*vid_val
+ * Vendor ID
+ * @var efuse_info_def_val::*svid_val
+ * Sybsystem Vendor ID
+ * @var efuse_info_def_val::*smid_val
+ * Sybsystem Device ID
+ */
+struct efuse_info_def_val {
+	u8 *mac_addr_val;
+	u8 *pid_val;
+	u8 *did_val;
+	u8 *vid_val;
+	u8 *svid_val;
+	u8 *smid_val;
+};
+
+/**
  * @struct efuse_info
  * @brief efuse_info
  *
  * @var efuse_info::offset
  * Efuse information offset
- * @var efuse_info::def_val
- * Efuse information default value
  * @var efuse_info::len
  * Efuse information length
  */
 struct efuse_info {
-	struct efuse_info_item *offset;
-	struct efuse_info_item *def_val;
-	struct efuse_info_item *len;
+	struct efuse_info_item offset;
+	struct efuse_info_item len;
 };
 
 /**
@@ -422,6 +447,28 @@ u32 mac_read_efuse_plus(struct mac_ax_adapter *adapter, u32 addr, u32 size,
  */
 u32 mac_read_efuse(struct mac_ax_adapter *adapter, u32 addr, u32 size, u8 *val,
 		   enum mac_ax_efuse_bank bank);
+/**
+ * @}
+ */
+
+/**
+ * @addtogroup Efuse
+ * @{
+ */
+
+/**
+ * @brief mac_read_hidden_efuse
+ *
+ * @param *adapter
+ * @param addr
+ * @param size
+ * @param *val
+ * @param hidden_cfg
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 mac_read_hidden_efuse(struct mac_ax_adapter *adapter, u32 addr, u32 size,
+			  u8 *val, enum mac_ax_efuse_hidden_cfg hidden_cfg);
 /**
  * @}
  */

@@ -14,38 +14,7 @@
  ******************************************************************************/
 
 #include "fwdl.h"
-
-#define FWDL_WAIT_CNT 400000
-#define FWDL_SECTION_MAX_NUM 10
-#define FWDL_SECTION_CHKSUM_LEN	8
-#define FWDL_SECTION_PER_PKT_LEN 2020
-#define FWDL_TRY_CNT 3
-#define FWDL_DIGEST_SIZE 0x20
-
-struct fwhdr_section_info {
-	u8 redl;
-	u8 *addr;
-	u32 len;
-	u32 dladdr;
-};
-
-struct fw_bin_info {
-	u8 section_num;
-	u32 hdr_len;
-	u32 git_idx;
-	struct fwhdr_section_info section_info[FWDL_SECTION_MAX_NUM];
-};
-
-struct hw_info {
-	u8 chip;
-	u8 cut;
-	u8 category;
-};
-
-struct fwld_info {
-	u32 len;
-	u8 *fw;
-};
+#define SUPPORT_52BP 0
 
 static inline void fwhdr_section_parser(struct fwhdr_section_t *section,
 					struct fwhdr_section_info *info)
@@ -57,6 +26,11 @@ static inline void fwhdr_section_parser(struct fwhdr_section_t *section,
 	section_len = GET_FIELD(hdr_val, SECTION_INFO_SEC_SIZE);
 	if (hdr_val & SECTION_INFO_CHECKSUM)
 		section_len += FWDL_SECTION_CHKSUM_LEN;
+	info->type = GET_FIELD(hdr_val, SECTION_INFO_SECTIONTYPE);
+	if (info->type == FWDL_SECURITY_SECTION_TYPE)
+		info->mssc = le32_to_cpu(section->dword2);
+	else
+		info->mssc = 0;
 	info->len = section_len;
 	info->redl = (hdr_val & SECTION_INFO_REDL) ? 1 : 0;
 
@@ -83,6 +57,73 @@ static inline void fwhdr_hdr_parser(struct fwhdr_hdr_t *hdr,
 	info->git_idx = GET_FIELD(hdr_val, FWHDR_COMMITID);
 }
 
+static u32 get_ple_base(struct mac_ax_adapter *adapter)
+{
+	u32 chip_id;
+	u32 ple_base = 0;
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+	chip_id = GET_FIELD(MAC_REG_R32(R_AX_SYS_CHIPINFO), B_AX_HW_ID);
+
+	switch (chip_id) {
+#if MAC_AX_8852A_SUPPORT
+	case RTL8852A_ID:
+		ple_base = FWDL_PLE_BASE_ADDR_8852A;
+		break;
+#endif
+#if MAC_AX_8852B_SUPPORT
+	case RTL8852B_ID:
+		ple_base = FWDL_PLE_BASE_ADDR_8852B;
+		break;
+#endif
+	default:
+		PLTFM_MSG_ERR("[ERR]%s: invalid chip\n", __func__);
+		ple_base = 0;
+		break;
+	}
+	return ple_base;
+}
+
+static s8 __mss_index(struct mac_ax_adapter *adapter)
+{
+	s8 ret = 0;
+	u8 externalPN = 0;
+	u8 customer = 0;
+	u8 serialNum = 0;
+	u8 b1;
+	u8 b2;
+	u8 i;
+	enum mac_ax_efuse_bank bank = MAC_AX_EFUSE_BANK_WIFI;
+	struct mac_ax_ops *ops = adapter_to_mac_ops(adapter);
+
+	if (ops->read_efuse(adapter, EFUSE_EXTERNALPN_ADDR, 1, &b1, bank) != 0) {
+		PLTFM_MSG_ERR("[ERR]%s: Read efuse 0x5EC failed.\n", __func__);
+		return -1;
+	}
+	if (ops->read_efuse(adapter, EFUSE_CUSTOMER_ADDR, 1, &b2, bank) != 0) {
+		PLTFM_MSG_ERR("[ERR]%s: Read efuse 0x5ED failed.\n", __func__);
+		return -1;
+	}
+	b1 = le32_to_cpu(b1);
+	b2 = le32_to_cpu(b2);
+	externalPN = 0xFF - GET_FIELD(b1, EFUSE_EXTERNALPN);
+	customer = 0xF - GET_FIELD(b2, EFUSE_CUSTOMER);
+	serialNum = 0x7 - GET_FIELD(b2, EFUSE_SERIALNUM);
+	PLTFM_MSG_ALWAYS("[DBG]%s: External PN %x\n", __func__, externalPN);
+	PLTFM_MSG_ALWAYS("[DBG]%s: customer %x\n", __func__, customer);
+	PLTFM_MSG_ALWAYS("[DBG]%s: Serial Num %x\n", __func__, serialNum);
+	for (i = 0; i < OTP_KEY_INFO_NUM; i++) {
+		if (externalPN == otp_key_info_externalPN[i] &&
+		    customer == otp_key_info_customer[i] &&
+		    serialNum == otp_key_info_serialNum[i]) {
+			ret = (s8)i;
+			break;
+		}
+	}
+	PLTFM_MSG_ALWAYS("[DBG]%s: ret %d\n", __func__, ret);
+	return ret;
+}
+
 static u32 fwhdr_parser(struct mac_ax_adapter *adapter, u8 *fw, u32 len,
 			struct fw_bin_info *info)
 {
@@ -90,6 +131,12 @@ static u32 fwhdr_parser(struct mac_ax_adapter *adapter, u8 *fw, u32 len,
 	u8 *fw_end = fw + len;
 	u8 *bin_ptr;
 	struct fwhdr_section_info *cur_section_info;
+	u32 ret;
+	u32 fwdl_ple_base;
+	enum DLE_RSVD_INFO dle_info;
+	u8 *mss_start;
+	u8 *mss_selected;
+	s8 mss_idx;
 
 	if (!info) {
 		PLTFM_MSG_ERR("[ERR]%s: *info = NULL\n", __func__);
@@ -102,24 +149,70 @@ static u32 fwhdr_parser(struct mac_ax_adapter *adapter, u8 *fw, u32 len,
 		return MACBUFSZ;
 	}
 
+	fwdl_ple_base = get_ple_base(adapter);
 	fwhdr_hdr_parser((struct fwhdr_hdr_t *)fw, info);
 	bin_ptr = fw + info->hdr_len;
 
 	/* jump to section header */
 	fw += FWHDR_HDR_LEN;
 	cur_section_info = info->section_info;
+	info->is_fw_use_ple = 0;
 	for (i = 0; i < info->section_num; i++) {
 		fwhdr_section_parser((struct fwhdr_section_t *)fw,
 				     cur_section_info);
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (cur_section_info->type == FWDL_SECURITY_SECTION_TYPE) {
+				cur_section_info->len = 2048;
+				((struct fwhdr_section_t *)fw)->dword1 = 0x09000800; //0x800 = 2048
+			}
+		}
 		cur_section_info->addr = bin_ptr;
 		bin_ptr += cur_section_info->len;
+		if (cur_section_info->dladdr == fwdl_ple_base)
+			info->is_fw_use_ple = 1;
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (cur_section_info->type == FWDL_SECURITY_SECTION_TYPE &&
+			    cur_section_info->mssc > 0) {
+				fw_end -= (cur_section_info->mssc * FWDL_SECURITY_SIGLEN);
+				mss_start = cur_section_info->addr + FWDL_SECURITY_SECTION_CONSTANT;
+				mss_idx = __mss_index(adapter);
+				if (mss_idx < 0) {
+					PLTFM_MSG_ERR("[ERR]%s:", __func__);
+					PLTFM_MSG_ERR("Failed to get secure info offset\n");
+					return MACFWBIN;
+				}
+				mss_selected = bin_ptr + (mss_idx * FWDL_SECURITY_SIGLEN);
+				PLTFM_MEMCPY(mss_start, mss_selected, FWDL_SECURITY_SIGLEN);
+				// Workaround for 1344 workaround,
+				// Secure Boot CAN NOT have 1344 workaround
+				// Assuming if mss_idx>0, than we are in secure boot.
+				// Sub 1088 (1344-256) from cur_section_info->len
+				if (mss_idx > 0) {
+					//cur_section_info->len should be 960
+					cur_section_info->len = 960;
+					//0x3C0=960
+					((struct fwhdr_section_t *)fw)->dword1 = 0x090003C0;
+				}
+			}
+		}
 		fw += FWHDR_SECTION_LEN;
 		cur_section_info++;
 	}
 
+	ret = get_dle_rsvd_info(adapter, (enum DLE_RSVD_INFO *)&dle_info);
+	if (ret != MACSUCCESS)
+		return ret;
+	// Check DLE reserved quota for FW
+	if (dle_info != DLE_RSVD_INFO_FW && info->is_fw_use_ple) {
+		PLTFM_MSG_ERR("[ERR]%s: ", __func__);
+		PLTFM_MSG_ERR("fw try to download something to ple illegally\n");
+		return MACFWBIN;
+	}
+
 	if (fw_end != bin_ptr) {
 		PLTFM_MSG_ERR("[ERR]%s: ", __func__);
-		PLTFM_MSG_ERR("fw bin size != fw size in fwhdr\n");
+		PLTFM_MSG_ERR("fw bin size (0x%x) != fw size in fwhdr (0x%x)\n",
+			      len, (u32)(bin_ptr - fw));
 		return MACFWBIN;
 	}
 
@@ -428,8 +521,7 @@ ind_aces_end:
 
 		while (seg_bytes != 0) {
 			val32 = *((u32 *)(content + index));
-			MAC_REG_W32(write_addr,
-				    cpu_to_le32(val32));
+			MAC_REG_W32(write_addr, cpu_to_le32(val32));
 
 			seg_bytes -= 4;
 			write_addr += 4;
@@ -453,6 +545,7 @@ static u32 fwdl_phase0(struct mac_ax_adapter *adapter)
 	u32 cnt = FWDL_WAIT_CNT;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 
+	PLTFM_MSG_TRACE("[TRACE]%s:Start.\n", __func__);
 	if (adapter->sm.fwdl != MAC_AX_FWDL_CPU_ON) {
 		PLTFM_MSG_ERR("[ERR]%s: state != CPU_ON\n", __func__);
 		return MACPROCERR;
@@ -470,6 +563,7 @@ static u32 fwdl_phase0(struct mac_ax_adapter *adapter)
 	}
 
 	adapter->sm.fwdl = MAC_AX_FWDL_H2C_PATH_RDY;
+	PLTFM_MSG_TRACE("[TRACE]%s:End.\n", __func__);
 
 	return MACSUCCESS;
 }
@@ -481,6 +575,7 @@ static u32 fwdl_phase1(struct mac_ax_adapter *adapter,
 	u32 cnt = FWDL_WAIT_CNT;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 
+	PLTFM_MSG_TRACE("[TRACE]%s:Start.\n", __func__);
 	if (adapter->sm.fwdl != MAC_AX_FWDL_H2C_PATH_RDY) {
 		PLTFM_MSG_ERR("[ERR]%s: state != H2C_PATH_RDY\n", __func__);
 		return MACPROCERR;
@@ -507,40 +602,70 @@ static u32 fwdl_phase1(struct mac_ax_adapter *adapter,
 	MAC_REG_W32(R_AX_HALT_C2H_CTRL, 0);
 
 	adapter->sm.fwdl = MAC_AX_FWDL_PATH_RDY;
+	PLTFM_MSG_TRACE("[TRACE]%s:End.\n", __func__);
 
 	return MACSUCCESS;
 }
 
 static u32 check_fw_rdy(struct mac_ax_adapter *adapter)
 {
+	u32 pre_val8;
 	u32 val8 = FWDL_INITIAL_STATE;
+	u32 pre_bootstep, cur_bootstep, pre_secure_step, cur_secure_step;
 	u32 cnt = FWDL_WAIT_CNT;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 
+	pre_bootstep = GET_FIELD(MAC_REG_R32(R_AX_BOOT_DBG),
+				 B_AX_BOOT_STATUS);
+	pre_secure_step = GET_FIELD(MAC_REG_R32(R_AX_BOOT_DBG),
+				    B_AX_SECUREBOOT_STATUS);
+	pre_val8 = GET_FIELD(MAC_REG_R8(R_AX_WCPU_FW_CTRL),
+			     B_AX_WCPU_FWDL_STS);
+
 	while (--cnt) {
+		cur_bootstep = GET_FIELD(MAC_REG_R32(R_AX_BOOT_DBG),
+					 B_AX_BOOT_STATUS);
+		cur_secure_step = GET_FIELD(MAC_REG_R32(R_AX_BOOT_DBG),
+					    B_AX_SECUREBOOT_STATUS);
 		val8 = GET_FIELD(MAC_REG_R8(R_AX_WCPU_FW_CTRL),
 				 B_AX_WCPU_FWDL_STS);
-		if (val8 == FWDL_WCPU_FW_INIT_RDY)
+		if (cur_bootstep != pre_bootstep) {
+			PLTFM_MSG_TRACE("[TRACE]%s: BOOTSTEP 0x%x -> 0x%x\n",
+					__func__, pre_bootstep, cur_bootstep);
+			pre_bootstep = cur_bootstep;
+		}
+		if (cur_secure_step != pre_secure_step) {
+			PLTFM_MSG_TRACE("[TRACE]%s: SECURE_STEP 0x%x -> 0x%x\n",
+					__func__, pre_secure_step, cur_secure_step);
+			pre_secure_step = cur_secure_step;
+		}
+		if (val8 != pre_val8) {
+			PLTFM_MSG_TRACE("[TRACE]%s: 0x1E0[7:5] 0x%x -> 0x%x\n",
+					__func__, pre_val8, val8);
+			pre_val8 = val8;
+		}
+		if (val8 == FWDL_WCPU_FW_INIT_RDY) {
 			break;
+		} else if (val8 == FWDL_CHECKSUM_FAIL) {
+			PLTFM_MSG_ERR("[ERR]%s: FWDL_DISPATCHER_CHECKSUM_FAIL\n", __func__);
+			PLTFM_MSG_ERR("[ERR]%s: 0x1E0[7:5] last value = %d\n", __func__, val8);
+			return MACFWCHKSUM;
+		} else if (val8 == FWDL_SECURITY_FAIL) {
+			PLTFM_MSG_ERR("[ERR]%s: FWDL_SECURITY_FAIL\n", __func__);
+			PLTFM_MSG_ERR("[ERR]%s: 0x1E0[7:5] last value = %d\n", __func__, val8);
+			return MACFWSECBOOT;
+		} else if (val8 == FWDL_CUT_NOT_MATCH) {
+			PLTFM_MSG_ERR("[ERR]%s: FWDL_CUT_NOT_MATCH\n", __func__);
+			PLTFM_MSG_ERR("[ERR]%s: 0x1E0[7:5] last value = %d\n", __func__, val8);
+			return MACFWCUT;
+		}
 		PLTFM_DELAY_US(1);
 	}
 
 	if (!cnt) {
-		PLTFM_MSG_ERR("[ERR]%s: poll 0x1E0[7:5] = 7 fail\n", __func__);
-
-		switch (val8) {
-		case FWDL_CHECKSUM_FAIL:
-			return MACFWCHKSUM;
-
-		case FWDL_SECURITY_FAIL:
-			return MACFWSECBOOT;
-
-		case FWDL_CUT_NOT_MATCH:
-			return MACFWCUT;
-
-		default:
-			return MACPOLLTO;
-		}
+		PLTFM_MSG_ERR("[ERR]%s: Polling 0x1E0[7:5] == 7 Timeout\n", __func__);
+		PLTFM_MSG_ERR("[ERR]%s: 0x1E0[7:5] last value = %d\n", __func__, val8);
+		return MACPOLLTO;
 	}
 
 	adapter->sm.fwdl = MAC_AX_FWDL_INIT_RDY;
@@ -555,12 +680,14 @@ static u32 fwdl_phase2(struct mac_ax_adapter *adapter, u8 *fw,
 	u32 section_num = info->section_num;
 	struct fwhdr_section_info *section_info = info->section_info;
 
+	PLTFM_MSG_TRACE("[TRACE]%s:Start.\n", __func__);
 	if (adapter->sm.fwdl != MAC_AX_FWDL_PATH_RDY) {
 		PLTFM_MSG_ERR("[ERR]%s: state != FWDL_PATH_RDY\n", __func__);
 		return MACPROCERR;
 	}
-
+	PLTFM_MSG_TRACE("[TRACE]%s:Section Download Start.\n", __func__);
 	while (section_num > 0) {
+		PLTFM_MSG_TRACE("[TRACE]%s:Remain Section Count:%d\n", __func__, section_num);
 		if (!redl) {
 			ret = __sections_download(adapter, section_info);
 			if (ret) {
@@ -583,22 +710,23 @@ static u32 fwdl_phase2(struct mac_ax_adapter *adapter, u8 *fw,
 		section_info++;
 		section_num--;
 	}
-
+	PLTFM_MSG_TRACE("[TRACE]%s:Section Send End.\n", __func__);
 	PLTFM_DELAY_MS(5);
-
+	PLTFM_MSG_TRACE("[TRACE]%s:Polling 0x1E0[7:5] = 7 Start\n", __func__);
 	ret = check_fw_rdy(adapter);
 	if (ret) {
 		PLTFM_MSG_ERR("%s: check_fw_rdy fail\n", __func__);
 		return ret;
 	}
-
+	PLTFM_MSG_TRACE("[TRACE]%s:Polling 0x1E0[7:5] = 7 End\n", __func__);
+	PLTFM_MSG_TRACE("[TRACE]%s:End.\n", __func__);
 	return MACSUCCESS;
 }
 
 static void fwdl_fail_dump(struct mac_ax_adapter *adapter,
 			   struct fw_bin_info *info, u32 ret)
 {
-	u32 val32, digest_addr, digest;
+	u32 val32;
 	u16 index;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 #if MAC_AX_FEATURE_DBGPKG
@@ -638,28 +766,6 @@ static void fwdl_fail_dump(struct mac_ax_adapter *adapter,
 		PLTFM_MSG_ERR("[ERR]fw PC = 0x%x\n", val32);
 		PLTFM_DELAY_US(10);
 	}
-
-	PLTFM_MSG_WARN("%s ind access FW digest start\n", __func__);
-	PLTFM_MUTEX_LOCK(&adapter->hw_info->ind_access_lock);
-	adapter->hw_info->ind_aces_cnt++;
-	digest_addr = (0xB8E17C00 + 64) & ~0xA0000000;
-
-	MAC_REG_W32(R_AX_FILTER_MODEL_ADDR, digest_addr);
-	PLTFM_MSG_ERR("IRAM digest:");
-	for (index = 0; index < FWDL_DIGEST_SIZE; index += 4) {
-		digest = MAC_REG_R32(R_AX_INDIR_ACCESS_ENTRY + index);
-		PLTFM_MSG_ERR("0x%x\t", digest);
-	}
-
-	PLTFM_MSG_ERR("DMEM digest:");
-	for (index = 0; index < FWDL_DIGEST_SIZE; index += 4) {
-		digest = MAC_REG_R32(R_AX_INDIR_ACCESS_ENTRY +
-				     FWDL_DIGEST_SIZE + index);
-		PLTFM_MSG_ERR("0x%x\t", digest);
-	}
-	adapter->hw_info->ind_aces_cnt--;
-	PLTFM_MUTEX_UNLOCK(&adapter->hw_info->ind_access_lock);
-	PLTFM_MSG_WARN("%s ind access FW digest end\n", __func__);
 
 	pltfm_dbg_dump(adapter);
 
@@ -705,12 +811,11 @@ u32 mac_fwredl(struct mac_ax_adapter *adapter, u8 *fw, u32 len)
 	struct fw_bin_info info;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 
-	val32 = MAC_REG_R32(R_AX_WCPU_FW_CTRL);
-	val32 &= ~(B_AX_WCPU_FWDL_EN | B_AX_H2C_PATH_RDY | B_AX_FWDL_PATH_RDY);
-	val32 = SET_CLR_WORD(val32, FWDL_INITIAL_STATE,
-			     B_AX_WCPU_FWDL_STS);
-
-	MAC_REG_W32(R_AX_WCPU_FW_CTRL, val32);
+	//FWREDL funtion is available only on 8852B
+	if (!is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+		PLTFM_MSG_ERR("%s: FWREDL is available only on 8852B\n", __func__);
+		return MACSUCCESS;
+	}
 
 	ret = fwhdr_parser(adapter, fw, len, &info);
 	if (ret) {
@@ -718,11 +823,21 @@ u32 mac_fwredl(struct mac_ax_adapter *adapter, u8 *fw, u32 len)
 		goto fwdl_err;
 	}
 
+	if (!info.is_fw_use_ple) {
+		PLTFM_MSG_WARN("[WARN]%s: no need to redownload\n", __func__);
+		return MACSUCCESS;
+	}
 	ret = update_fw_ver(adapter, (struct fwhdr_hdr_t *)fw);
 	if (ret) {
 		PLTFM_MSG_ERR("[ERR]%s: update_fw_ver fail\n", __func__);
 		goto fwdl_err;
 	}
+
+	val32 = MAC_REG_R32(R_AX_WCPU_FW_CTRL);
+	val32 &= ~(B_AX_WCPU_FWDL_EN | B_AX_H2C_PATH_RDY | B_AX_FWDL_PATH_RDY);
+	val32 = SET_CLR_WORD(val32, FWDL_INITIAL_STATE,
+			     B_AX_WCPU_FWDL_STS);
+	MAC_REG_W32(R_AX_WCPU_FW_CTRL, val32);
 
 	adapter->sm.fwdl = MAC_AX_FWDL_H2C_PATH_RDY;
 
@@ -757,25 +872,27 @@ u32 mac_fwdl(struct mac_ax_adapter *adapter, u8 *fw, u32 len)
 	ret = 0;
 	retry_cnt = 0;
 	MAC_REG_W32(R_AX_UDM1, 0);
+	if (!fw) {
+		PLTFM_MSG_ERR("[ERR]%s: no fw\n", __func__);
+		ret = MACNOFW;
+		PLTFM_MEMSET(&info, 0, sizeof(struct fw_bin_info));
+		return ret;
+	}
+	/* Move this fuinction outside the retry loop may be buggy.
+	 * Since we've reed efuse in this function.
+	 */
+	ret = fwhdr_parser(adapter, fw, len, &info);
+	if (ret) {
+		PLTFM_MSG_ERR("[ERR]%s: fwhdr_parser fail\n", __func__);
+		return ret;
+	}
+
+	ret = update_fw_ver(adapter, (struct fwhdr_hdr_t *)fw);
+	if (ret)
+		return ret;
+
 	// FWDL retry, for 025 temp workaround
 	while (retry_cnt < FWDL_TRY_CNT) {
-		if (!fw) {
-			PLTFM_MSG_ERR("[ERR]%s: no fw\n", __func__);
-			ret = MACNOFW;
-			PLTFM_MEMSET(&info, 0, sizeof(struct fw_bin_info));
-			goto fwdl_err;
-		}
-
-		ret = fwhdr_parser(adapter, fw, len, &info);
-		if (ret) {
-			PLTFM_MSG_ERR("[ERR]%s: fwhdr_parser fail\n", __func__);
-			goto fwdl_err;
-		}
-
-		ret = update_fw_ver(adapter, (struct fwhdr_hdr_t *)fw);
-		if (ret)
-			goto fwdl_err;
-
 		ret = fwdl_phase0(adapter);
 		if (ret) {
 			PLTFM_MSG_ERR("[ERR]%s: fwdl_phase0 fail\n", __func__);
@@ -840,7 +957,10 @@ u32 mac_enable_cpu(struct mac_ax_adapter *adapter, u8 boot_reason, u8 dlfw)
 	}
 
 	//FW cannot support too much log. Reset R_AX_LDM for FW debug config
-	MAC_REG_W32(R_AX_LDM, 0);
+	if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) ||
+	    is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+		MAC_REG_W32(R_AX_LDM, 0);
+	}
 
 	MAC_REG_W32(R_AX_HALT_H2C_CTRL, 0);
 	MAC_REG_W32(R_AX_HALT_C2H_CTRL, 0);
@@ -1034,12 +1154,19 @@ u32 mac_enable_fw(struct mac_ax_adapter *adapter, enum rtw_fw_type cat)
 	u32 fw_len = 0;
 	u8 *fw = NULL;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	enum DLE_RSVD_INFO dle_info;
 
 	chip_id = GET_FIELD(MAC_REG_R32(R_AX_SYS_CHIPINFO), B_AX_HW_ID);
 	cv = GET_FIELD(MAC_REG_R32(R_AX_SYS_CFG1), B_AX_CHIP_VER);
 
+	ret = get_dle_rsvd_info(adapter, (enum DLE_RSVD_INFO *)&dle_info);
+	if (ret != MACSUCCESS) {
+		PLTFM_MSG_ERR("[ERR]%s: ", __func__);
+		return ret;
+	}
+
 	switch (chip_id) {
-#ifdef CONFIG_RTL8852A
+#if MAC_AX_8852A_SUPPORT
 	case RTL8852A_ID:
 		switch (cv) {
 #ifdef MAC_FW_8852A_U2
@@ -1107,51 +1234,74 @@ u32 mac_enable_fw(struct mac_ax_adapter *adapter, enum rtw_fw_type cat)
 			break;
 		}
 		break;
-#endif /*CONFIG_RTL8852A*/
-#ifdef CONFIG_RTL8852B
+#endif /*MAC_AX_8852A_SUPPORT*/
+#if MAC_AX_8852B_SUPPORT
 	case RTL8852B_ID:
 		switch (cv) {
-#ifdef MAC_FW_8852B_U1
-		case FWDL_CAV:
-			switch (cat) {
-#ifdef PHL_FEATURE_AP
-			case RTW_FW_AP:
-				fw_len = array_length_8852b_u1_ap;
-				fw = array_8852b_u1_ap;
-				break;
-#endif /*PHL_FEATURE_AP*/
-#ifdef PHL_FEATURE_NIC
-			case RTW_FW_NIC:
-				fw_len = array_length_8852b_u1_nic;
-				fw = array_8852b_u1_nic;
-				break;
-#ifdef CONFIG_WOWLAN
-			case RTW_FW_WOWLAN:
-				fw_len = array_length_8852b_u1_wowlan;
-				fw = array_8852b_u1_wowlan;
-				break;
-#endif /*CONFIG_WOWLAN*/
-#endif /*PHL_FEATURE_NIC*/
-			default:
-				PLTFM_MSG_ERR("[ERR]%s: no cat\n", __func__);
-				fw_len = 0;
-				fw = 0;
-				break;
-			}
-			break;
-#endif /*MAC_FW_8852B_U1*/
 #ifdef MAC_FW_8852B_U2
 		case FWDL_CBV:
 			switch (cat) {
+#ifdef PHL_FEATURE_AP
+			case RTW_FW_AP:
+				PLTFM_MSG_ERR("[ERR]%s: 8852b does not have ap image\n", __func__);
+				fw_len = 0;
+				fw = 0;
+				break;
+#endif /*PHL_FEATURE_AP*/
 #ifdef PHL_FEATURE_NIC
+			case RTW_FW_NIC_CE:
+				fw_len = array_length_8852b_u2_nicce;
+				fw = array_8852b_u2_nicce;
+				break;
+
 			case RTW_FW_NIC:
-				fw_len = array_length_8852b_u2_nic;
-				fw = array_8852b_u2_nic;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					if (dle_info == DLE_RSVD_INFO_FW) {
+						PLTFM_MSG_WARN("PLE FW is not in use\n");
+						fw_len = array_length_8852b_u2_nic;
+						fw = array_8852b_u2_nic;
+					} else {
+						fw_len = array_length_8852b_u2_nic;
+						fw = array_8852b_u2_nic;
+					}
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					fw_len = array_length_8852b_u2_nic_bplus;
+					fw = array_8852b_u2_nic_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					fw_len = 0;
+					fw = 0;
+#endif
+				} else {
+					PLTFM_MSG_ERR("neither 52B nor 52BP WOWLAN FW found\n");
+					fw_len = 0;
+					fw = 0;
+				}
 				break;
 #ifdef CONFIG_WOWLAN
 			case RTW_FW_WOWLAN:
-				fw_len = array_length_8852b_u2_wowlan;
-				fw = array_8852b_u2_wowlan;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					fw_len = array_length_8852b_u2_wowlan;
+					fw = array_8852b_u2_wowlan;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					fw_len = array_length_8852b_u2_wowlan_bplus;
+					fw = array_8852b_u2_wowlan_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					fw_len = 0;
+					fw = 0;
+#endif
+				} else {
+					PLTFM_MSG_ERR("neither 52B nor 52BP WOWLAN FW found\n");
+					fw_len = 0;
+					fw = 0;
+				}
 				break;
 #endif /*CONFIG_WOWLAN*/
 #endif /*PHL_FEATURE_NIC*/
@@ -1163,17 +1313,56 @@ u32 mac_enable_fw(struct mac_ax_adapter *adapter, enum rtw_fw_type cat)
 			}
 			break;
 #endif /*MAC_FW_8852B_U2*/
-		default:
+#ifdef MAC_FW_8852B_U3
+		case FWDL_CCV:
 			switch (cat) {
+#ifdef PHL_FEATURE_AP
+			case RTW_FW_AP:
+				PLTFM_MSG_ERR("[ERR]%s: 8852b does not have ap image\n", __func__);
+				fw_len = 0;
+				fw = 0;
+				break;
+#endif /*PHL_FEATURE_AP*/
 #ifdef PHL_FEATURE_NIC
+			case RTW_FW_NIC_CE:
+				fw_len = array_length_8852b_u3_nicce;
+				fw = array_8852b_u3_nicce;
+				break;
+
 			case RTW_FW_NIC:
-				fw_len = array_length_8852b_u2_nic;
-				fw = array_8852b_u2_nic;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					fw_len = array_length_8852b_u3_nic;
+					fw = array_8852b_u3_nic;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					fw_len = array_length_8852b_u3_nic_bplus;
+					fw = array_8852b_u3_nic_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					fw_len = 0;
+					fw = 0;
+#endif
+				}
 				break;
 #ifdef CONFIG_WOWLAN
 			case RTW_FW_WOWLAN:
-				fw_len = array_length_8852b_u2_wowlan;
-				fw = array_8852b_u2_wowlan;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					fw_len = array_length_8852b_u3_wowlan;
+					fw = array_8852b_u3_wowlan;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					fw_len = array_length_8852b_u3_wowlan_bplus;
+					fw = array_8852b_u3_wowlan_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					fw_len = 0;
+					fw = 0;
+#endif
+				}
 				break;
 #endif /*CONFIG_WOWLAN*/
 #endif /*PHL_FEATURE_NIC*/
@@ -1184,41 +1373,7 @@ u32 mac_enable_fw(struct mac_ax_adapter *adapter, enum rtw_fw_type cat)
 				break;
 			}
 			break;
-		}
-		break;
-#endif /*CONFIG_RTL8852B*/
-#ifdef CONFIG_RTL8852C
-	case RTL8852C_ID:
-		switch (cv) {
-#ifdef MAC_FW_8852C_U1
-		case FWDL_CAV:
-			switch (cat) {
-#ifdef PHL_FEATURE_AP
-			case RTW_FW_AP:
-				fw_len = array_length_8852c_u1_ap;
-				fw = array_8852c_u1_ap;
-				break;
-#endif /*PHL_FEATURE_AP*/
-#ifdef PHL_FEATURE_NIC
-			case RTW_FW_NIC:
-				fw_len = array_length_8852c_u1_nic;
-				fw = array_8852c_u1_nic;
-				break;
-#ifdef CONFIG_WOWLAN
-			case RTW_FW_WOWLAN:
-				fw_len = array_length_8852c_u1_wowlan;
-				fw = array_8852c_u1_wowlan;
-				break;
-#endif /*CONFIG_WOWLAN*/
-#endif /*PHL_FEATURE_NIC*/
-			default:
-				PLTFM_MSG_ERR("[ERR]%s: no cat\n", __func__);
-				fw_len = 0;
-				fw = 0;
-				break;
-				}
-				break;
-#endif /*MAC_FW_8852C_U1*/
+#endif /*MAC_FW_8852B_U3*/
 		default:
 			PLTFM_MSG_ERR("[ERR]%s: invalid cut\n", __func__);
 			fw_len = 0;
@@ -1226,7 +1381,7 @@ u32 mac_enable_fw(struct mac_ax_adapter *adapter, enum rtw_fw_type cat)
 			break;
 		}
 		break;
-#endif /*CONFIG_RTL8852C*/
+#endif /*MAC_AX_8852B_SUPPORT*/
 
 	default:
 		PLTFM_MSG_ERR("[ERR]%s: invalid chip\n", __func__);
@@ -1283,12 +1438,17 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 #if defined(PHL_FEATURE_AP) || defined(PHL_FEATURE_NIC)
 	u32 chip_id, cv;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+	enum DLE_RSVD_INFO dle_info;
 
 	chip_id = GET_FIELD(MAC_REG_R32(R_AX_SYS_CHIPINFO), B_AX_HW_ID);
 	cv = GET_FIELD(MAC_REG_R32(R_AX_SYS_CFG1), B_AX_CHIP_VER);
 
+	ret = get_dle_rsvd_info(adapter, (enum DLE_RSVD_INFO *)&dle_info);
+	if (ret != MACSUCCESS)
+		return ret;
+
 	switch (chip_id) {
-#ifdef CONFIG_RTL8852A
+#if MAC_AX_8852A_SUPPORT
 	case RTL8852A_ID:
 		switch (cv) {
 #ifdef MAC_FW_8852A_U2
@@ -1357,7 +1517,7 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 		}
 		break;
 #endif /*MAC_AX_8852A_SUPPORT*/
-#ifdef CONFIG_RTL8852B
+#if MAC_AX_8852B_SUPPORT
 	case RTL8852B_ID:
 		switch (cv) {
 #ifdef MAC_FW_8852B_U2
@@ -1371,14 +1531,53 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 				break;
 #endif /*PHL_FEATURE_AP*/
 #ifdef PHL_FEATURE_NIC
+			case RTW_FW_NIC_CE:
+				*fw_len = array_length_8852b_u2_nicce;
+				*fw = array_8852b_u2_nicce;
+				break;
 			case RTW_FW_NIC:
-				*fw_len = array_length_8852b_u2_nic;
-				*fw = array_8852b_u2_nic;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					if (dle_info == DLE_RSVD_INFO_FW) {
+						PLTFM_MSG_WARN("PLE FW is not in use\n");
+					    // disable PLE FW temporarily
+					    // *fw_len = array_length_8852b_u2_nic_ple;
+					    // *fw = array_8852b_u2_nic_ple;
+						*fw_len = array_length_8852b_u2_nic;
+						*fw = array_8852b_u2_nic;
+					} else {
+						*fw_len = array_length_8852b_u2_nic;
+						*fw = array_8852b_u2_nic;
+					}
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					*fw_len = array_length_8852b_u2_nic_bplus;
+					*fw = array_8852b_u2_nic_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					*fw_len = 0;
+					*fw = 0;
+#endif
+				}
 				break;
 #ifdef CONFIG_WOWLAN
 			case RTW_FW_WOWLAN:
-				*fw_len = array_length_8852b_u2_wowlan;
-				*fw = array_8852b_u2_wowlan;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					*fw_len = array_length_8852b_u2_wowlan;
+					*fw = array_8852b_u2_wowlan;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					*fw_len = array_length_8852b_u2_wowlan_bplus;
+					*fw = array_8852b_u2_wowlan_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					*fw_len = 0;
+					*fw = 0;
+#endif
+				}
 				break;
 #endif /*CONFIG_WOWLAN*/
 #endif /*PHL_FEATURE_NIC*/
@@ -1389,36 +1588,57 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 				break;
 			}
 			break;
-#endif /*MAC_FW_8852B_U1*/
-		default:
-			PLTFM_MSG_ERR("[ERR]%s: invalid cut\n", __func__);
-			*fw_len = 0;
-			fw = 0;
-			break;
-		}
-		break;
-#endif /*MAC_AX_8852B_SUPPORT*/
-#ifdef CONFIG_RTL8852C
-	case RTL8852C_ID:
-		switch (cv) {
-#ifdef MAC_FW_8852C_U1
-		case FWDL_CAV:
+#endif /*MAC_FW_8852B_U2*/
+#ifdef MAC_FW_8852B_U3
+		case FWDL_CCV:
 			switch (cat) {
 #ifdef PHL_FEATURE_AP
 			case RTW_FW_AP:
-				*fw_len = array_length_8852c_u1_ap;
-				*fw = array_8852c_u1_ap;
+				PLTFM_MSG_ERR("[ERR]%s: 8852b does not have ap image\n", __func__);
+				*fw_len = 0;
+				fw = 0;
 				break;
 #endif /*PHL_FEATURE_AP*/
 #ifdef PHL_FEATURE_NIC
+			case RTW_FW_NIC_CE:
+				*fw_len = array_length_8852b_u3_nicce;
+				*fw = array_8852b_u3_nicce;
+				break;
+
 			case RTW_FW_NIC:
-				*fw_len = array_length_8852c_u1_nic;
-				*fw = array_8852c_u1_nic;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					*fw_len = array_length_8852b_u3_nic;
+					*fw = array_8852b_u3_nic;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					*fw_len = array_length_8852b_u3_nic_bplus;
+					*fw = array_8852b_u3_nic_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					*fw_len = 0;
+					*fw = 0;
+#endif
+				}
 				break;
 #ifdef CONFIG_WOWLAN
 			case RTW_FW_WOWLAN:
-				*fw_len = array_length_8852c_u1_wowlan;
-				*fw = array_8852c_u1_wowlan;
+				if (adapter->hw_info->adie_chip_id == \
+				    MAC_AX_ADIE_CHIP_ID_8852B) {
+					*fw_len = array_length_8852b_u3_wowlan;
+					*fw = array_8852b_u3_wowlan;
+				} else if (adapter->hw_info->adie_chip_id == \
+					 MAC_AX_ADIE_CHIP_ID_8852BP) {
+#if SUPPORT_52BP
+					*fw_len = array_length_8852b_u3_wowlan_bplus;
+					*fw = array_8852b_u3_wowlan_bplus;
+#else
+					PLTFM_MSG_ERR("Not support 52BP\n");
+					*fw_len = 0;
+					*fw = 0;
+#endif
+				}
 				break;
 #endif /*CONFIG_WOWLAN*/
 #endif /*PHL_FEATURE_NIC*/
@@ -1427,9 +1647,9 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 				*fw_len = 0;
 				fw = 0;
 				break;
-				}
-				break;
-#endif /*MAC_FW_8852C_U1*/
+			}
+			break;
+#endif /*MAC_FW_8852B_U3*/
 		default:
 			PLTFM_MSG_ERR("[ERR]%s: invalid cut\n", __func__);
 			*fw_len = 0;
@@ -1437,7 +1657,7 @@ u32 mac_query_fw_buff(struct mac_ax_adapter *adapter, enum rtw_fw_type cat, u8 *
 			break;
 		}
 		break;
-#endif /*MAC_AX_8852C_SUPPORT*/
+#endif /*MAC_AX_8852B_SUPPORT*/
 
 	default:
 		PLTFM_MSG_ERR("[ERR]%s: invalid chip\n", __func__);

@@ -770,6 +770,20 @@ u32 sdio_autok_counter_avg(struct mac_ax_adapter *adapter);
  */
 
 /**
+ * @brief sdio_tp_adjust
+ *
+ * @param *adapter
+ * @param tp
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 sdio_tp_adjust(struct mac_ax_adapter *adapter, struct mac_ax_tp_param tp);
+/**
+ * @}
+ * @}
+ */
+
+/**
  * @addtogroup HCI
  * @{
  * @addtogroup SDIO

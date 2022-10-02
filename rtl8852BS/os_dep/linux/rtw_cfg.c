@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2020 Realtek Corporation.
+ * Copyright(c) 2007 - 2022 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -87,9 +87,15 @@ int rtw_scan_mode = 1;/* active, passive */
 #endif /* CONFIG_POWER_SAVING */
 #ifdef CONFIG_RTW_IPS
 	int rtw_ips_mode = PS_OP_MODE_AUTO;
+#ifdef CONFIG_FWIPS
+	int rtw_ips_cap = PS_CAP_PWRON |
+			PS_CAP_RF_OFF |
+			PS_CAP_CLK_GATED |
+			PS_CAP_PWR_GATED;
+#endif /* CONFIG_FWIPS */
 #else
 	int rtw_ips_mode = PS_OP_MODE_DISABLED;
-#endif
+#endif /* CONFIG_RTW_IPS */
 #ifdef CONFIG_RTW_LPS
 	int rtw_lps_mode = PS_OP_MODE_AUTO;
 	int rtw_lps_cap = PS_CAP_PWRON |
@@ -99,7 +105,7 @@ int rtw_scan_mode = 1;/* active, passive */
 #else
 	int rtw_lps_mode = PS_OP_MODE_DISABLED;
 	int rtw_lps_cap = PS_CAP_PWRON;
-#endif
+#endif /* CONFIG_RTW_LPS */
 
 #ifdef CONFIG_NARROWBAND_SUPPORTING
 int rtw_nb_config = CONFIG_NB_VALUE;
@@ -229,7 +235,7 @@ int rtw_ht_enable = 1;
 #ifdef CONFIG_RTW_CUSTOMIZE_BWMODE
 int rtw_bw_mode = CONFIG_RTW_CUSTOMIZE_BWMODE;
 #else
-int rtw_bw_mode = ((BW_CAP_80M | BW_CAP_40M | BW_CAP_20M) << 4 ) | (BW_CAP_40M | BW_CAP_20M);
+int rtw_bw_mode = 0x21;
 #endif
 
 int rtw_ampdu_enable = 1;/* for enable tx_ampdu , */ /* 0: disable, 0x1:enable */
@@ -250,6 +256,11 @@ module_param(rtw_max_amsdu_len, uint, 0644);
 * 1: Force the AMSDU filed in ADDBA Resp. to be enabled.
 */
 int rtw_tx_ampdu_amsdu = 2;
+
+/* 0: Default by halmac provided. */
+/* other: Setting by driver. The final decision will take a samller value from halmac or driver. */
+int rtw_tx_ampdu_num = 0;
+module_param(rtw_tx_ampdu_num, int, 0644);
 
 int rtw_quick_addba_req = 0;
 
@@ -279,8 +290,11 @@ MODULE_PARM_DESC(rtw_rx_ampdu_sz_limit_4ss, "RX AMPDU size limit for 4SS link of
 * BIT2 - 80MHz, 0: non-support, 1: support
 * BIT3 - 160MHz, 0: non-support, 1: support */
 int rtw_short_gi = 0xf;
-/* BIT0: Enable VHT LDPC Rx, BIT1: Enable VHT LDPC Tx, BIT4: Enable HT LDPC Rx, BIT5: Enable HT LDPC Tx */
-int rtw_ldpc_cap = 0x33;
+/* BIT0: Enable VHT LDPC Rx, BIT1: Enable VHT LDPC Tx
+ * BIT2: Enable HE LDPC Rx, BIT3: Enable HE LDPC Tx
+ * BIT4: Enable HT LDPC Rx, BIT5: Enable HT LDPC Tx
+ */
+int rtw_ldpc_cap = 0x3f;
 /* BIT0: Enable VHT STBC Rx, BIT1: Enable VHT STBC Tx
 * BIT4: Enable HT STBC Rx, BIT5: Enable HT STBC Tx
 * BIT8: Enable HE STBC Rx, BIT9: Enable HE STBC Rx(greater than 80M)
@@ -624,7 +638,7 @@ module_param(rtw_hwpwrp_detect, int, 0644);
 module_param(rtw_hw_wps_pbc, int, 0644);
 module_param(rtw_check_hw_status, int, 0644);
 
-#ifdef CONFIG_PCI_HCI
+#if defined(CONFIG_PCI_HCI) && defined(CONFIG_PCI_ASPM)
 module_param(rtw_pci_aspm_enable, int, 0644);
 #endif
 
@@ -688,8 +702,13 @@ MODULE_PARM_DESC(rtw_adaptivity_idle_probability, "rtw_adaptivity_idle_probabili
 #ifdef CONFIG_DFS_MASTER
 uint rtw_dfs_region_domain = CONFIG_RTW_DFS_REGION_DOMAIN;
 module_param(rtw_dfs_region_domain, uint, 0644);
-MODULE_PARM_DESC(rtw_dfs_region_domain, "0:NONE, 1:FCC, 2:MKK, 3:ETSI");
+MODULE_PARM_DESC(rtw_dfs_region_domain, "0:NONE, 1:FCC, 2:MKK, 3:ETSI, 4:KCC");
 #endif
+
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+uint rtw_fw_ofld_cap = 1;
+module_param(rtw_fw_ofld_cap, uint, 0644);
+#endif /*CONFIG_FW_IO_OFLD_SUPPORT*/
 
 uint rtw_amsdu_mode = RTW_AMSDU_MODE_NON_SPP;
 module_param(rtw_amsdu_mode, uint, 0644);
@@ -984,6 +1003,13 @@ module_param(rtw_roch_max_away_dur, uint, 0644);
 module_param(rtw_roch_extend_dur, uint, 0644);
 #endif
 
+#ifdef CONFIG_QUOTA_TURBO_ENABLE
+int rtw_quota_turbo_en = true;
+#else
+int rtw_quota_turbo_en = false;
+#endif
+module_param(rtw_quota_turbo_en, int, 0644);
+
 uint rtw_scan_pch_ex = 0;
 module_param(rtw_scan_pch_ex, uint, 0644);
 
@@ -1184,10 +1210,16 @@ static void rtw_load_phy_file_path (struct dvobj_priv *dvobj)
 void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 {
 	struct rtw_phl_com_t *phl_com = GET_PHL_COM(dvobj);
+	u8 max_bw_mode = 0;
 
 	#ifdef CONFIG_LOAD_PHY_PARA_FROM_FILE
 	rtw_load_phy_file_path(dvobj);
 	#endif /* CONFIG_LOAD_PHY_PARA_FROM_FILE */
+
+	if (is_supported_24g(rtw_band_type))
+		max_bw_mode = BW_MODE_2G(rtw_bw_mode);
+	if (is_supported_5g(rtw_band_type))
+		max_bw_mode = rtw_max(BW_MODE_5G(rtw_bw_mode), max_bw_mode);
 
 	phl_com->dev_sw_cap.fw_cap.dlram_en = true;
 	phl_com->dev_sw_cap.fw_cap.dlrom_en = false;
@@ -1199,15 +1231,29 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 
 	phl_com->phy_sw_cap[0].proto_sup = rtw_wireless_mode;
 	phl_com->phy_sw_cap[0].band_sup = rtw_band_type;
-	phl_com->phy_sw_cap[0].bw_sup = BW_CAP_80M | BW_CAP_40M | BW_CAP_20M; //rtw_bw_mode;
+
+	#ifdef CONFIG_NARROWBAND_SUPPORTING
+	if (rtw_nb_config != RTW_NB_CONFIG_NONE)
+		phl_com->phy_sw_cap[0].bw_sup = BW_CAP_20M;
+	else
+	#endif /*CONFIG_NARROWBAND_SUPPORTING*/
+		phl_com->phy_sw_cap[0].bw_sup = ch_width_to_bw_cap(max_bw_mode + 1) - 1; /* max supported bw */
 	phl_com->phy_sw_cap[0].txss = rtw_tx_nss;
 	phl_com->phy_sw_cap[0].rxss = rtw_rx_nss;
+	phl_com->phy_sw_cap[0].txagg_num = rtw_tx_ampdu_num;
 
 	phl_com->phy_sw_cap[1].proto_sup = rtw_wireless_mode;
 	phl_com->phy_sw_cap[1].band_sup = rtw_band_type;
-	phl_com->phy_sw_cap[1].bw_sup = rtw_bw_mode;
+
+	#ifdef CONFIG_NARROWBAND_SUPPORTING
+	if (rtw_nb_config != RTW_NB_CONFIG_NONE)
+		phl_com->phy_sw_cap[1].bw_sup = BW_CAP_20M;
+	else
+	#endif /*CONFIG_NARROWBAND_SUPPORTING*/
+		phl_com->phy_sw_cap[1].bw_sup = ch_width_to_bw_cap(max_bw_mode + 1) - 1; /* max supported bw */
 	phl_com->phy_sw_cap[1].txss = rtw_tx_nss;
 	phl_com->phy_sw_cap[1].rxss = rtw_rx_nss;
+	phl_com->phy_sw_cap[1].txagg_num = rtw_tx_ampdu_num;
 
 	phl_com->phy_sw_cap[0].hw_rts_time_th = 88;
 	phl_com->phy_sw_cap[0].hw_rts_len_th = 4080;
@@ -1229,8 +1275,13 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 	phl_com->proto_sw_cap[1].max_amsdu_len = rtw_max_amsdu_len;
 
 #if defined(CONFIG_PCI_HCI)
-	#if !defined(CONFIG_PCI_ASPM)
-	/* Disable all PCIE Backdoor to avoid PCIE IOT */
+	#if defined(CONFIG_PCI_ASPM)
+	phl_com->bus_sw_cap.l0s_ctrl = (rtw_pci_aspm_enable & BIT1) ? RTW_PCIE_BUS_FUNC_ENABLE : RTW_PCIE_BUS_FUNC_DISABLE;
+	phl_com->bus_sw_cap.l1_ctrl = (rtw_pci_aspm_enable & BIT2) ? RTW_PCIE_BUS_FUNC_ENABLE : RTW_PCIE_BUS_FUNC_DISABLE;
+	phl_com->bus_sw_cap.l1ss_ctrl = (rtw_pci_aspm_enable & BIT3) ? RTW_PCIE_BUS_FUNC_ENABLE : RTW_PCIE_BUS_FUNC_DISABLE;
+	phl_com->bus_sw_cap.wake_ctrl = RTW_PCIE_BUS_FUNC_DEFAULT;
+	phl_com->bus_sw_cap.crq_ctrl = (rtw_pci_aspm_enable & BIT0) ? RTW_PCIE_BUS_FUNC_ENABLE : RTW_PCIE_BUS_FUNC_DISABLE;
+	#else
 	phl_com->bus_sw_cap.l0s_ctrl = RTW_PCIE_BUS_FUNC_DISABLE;
 	phl_com->bus_sw_cap.l1_ctrl = RTW_PCIE_BUS_FUNC_DISABLE;
 	phl_com->bus_sw_cap.l1ss_ctrl = RTW_PCIE_BUS_FUNC_DISABLE;
@@ -1246,6 +1297,20 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 	phl_com->bus_sw_cap.rxbuf_num = 512;
 #endif
 	phl_com->bus_sw_cap.rpbuf_num = 0;	/* by default */
+
+#ifdef CONFIG_PCIE_TRX_MIT_DYN
+	phl_com->bus_sw_cap.mit_ctl.tx_timer = 0;
+	phl_com->bus_sw_cap.mit_ctl.tx_counter = 0;
+	phl_com->bus_sw_cap.mit_ctl.rx_timer = PCIE_RX_INT_MIT_TIMER;
+	phl_com->bus_sw_cap.mit_ctl.rx_counter = 0;
+	phl_com->bus_sw_cap.mit_ctl.fixed_mitigation = 0;
+#else
+	phl_com->bus_sw_cap.mit_ctl.tx_timer = 0;
+	phl_com->bus_sw_cap.mit_ctl.tx_counter = 0;
+	phl_com->bus_sw_cap.mit_ctl.rx_timer = 0;
+	phl_com->bus_sw_cap.mit_ctl.rx_counter = 0;
+	phl_com->bus_sw_cap.mit_ctl.fixed_mitigation = 0;
+#endif
 #endif /*CONFIG_PCI_HCI*/
 
 #ifdef CONFIG_BTC
@@ -1391,11 +1456,15 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 #ifdef CONFIG_POWER_SAVE
 #ifdef CONFIG_RTW_IPS
 	phl_com->dev_sw_cap.ps_cap.ips_en = rtw_ips_mode;
+#ifdef CONFIG_FWIPS
+	phl_com->dev_sw_cap.ps_cap.ips_cap = rtw_ips_cap;
+#endif /* CONFIG_FWIPS */
 #endif
 #ifdef CONFIG_RTW_LPS
 	phl_com->dev_sw_cap.ps_cap.lps_en = rtw_lps_mode;
 	phl_com->dev_sw_cap.ps_cap.lps_cap = rtw_lps_cap;
 #endif
+
 	phl_com->dev_sw_cap.ps_cap.lps_wow_en = PS_OP_MODE_FORCE_ENABLED;
 	phl_com->dev_sw_cap.ps_cap.lps_wow_cap =
 		PS_CAP_PWRON | PS_CAP_RF_OFF | PS_CAP_CLK_GATED | PS_CAP_PWR_GATED;
@@ -1410,6 +1479,23 @@ void rtw_core_update_default_setting (struct dvobj_priv *dvobj)
 #else
 	phl_com->dev_sw_cap.rpq_agg_num = 0; /* MAC default num: 121 for all IC */
 #endif
+	#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+	phl_com->dev_sw_cap.fw_cap.offload_cap = rtw_fw_ofld_cap;
+	#endif
+
+	phl_com->dev_sw_cap.quota_turbo = rtw_quota_turbo_en;
+
+	#ifdef CONFIG_NARROWBAND_SUPPORTING
+	if (rtw_nb_config != RTW_NB_CONFIG_NONE) {
+		if (rtw_nb_config == RTW_NB_CONFIG_WIDTH_10)
+			phl_com->dev_sw_cap.nb_config = CHANNEL_WIDTH_10;
+		else if (rtw_nb_config == RTW_NB_CONFIG_WIDTH_5)
+			phl_com->dev_sw_cap.nb_config = CHANNEL_WIDTH_5;
+		else
+			phl_com->dev_sw_cap.nb_config = 0;
+	} else
+	#endif /*CONFIG_NARROWBAND_SUPPORTING*/
+		phl_com->dev_sw_cap.nb_config = 0;
 }
 
 u8 rtw_load_dvobj_registry(struct dvobj_priv *dvobj)
@@ -1443,7 +1529,7 @@ uint rtw_load_registry(_adapter *padapter)
 	registry_par->channel = (u8)rtw_channel;
 #ifdef CONFIG_NARROWBAND_SUPPORTING
 	if (rtw_nb_config != RTW_NB_CONFIG_NONE)
-		rtw_wireless_mode &= ~WIRELESS_11B;
+		rtw_wireless_mode &= ~WLAN_MD_11B;
 #endif
 	registry_par->wireless_mode = (u8)rtw_wireless_mode;
 	registry_par->band_type = (u8)rtw_band_type; 
@@ -1481,12 +1567,12 @@ uint rtw_load_registry(_adapter *padapter)
 	registry_par->tdmadig_mode = (u8)rtw_tdmadig_mode;
 	registry_par->tdmadig_dynamic = (u8) rtw_dynamic_tdmadig;
 	registry_par->power_mgnt = PM_PS_MODE_ACTIVE;
-	registry_par->ips_mode = IPS_NONE;
 	#else
 	registry_par->power_mgnt = (u8)rtw_power_mgnt;
-	registry_par->ips_mode = (u8)rtw_ips_mode;
 	#endif/*CONFIG_TDMADIG*/
 	registry_par->lps_level = (u8)rtw_lps_level;
+	registry_par->ips_mode = (u8)rtw_ips_mode;
+	registry_par->lps_mode = (u8)rtw_lps_mode;
 	registry_par->en_dyn_rrsr = (u8)rtw_en_dyn_rrsr;
 	registry_par->set_rrsr_value = (u32)rtw_rrsr_value;
 #ifdef CONFIG_LPS_1T1R
@@ -1530,16 +1616,20 @@ uint rtw_load_registry(_adapter *padapter)
 
 	registry_par->RegPwrTrimEnable = (u8)rtw_pwrtrim_enable;
 
+	#ifdef CONFIG_NARROWBAND_SUPPORTING
+	registry_par->rtw_nb_config = (u8)rtw_nb_config;
+	if (registry_par->rtw_nb_config != RTW_NB_CONFIG_NONE) {
+		rtw_tx_bw_mode = 0;
+		rtw_bw_mode = 0;
+	}
+	#endif
+
 	registry_par->tx_bw_mode = (u8)rtw_tx_bw_mode;
 
 #ifdef CONFIG_80211N_HT
 	registry_par->ht_enable = (u8)rtw_ht_enable;
 	if (registry_par->ht_enable && is_supported_ht(registry_par->wireless_mode)) {
-#ifdef CONFIG_NARROWBAND_SUPPORTING
-	if (rtw_nb_config != RTW_NB_CONFIG_NONE)
-		rtw_bw_mode = 0;
-#endif
-		registry_par->bw_mode = (u8)rtw_bw_mode;
+		registry_par->bw_mode = (u16)rtw_bw_mode;
 		registry_par->ampdu_enable = (u8)rtw_ampdu_enable;
 		registry_par->rx_ampdu_amsdu = (u8)rtw_rx_ampdu_amsdu;
 #ifdef CONFIG_DISBALE_RX_AMSDU_FOR_BUS_LOW_SPEED
@@ -1549,6 +1639,7 @@ uint rtw_load_registry(_adapter *padapter)
 #endif
 #endif
 		registry_par->tx_ampdu_amsdu = (u8)rtw_tx_ampdu_amsdu;
+		registry_par->tx_ampdu_num = (u8)rtw_tx_ampdu_num;
 		registry_par->tx_quick_addba_req = (u8)rtw_quick_addba_req;
 		registry_par->short_gi = (u8)rtw_short_gi;
 		registry_par->ldpc_cap = (u8)rtw_ldpc_cap;
@@ -1580,9 +1671,6 @@ int rtw_stbc_cap = 0x13;
 
 #ifdef DBG_LA_MODE
 	registry_par->la_mode_en = (u8)rtw_la_mode_en;
-#endif
-#ifdef CONFIG_NARROWBAND_SUPPORTING
-	registry_par->rtw_nb_config = (u8)rtw_nb_config;
 #endif
 
 #ifdef CONFIG_80211AC_VHT
@@ -1713,10 +1801,6 @@ int rtw_stbc_cap = 0x13;
 
 #ifdef CONFIG_DFS_MASTER
 	registry_par->dfs_region_domain = (u8)rtw_dfs_region_domain;
-	if (registry_par->dfs_region_domain != RTW_DFS_REGD_NONE) {
-		RTW_WARN("%s force disable radar detection capability for now\n", __func__);
-		registry_par->dfs_region_domain = RTW_DFS_REGD_NONE;
-	}
 	#ifdef CONFIG_REGD_SRC_FROM_OS
 	if (rtw_regd_src == REGD_SRC_OS && registry_par->dfs_region_domain != RTW_DFS_REGD_NONE) {
 		RTW_WARN("%s force disable radar detection capability when regd_src is OS\n", __func__);

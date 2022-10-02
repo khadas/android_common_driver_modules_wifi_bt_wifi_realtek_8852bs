@@ -919,7 +919,7 @@ static void rtw_mbo_disassoc(_adapter *padapter, u8 *da,
         u16 *fctrl;
         int ret = _FAIL;
 
-	if (rtw_rfctl_is_tx_blocked_by_ch_waiting(adapter_to_rfctl(padapter)))
+	if (adapter_is_tx_blocked_by_ch_waiting(padapter))
 		return;
 
 	pmgntframe = alloc_mgtxmitframe(pxmitpriv);

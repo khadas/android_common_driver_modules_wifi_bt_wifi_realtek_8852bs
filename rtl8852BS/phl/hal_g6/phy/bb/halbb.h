@@ -126,10 +126,10 @@ struct bb_link_info {
 };
 
 struct bb_ch_info {
-	u8			rssi_min;
+	u8			rssi_min; /*U(8.1), external rssi (from antenna)*/
 	u16			rssi_min_macid;
 	u8			pre_rssi_min;
-	u8			rssi_max;
+	u8			rssi_max; /*U(8.1), external rssi (from antenna)*/
 	u16			rssi_max_macid;
 	u8			rxsc_160;
 	u8			rxsc_80;
@@ -138,6 +138,10 @@ struct bb_ch_info {
 	u8			rxsc_l;
 	u8			is_noisy;
 	u8			rf_central_ch_cfg; /*report in phy-sts*/
+	s8			ext_loss[HALBB_MAX_PATH]; /*S(8.2), update when switching ch*/
+	s8			ext_loss_avg; /*S(8.2), update when switching ch*/
+	u8			int_rssi_min; /*U(8.1), internal rssi (from ADC output) = external rssi - ext_loss*/
+	u8			int_rssi_max; /*U(8.1), internal rssi (from ADC output) = external rssi - ext_loss*/
 };
 
 struct bb_cmn_backup_info {
@@ -146,6 +150,10 @@ struct bb_cmn_backup_info {
 	s16			cur_tx_pwr;
 	u8			cur_pd_lower_bound;
 	u8			last_rssi;
+	u32			cur_rfmode_a_12ac;
+	u32			cur_rfmode_a_12b0;
+	u32			cur_rfmode_b_32ac;
+	u32			cur_rfmode_b_32b0;
 	struct rssi_physts 	last_rssi_rpt;
 	struct rxevm_physts 	last_rxevm_rpt;
 };
@@ -177,6 +185,10 @@ struct bb_efuse_info{
 	s8 efuse_ofst_tb; // 8852A:S(7,4) 8852B:S(8,4)
 };
 
+struct bb_cmn_dbg_info {
+	bool cmn_log_2_cnsl_en;
+};
+
 struct bb_cmn_info {
 	u8 bb_dm_number;
 #ifdef HALBB_PSD_SUPPORT
@@ -190,6 +202,12 @@ struct bb_cmn_info {
 #endif
 	struct bb_echo_cmd_info	bb_echo_cmd_i;
 	struct bb_func_hooker_info bb_func_hooker_i;
+	struct bb_cmn_dbg_info bb_cmn_dbg_i;
+#ifdef HALBB_FW_OFLD_SUPPORT
+	u8 bbcr_fwofld_state;
+	bool skip_io_init_en;
+#endif
+
 };
 
 #ifdef HALBB_DIG_MCC_SUPPORT
@@ -266,6 +284,7 @@ struct bb_info {
 	struct bb_gain_info	bb_gain_i;
 	struct bb_efuse_info	bb_efuse_i;
 	enum bb_ic_t		ic_type;
+	enum bb_ic_sub_t	ic_sub_type;
 	enum bb_cr_t		cr_type;
 	u8			num_rf_path;
 	/*[System Info]*/
@@ -310,6 +329,7 @@ struct bb_info {
 	struct bb_8852a_2_info	bb_8852a_2_i;
 	struct bb_h2c_fw_cmw	bb_fw_cmw_i;
 #endif
+
 #ifdef HALBB_RA_SUPPORT
 	struct bb_ra_info	bb_ra_i[PHL_MAX_STA_NUM];
 #endif
@@ -376,6 +396,9 @@ struct bb_info {
 #ifdef HALBB_DYN_L2H_SUPPORT
 	struct bb_dyn_l2h_info bb_dyn_l2h_i;
 #endif
+#ifdef HALBB_PATH_DIV_SUPPORT
+	struct bb_pathdiv_info bb_path_div_i;
+#endif
 	/*@=== [HALBB Timer] ================================================*/
 #ifdef HALBB_RUA_SUPPORT
 	/*struct rtw_rua_tbl rtw_rua_t;*/
@@ -383,6 +406,13 @@ struct bb_info {
 #ifdef HALBB_DIG_MCC_SUPPORT
 	struct halbb_mcc_dm mcc_dm;
 #endif
+#ifdef HALBB_DYN_DTR_SUPPORT
+	struct bb_dyn_dtr_info bb_dyn_dtr_i;
+#endif
+#ifdef HALBB_FW_OFLD_SUPPORT
+	enum phl_msg_evt_id bb_phl_evt;
+#endif
+
 };
 
  
@@ -395,4 +425,5 @@ void halbb_supportability_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			     char *output, u32 *_out_len);
 void halbb_pause_func_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			  char *output, u32 *_out_len);
+void halbb_store_data(struct bb_info *bb);
 #endif

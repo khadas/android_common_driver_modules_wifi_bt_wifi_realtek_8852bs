@@ -16,7 +16,7 @@
 #define _HALRF_TSSI_8852B_H_
 #ifdef RF_8852B_SUPPORT
 
-#define TSSI_VER_8852B 0x18
+#define TSSI_VER_8852B 0x21
 
 #define TSSI_PATH_MAX_8852B 2
 
@@ -38,6 +38,7 @@ void halrf_do_tssi_8852b(struct rf_info *rf, enum phl_phy_idx phy);
 void halrf_do_tssi_scan_8852b(struct rf_info *rf, enum phl_phy_idx phy);
 void halrf_tssi_enable_8852b(struct rf_info *rf, enum phl_phy_idx phy);
 void halrf_tssi_disable_8852b(struct rf_info *rf, enum phl_phy_idx phy);
+void halrf_tssi_ant_open_8852b(struct rf_info *rf);
 s32 halrf_get_online_tssi_de_8852b(struct rf_info *rf, enum phl_phy_idx phy_idx,
 				u8 path, s32 dbm, s32 puot);
 void halrf_tssi_cck_8852b(struct rf_info *rf, enum phl_phy_idx phy,
@@ -57,5 +58,9 @@ u32 halrf_tssi_get_final_8852b(struct rf_info *rf, enum rf_path path);
 
 void halrf_get_tssi_info_8852b(struct rf_info *rf,
 		char input[][16], u32 *_used, char *output, u32 *_out_len);
+
+void _halrf_tssi_hw_tx_8852b(struct rf_info *rf,
+			enum phl_phy_idx phy, u8 path, u16 cnt, u16 period, s16 dbm, u32 rate, u8 bw,
+			bool enable);
 #endif
 #endif	/*_HALRF_SET_PWR_TABLE_8852B_H_*/

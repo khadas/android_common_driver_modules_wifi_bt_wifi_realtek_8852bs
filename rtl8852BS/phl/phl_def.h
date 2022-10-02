@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  *
  * Copyright(c) 2019 - 2021 Realtek Corporation.
  *
@@ -14,15 +14,6 @@
  *****************************************************************************/
 #ifndef _PHL_DEF_H_
 #define _PHL_DEF_H_
-
-enum phl_packet_type {
-	PACKET_NORMAL,
-	PACKET_DHCP,
-	PACKET_ARP,
-	PACKET_EAPOL,
-	PACKET_EAPOL_START,
-	PACKET_MAX
-};
 
 /*HW_BAND0 - CMAC0 + PHY0 + S0*/
 /*HW_BAND1 - CMAC1 + PHY1 + S1*/
@@ -358,6 +349,7 @@ enum wr_chg_id {
 	WR_CHG_TYPE,
 	WR_CHG_MADDR,
 	WR_CHG_AP_PARAM,
+	WR_CHG_MULTI_EDCA_PARAM,
 	WR_CHG_EDCA_PARAM,
 	WR_CHG_MU_EDCA_PARAM,
 	WR_CHG_MU_EDCA_CFG,
@@ -365,6 +357,7 @@ enum wr_chg_id {
 	WR_CHG_RTS_TH,
 	WR_CHG_DFS_HE_TB_CFG,
 	WR_CHG_TRX_PATH,
+	WR_CHG_STBC_CFG,
 	WR_CHG_MAX,
 };
 
@@ -400,6 +393,14 @@ struct rtw_edca_param {
 	 */
 	u32 param;
 };
+
+#define ACQ_MAX 4
+
+struct rtw_multi_edca_param {
+	u8 num;
+	struct rtw_edca_param edca[ACQ_MAX];
+};
+
 
 struct rtw_mu_edca_param {
 	u8 ac;
@@ -553,7 +554,6 @@ enum phl_msg_evt_id {
 	MSG_EVT_BTC_TMR = 35,
 	MSG_EVT_BTC_FWEVNT = 36,
 	MSG_EVT_BTC_REQ_BT_SLOT = 37,
-	MSG_EVT_BTC_PKT_EVT_NTFY = 38,
 	/* ser*/
 	MSG_EVT_SER_L0_RESET = 39,		/* L0 notify only */
 	MSG_EVT_SER_M1_PAUSE_TRX = 40,
@@ -629,10 +629,10 @@ enum phl_msg_evt_id {
 	/* ps */
 	MSG_EVT_PS_CAP_CHG = 105,
 	MSG_EVT_PS_PERIOD_CHK = 106,
-	MSG_EVT_PS_DBG_LPS_ENTER = 107,
-	MSG_EVT_PS_DBG_LPS_LEAVE = 108,
-	MSG_EVT_PS_DBG_IPS_ENTER = 109,
-	MSG_EVT_PS_DBG_IPS_LEAVE = 110,
+	MSG_EVT_PS_DBG_CMD = 107,
+	MSG_EVT_PS_LPS_ENTER = 108,
+	MSG_EVT_PS_LPS_LEAVE = 109,
+
 	/* Change operating ch def(ch / bw) */
 	MSG_EVT_CHG_OP_CH_DEF_START = 111,
 	MSG_EVT_CHG_OP_CH_DEF_END = 112,
@@ -641,7 +641,19 @@ enum phl_msg_evt_id {
 
 	MSG_EVT_TX_PKT_NTFY = 115,
 	MSG_EVT_SW_WATCHDOG = 116,
+	MSG_EVT_GET_TX_PWR_DBM = 117,
 	/* ltr */
+	MSG_EVT_LTR_TX_DLY = 199,
+
+	MSG_EVT_BTC_REQ = 132,
+
+	/* DFS radar detecting*/
+	MSG_EVT_DFS_RD_IS_DETECTING = 136,
+	MSG_EVT_DFS_RD_SETUP = 137,
+
+	/* tx power */
+	MSG_EVT_TXPWR_SETUP = 150,
+
 	/* dbg */
 	MSG_EVT_DBG_SIP_REG_DUMP = 200,
 	MSG_EVT_DBG_FULL_REG_DUMP = 201,
@@ -652,6 +664,11 @@ enum phl_msg_evt_id {
 	/* p2pps */
 	MSG_EVT_TSF32_TOG = 205,
 	/* p2pps end */
+	/* MCC */
+	MSG_EVT_MCC_START = 206,
+	MSG_EVT_MCC_STOP = 207,
+	/* MCC end */
+	MSG_EVT_PKT_EVT_NTFY = 208,
 	/*Add EVT-ID for linux core cmd temporality*/
 
 	/* sub module IO */
@@ -917,7 +934,9 @@ struct phl_data_ctl_t {
 	((_msg_id) = (((_msg_id) & ~((u32)(_indc) << 24))|((u32)(_indc) << 24)))
 #define CLEAR_MSG_INDC_FIELD(_msg_id, _indc) ((_msg_id) &= ~((_indc) << 24))
 
-#define RTW_MAX_FW_SIZE 0x400000
+#define RTW_MAX_FW_SIZE 0x80000
+
+#define BTC_MAX_DATA_SIZE 32
 
 enum rtw_fw_src {
 	RTW_FW_SRC_INTNAL, /* 0 */
@@ -1004,9 +1023,9 @@ struct protocol_cap_t {
 	u8 sgi_40:1;		/* HT Short GI for 40 MHz */
 	u8 sgi_80:1;		/* VHT Short GI for 80 MHz */
 	u8 sgi_160:1;		/* VHT Short GI for 160/80+80 MHz */
-	struct rtw_edca_param edca[4]; 	/* Access Category, 0:BE, 1:BK, 2:VI, 3:VO */
+	struct rtw_edca_param edca[ACQ_MAX]; 	/* Access Category, 0:BE, 1:BK, 2:VI, 3:VO */
 	u8 mu_qos_info;
-	struct rtw_mu_edca_param mu_edca[4];
+	struct rtw_mu_edca_param mu_edca[ACQ_MAX];
 
 	/* BB related */
 	u8 ht_ldpc:1;
@@ -1095,8 +1114,12 @@ struct protocol_cap_t {
 	u8 nss_rx:3;
 
 	u8 num_ampdu_bk;
+	u8 cap_option;
+
+	u8 ppe_th_present:1;
 };
 
+#define EXT_CAP_LIMIT_2G_RX_STBC	BIT0
 
 
 #define LOAD_MAC_REG_FILE				BIT0
@@ -1121,6 +1144,15 @@ enum rtw_pcie_ltr_state {
 	RTW_PCIE_LTR_SW_IDLE = 2
 };
 
+struct rtw_pcie_trx_mit_info_t {
+	u32 tx_timer;
+	u8 tx_counter;
+	u32 rx_timer;
+	u8 rx_counter;
+	u8 fixed_mitigation; /*no watchdog dynamic setting*/
+	void *priv;
+};
+
 struct bus_sw_cap_t {
 #ifdef CONFIG_PCI_HCI
 	enum rtw_pcie_bus_func_cap_t l0s_ctrl;
@@ -1133,6 +1165,8 @@ struct bus_sw_cap_t {
 	u32 rpbd_num;
 	u32 rxbuf_num;
 	u32 rpbuf_num;
+	u32 read_txbd_lvl; /* 0: always read, 1: < 1/2 tx res, 2: < 1/4 tx res */
+	struct rtw_pcie_trx_mit_info_t mit_ctl;
 	u8 clkdly_ctrl;
 	u8 l0sdly_ctrl;
 	u8 l1dly_ctrl;
@@ -1146,6 +1180,9 @@ struct bus_sw_cap_t {
 	u32 ltr_sw_act_tri_cnt;
 	u32 ltr_sw_idle_tri_cnt;
 	u8 ltr_cur_state;
+	#ifdef RTW_WKARD_GET_PROCESSOR_ID
+	u64 proc_id; /* processor id */
+	#endif
 #elif defined (CONFIG_USB_HCI)
 	u32 tx_buf_size;
 	u32 tx_buf_num;
@@ -1179,6 +1216,7 @@ struct bus_cap_t {
 	u32 rpbd_num;
 	u32 rxbuf_num;
 	u32 rpbuf_num;
+	u32 read_txbd_th;
 	u8 clkdly_ctrl;
 	u8 l0sdly_ctrl;
 	u8 l1dly_ctrl;
@@ -1187,6 +1225,9 @@ struct bus_cap_t {
 	u8 ltr_init_state;
 	u8 ltr_sw_ctrl;
 	u8 ltr_hw_ctrl;
+	#ifdef RTW_WKARD_GET_PROCESSOR_ID
+	u64 proc_id; /* processor id */
+	#endif
 #elif defined (CONFIG_USB_HCI)
 	u32 tx_buf_size;
 	u32 tx_buf_num;
@@ -1442,6 +1483,22 @@ enum phl_ps_rt_rson {
 #define PS_CAP_PWR_GATED BIT3
 #define PS_CAP_PWR_OFF BIT4
 
+enum phl_ps_defer_rson {
+	PS_DEFER_PING_PKT = BIT0,
+	PS_DEFER_DHCP_PKT = BIT1,
+};
+#define PS_DEFER_RSON_NONE 0
+
+struct rtw_ps_defer_para {
+	/* see phl_ps_defer_rson */
+	u8 defer_rson;
+
+	/* Tx ping defer time(ms) */
+	u32 lps_ping_defer_time;
+	/* Reserved for dhcp*/
+	u32 lps_dhcp_defer_time;
+};
+
 /**
  * ips_en/lps_en
  * refs. structure "phl_ps_operation_mode"
@@ -1476,6 +1533,9 @@ struct rtw_ps_cap_t {
 	u8 lps_rssi_enter_threshold;
 	u8 lps_rssi_leave_threshold;
 	u8 lps_rssi_diff_threshold;
+
+	struct rtw_ps_defer_para defer_para;
+
 	bool lps_pause_tx;
 	/* wow lps */
 	u8 lps_wow_en;
@@ -1511,9 +1571,12 @@ struct phy_sw_cap_t {
 	u8 bw_sup;
 	u8 txss;
 	u8 rxss;
+	u8 tx_path_num;
+	u8 rx_path_num;
 	u16 hw_rts_time_th;
 	u16 hw_rts_len_th;
 	bool bfreed_para;
+	u32 txagg_num;
 };
 
 /* final capability of phy */
@@ -1523,8 +1586,11 @@ struct phy_cap_t {
 	u8 bw_sup;
 	u8 txss;
 	u8 rxss;
+	u8 tx_path_num;
+	u8 rx_path_num;
 	u16 hw_rts_time_th;
 	u16 hw_rts_len_th;
+	u32 txagg_num;
 };
 
 /* final capability of device */
@@ -1570,6 +1636,13 @@ struct dev_cap_t {
 	u8 wl_func_cap;
 	u8 rpq_agg_num; /* 0: no adjust, use mac default size: 121 */
 	bool quota_turbo;
+	/*CHANNEL_WIDTH_10 or CHANNEL_WIDTH_5 or 0(non 5/10M setting)*/
+	u8 nb_config;
+#ifdef CONFIG_PHL_THERMAL_PROTECT
+	/* TX duty could be 0~100, 100 means no TX duty control */
+	u8 min_tx_duty;
+	u8 thermal_threshold;
+#endif
 };
 
 #ifdef RTW_PHL_BCN //phl def
@@ -1835,6 +1908,9 @@ struct rtw_hal_stainfo_t;
 struct rtw_phl_stainfo_t {
 	_os_list list;
 	struct rtw_wifi_role_t *wrole;
+#ifdef RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
+	bool allocated;
+#endif
 	bool active;
 	u16 aid;
 	u16 macid;
@@ -2064,12 +2140,53 @@ enum dfs_regd_t {
 	DFS_REGD_FCC	= 1,
 	DFS_REGD_JAP	= 2,
 	DFS_REGD_ETSI	= 3,
+	DFS_REGD_KCC	= 4,
+	DFS_REGD_NUM,
 };
+
+#define PHL_DFS_REGD_IS_UNKNOWN(regd) ((regd) == DFS_REGD_UNKNOWN || (regd) >= DFS_REGD_NUM)
+
 struct rtw_dfs_t {
-	u8 region_domain;
-	bool dfs_enabled;
+	enum dfs_regd_t region_domain;
+	bool enable; /* set by core layer to enable/disable radar detection */
+
+	/*
+	* set by core to specify detect range
+	* sp_detect_range_hi = 0 means no specified range, whole range allowed
+	* by HAL will enable radar detection
+	*/
+	u32 sp_detect_range_hi;
+	u32 sp_detect_range_lo;
+
+	bool radar_detect_enabled; /* if radar detection is enabled */
+	bool cac_tx_paused; /* if tx paused by CAC */
+	bool pending_domain_change; /* if there is domain change under process */
+
+	bool is_radar_detectd; /* if radar is detected */
 };
 #endif
+
+struct txpwr_ctl_param {
+	enum phl_band_idx band_idx;
+
+	/*
+	* set true to write tx power setting to HW even if no configuration change
+	*/
+	bool force_write_txpwr;
+
+	/*
+	* tx power constraint in unit of mB (0.01dB)
+	* < 0: not set (keep original)
+	*/
+	s32 constraint_mb;
+};
+
+#define txpwr_ctl_param_init(param) \
+	do { \
+		(param)->band_idx = HW_BAND_MAX; \
+		(param)->force_write_txpwr = false; \
+		(param)->constraint_mb = -1; \
+	} while (0)
 
 #ifdef CONFIG_PHL_CHANNEL_INFO
 
@@ -2356,6 +2473,11 @@ struct rtw_phl_mcc_bt_info {
 	bool add_bt_role;
 };
 
+struct rtw_phl_mcc_dbg_info {
+	u8 ntfy_cnt; /*max value : 7. 0: Continuous Query Notification, 1~7: Notify counter*/
+	bool ntfy_rx; /*rx evetn of notification*/
+};
+
 enum rtw_phl_mcc_chk_inprocess_type {
 	RTW_PHL_MCC_CHK_INPROGRESS = 0,
 	RTW_PHL_MCC_CHK_INPROGRESS_SINGLE_CH,
@@ -2626,6 +2748,10 @@ enum phl_thermal_protect_action{
 	PHL_THERMAL_PROTECT_ACTION_NONE = 0,
 	PHL_THERMAL_PROTECT_ACTION_LEVEL1 = 1,
 	PHL_THERMAL_PROTECT_ACTION_LEVEL2 = 2,
+	PHL_THERMAL_PROTECT_ACTION_LEVEL3 = 3,
+	PHL_THERMAL_PROTECT_ACTION_LEVEL4 = 4,
+	PHL_THERMAL_PROTECT_ACTION_LEVEL5 = 5,
+	PHL_THERMAL_PROTECT_ACTION_LEVEL_MAX = PHL_THERMAL_PROTECT_ACTION_LEVEL5,
 };
 #endif
 
@@ -2819,12 +2945,14 @@ struct scan_ofld_ch_info {
 	u8 period;
 	bool tx_pkt; /* 1:probe request will be sent */
 	bool tx_data_pause; /* 1:no data will be sent during fw scanning */
+	u8 probe_req_id;
 };
 
 enum SCAN_OFLD_OP {
 	SCAN_OFLD_OP_STOP,
 	SCAN_OFLD_OP_START,
-	SCAN_OFLD_OP_SET
+	SCAN_OFLD_OP_SET,
+	SCAN_OFLD_OP_RPT
 };
 
 enum SCAN_OFLD_MD {
@@ -3191,21 +3319,6 @@ struct rtw_role_cmd {
 	enum role_state rstate;
 };
 
-enum phl_btc_pkt_evt_type {
-	BTC_PKT_EVT_NORMAL,
-	BTC_PKT_EVT_DHCP,
-	BTC_PKT_EVT_ARP,
-	BTC_PKT_EVT_EAPOL,
-	BTC_PKT_EVT_EAPOL_START,
-	BTC_PKT_EVT_ADD_KEY,
-	BTC_PKT_EVT_MAX
-};
-
-struct rtw_pkt_evt_ntfy {
-	struct rtw_wifi_role_t *wrole;
-	enum phl_btc_pkt_evt_type type;
-};
-
 struct role_ntfy_info {
 	u8 role_id;
 	u16 macid;
@@ -3228,6 +3341,16 @@ struct set_rf_ntfy_info {
 	_os_event done;
 };
 
+enum rtw_phl_btc_req_evt_type {
+	EVT_BTC_LINK_CHG = 0,
+	EVT_BTC_MAX
+};
+
+struct rtw_btc_req_msg {
+	enum rtw_phl_btc_req_evt_type type;
+	u32 len;
+	u8 buf[BTC_MAX_DATA_SIZE];
+};
 
 /**
  * rtw_phl_rainfo - structure use to query RA information
@@ -3235,26 +3358,20 @@ struct set_rf_ntfy_info {
  * @rate: current rate selected by RA, define by general definition enum rtw_data_rate
  * @bw: current BW, define by general definition enum channel_width
  * @gi_ltf: current gi_ltf, define by general definition enum rtw_gi_ltf
+ * @is_actrl: report by RA,0: don't append a-ctrl field; 1: could append a-ctrl field
  */
 struct rtw_phl_rainfo {
 	enum rtw_data_rate rate;
 	enum channel_width bw;
 	enum rtw_gi_ltf gi_ltf;
-};
-
-struct rtw_pcie_trx_mit_info_t {
-	u32 tx_timer;
-	u8 tx_counter;
-	u32 rx_timer;
-	u8 rx_counter;
-	u8 fixed_mitigation; /*no watchdog dynamic setting*/
-	void *priv;
+	bool is_actrl;
 };
 
 struct rtw_env_report {
 	bool rpt_status; /*1 means CCX_SUCCESS,0 means fail*/
 	u8 clm_ratio;
 	u8 nhm_ratio;
+	u8 nhm_tx_ratio;
 	u8 nhm_pwr;
 	u8 nhm_cca_ratio;
 };
@@ -3267,6 +3384,16 @@ enum rtw_phl_ser_lv1_recv_step {
 	RTW_PHL_SER_LV1_RCVY_STEP_LAST,
 	RTW_PHL_SER_LV1_RCVY_STEP_MAX = RTW_PHL_SER_LV1_RCVY_STEP_LAST,
 	RTW_PHL_SER_LV1_RCVY_STEP_INVALID = RTW_PHL_SER_LV1_RCVY_STEP_LAST,
+};
+
+enum phl_pkt_evt_type {
+	PKT_EVT_DHCP,
+	PKT_EVT_ARP,
+	PKT_EVT_TX_PING_REQ,
+	PKT_EVT_RX_PING_RSP,
+	PKT_EVT_EAPOL_START,
+	PKT_EVT_EAPOL_END,
+	PKT_EVT_MAX
 };
 
 #endif /*_PHL_DEF_H_*/

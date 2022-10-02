@@ -49,129 +49,45 @@ u32 mac_coex_init(struct mac_ax_adapter *adapter,
 	u16 val16;
 	u32 ret, val32;
 
-	val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
-	MAC_REG_W8(R_AX_GPIO_MUXCFG, val | B_AX_ENBT);
-
-	switch (coex->direction) {
-	case MAC_AX_COEX_INNER:
-		val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
-		val = (val & ~BIT(2)) | BIT(1);
-		MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
-		break;
-	case MAC_AX_COEX_OUTPUT:
-		val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
-		val = val | BIT(1) | BIT(0);
-		MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
-		break;
-	case MAC_AX_COEX_INPUT:
-		val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
-		val = val & ~(BIT(2) | BIT(1));
-		MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
-		break;
-	default:
-		return MACNOITEM;
-	}
-
-#if MAC_AX_FW_REG_OFLD
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		ret = MAC_REG_W_OFLD(R_AX_BTC_FUNC_EN, B_AX_PTA_WL_TX_EN,
-				     1, 0);
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+				      B_AX_ENBT, B_AX_ENBT, 0);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("%s: write offload fail %d",
 				      __func__, ret);
 			return ret;
 		}
-		ret = MAC_REG_W_OFLD(R_AX_BT_COEX_CFG_2,
-				     B_AX_GNT_BT_BYPASS_PRIORITY,
-				     1, 0);
-		if (ret != MACSUCCESS) {
-			PLTFM_MSG_ERR("%s: write offload fail %d",
-				      __func__, ret);
-			return ret;
-		}
-		ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
-				     B_AX_WL_ACT_MSK | B_AX_STATIS_BT_EN |
-				     B_AX_BT_CNT_REST,
-				     0x4003, 0);
-		if (ret != MACSUCCESS) {
-			PLTFM_MSG_ERR("%s: write offload fail %d",
-				      __func__, ret);
-			return ret;
-		}
-		ret = MAC_REG_W_OFLD(R_AX_TRXPTCL_RESP_0, B_AX_RSP_CHK_BTCCA,
-				     0, 0);
-		if (ret != MACSUCCESS) {
-			PLTFM_MSG_ERR("%s: write offload fail %d",
-				      __func__, ret);
-			return ret;
-		}
-		ret = MAC_REG_W_OFLD(R_AX_CCA_CFG_0,
-				     B_AX_BTCCA_BRK_TXOP_EN | B_AX_BTCCA_EN,
-				     1, 0);
-		if (ret != MACSUCCESS) {
-			PLTFM_MSG_ERR("%s: write offload fail %d",
-				      __func__, ret);
-			return ret;
-		}
-		switch (coex->pta_mode) {
-		case MAC_AX_COEX_RTK_MODE:
-			val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
-			val = SET_CLR_WORD(val, MAC_AX_BT_MODE_0_3,
-					   B_AX_BTMODE);
-			MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
-
-			ret = MAC_REG_W_OFLD(R_AX_TDMA_MODE,
-					     B_AX_RTK_BT_ENABLE,
-					     1, 0);
-			if (ret != MACSUCCESS) {
-				PLTFM_MSG_ERR("%s: write offload fail %d",
-					      __func__, ret);
-				return ret;
-			}
-			ret = MAC_REG_W_OFLD(R_AX_BT_COEX_CFG_5,
-					     B_AX_BT_RPT_SAMPLE_RATE_MSK <<
-					     B_AX_BT_RPT_SAMPLE_RATE_SH,
-					     MAC_AX_RTK_RATE, 1);
+		switch (coex->direction) {
+		case MAC_AX_COEX_INNER:
+			ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+					      B_AX_PO_WIFI_PTA_PINS |
+					      B_AX_PO_BT_PTA_PINS,
+					      B_AX_PO_BT_PTA_PINS, 0);
 			if (ret != MACSUCCESS) {
 				PLTFM_MSG_ERR("%s: write offload fail %d",
 					      __func__, ret);
 				return ret;
 			}
 			break;
-		case MAC_AX_COEX_CSR_MODE:
-			val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
-			val = SET_CLR_WORD(val, MAC_AX_BT_MODE_2, B_AX_BTMODE);
-			MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
-
-			ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
-					     B_AX_BT_PRI_DETECT_TO_MSK <<
-					     B_AX_BT_PRI_DETECT_TO_SH,
-					     MAC_AX_CSR_PRI_TO, 0);
+		case MAC_AX_COEX_OUTPUT:
+			ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+					      B_AX_PO_BT_PTA_PINS |
+					      B_AX_ENUARTTX,
+					      B_AX_PO_BT_PTA_PINS |
+					      B_AX_ENUARTTX, 0);
 			if (ret != MACSUCCESS) {
 				PLTFM_MSG_ERR("%s: write offload fail %d",
 					      __func__, ret);
 				return ret;
 			}
-			ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
-					     B_AX_BT_TRX_INIT_DETECT_MSK <<
-					     B_AX_BT_TRX_INIT_DETECT_SH,
-					     MAC_AX_CSR_TRX_TO, 0);
-			if (ret != MACSUCCESS) {
-				PLTFM_MSG_ERR("%s: write offload fail %d",
-					      __func__, ret);
-				return ret;
-			}
-			ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
-					     B_AX_BT_STAT_DELAY_MSK <<
-					     B_AX_BT_STAT_DELAY_SH,
-					     MAC_AX_CSR_DELAY, 0);
-			if (ret != MACSUCCESS) {
-				PLTFM_MSG_ERR("%s: write offload fail %d",
-					      __func__, ret);
-				return ret;
-			}
-			ret = MAC_REG_W8_OFLD(R_AX_BT_COEX_CFG_2,
-					      MAC_AX_CSR_RATE, 1);
+			break;
+		case MAC_AX_COEX_INPUT:
+			ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+					      B_AX_PO_WIFI_PTA_PINS |
+					      B_AX_PO_BT_PTA_PINS,
+					      0, 0);
 			if (ret != MACSUCCESS) {
 				PLTFM_MSG_ERR("%s: write offload fail %d",
 					      __func__, ret);
@@ -182,77 +98,334 @@ u32 mac_coex_init(struct mac_ax_adapter *adapter,
 			return MACNOITEM;
 		}
 
-		return ret;
+		ret = MAC_REG_W_OFLD2(R_AX_BTC_FUNC_EN,
+				      B_AX_PTA_WL_TX_EN,
+				      B_AX_PTA_WL_TX_EN, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		}
+		ret = MAC_REG_W_OFLD2(R_AX_BT_COEX_CFG_2,
+				      B_AX_GNT_BT_POLARITY,
+				      B_AX_GNT_BT_POLARITY, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		}
+		ret = MAC_REG_W_OFLD2(R_AX_CSR_MODE,
+				      B_AX_STATIS_BT_EN | B_AX_WL_ACT_MSK |
+				      B_AX_BT_CNT_REST,
+				      B_AX_STATIS_BT_EN | B_AX_WL_ACT_MSK |
+				      B_AX_BT_CNT_REST, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		}
+		ret = MAC_REG_W_OFLD2(R_AX_TRXPTCL_RESP_0,
+				      B_AX_RSP_CHK_BTCCA, 0, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		ret = MAC_REG_W_OFLD2(R_AX_CCA_CFG_0,
+				      B_AX_BTCCA_EN | B_AX_BTCCA_BRK_TXOP_EN,
+				      B_AX_BTCCA_EN, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		ret = mac_read_lte(adapter, R_AX_LTE_SW_CFG_2, &val32);
+		if (ret) {
+			PLTFM_MSG_ERR("%s: Read LTE fail!\n", __func__);
+			return ret;
+		}
+		val32 = val32 & B_AX_WL_RX_CTRL;
+		ret = mac_write_lte(adapter, R_AX_LTE_SW_CFG_2, val32);
+		if (ret) {
+			PLTFM_MSG_ERR("%s: Write LTE fail!\n", __func__);
+			return ret;
+		}
+		switch (coex->pta_mode) {
+		case MAC_AX_COEX_RTK_MODE:
+			ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+					      GET_MSK(B_AX_BTMODE),
+					      SET_WORD(MAC_AX_BT_MODE_0_3,
+						       B_AX_BTMODE), 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD2(R_AX_TDMA_MODE,
+					      B_AX_RTK_BT_ENABLE,
+					      B_AX_RTK_BT_ENABLE, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD2(R_AX_BT_COEX_CFG_5,
+					      GET_MSK(B_AX_BT_RPT_SAMPLE_RATE),
+					      SET_WORD(MAC_AX_RTK_RATE,
+						       B_AX_BT_RPT_SAMPLE_RATE),
+					      1);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			break;
+		case MAC_AX_COEX_CSR_MODE:
+			ret = MAC_REG_W_OFLD2(R_AX_GPIO_MUXCFG,
+					      GET_MSK(B_AX_BTMODE),
+					      SET_WORD(MAC_AX_BT_MODE_2,
+						       B_AX_BTMODE), 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD2(R_AX_CSR_MODE,
+					      (B_AX_ENHANCED_BT |
+					       GET_MSK(B_AX_BT_PRI_DETECT_TO) |
+					       GET_MSK(B_AX_BT_TRX_INIT_DETECT) |
+					       GET_MSK(B_AX_BT_STAT_DELAY)),
+					      (SET_WORD(MAC_AX_CSR_PRI_TO,
+							B_AX_BT_PRI_DETECT_TO) |
+					       SET_WORD(MAC_AX_CSR_TRX_TO,
+							B_AX_BT_TRX_INIT_DETECT) |
+					       SET_WORD(MAC_AX_CSR_DELAY,
+							B_AX_BT_STAT_DELAY) |
+					       B_AX_ENHANCED_BT), 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+
+			ret = MAC_REG_W_OFLD2(R_AX_BT_COEX_CFG_2,
+					      GET_MSK(B_AX_R_BT_CNT_THR),
+					      SET_WORD(MAC_AX_CSR_RATE,
+						       B_AX_R_BT_CNT_THR), 1);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			break;
+		default:
+			return MACNOITEM;
+		}
+	} else {
+#endif
+		val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
+		MAC_REG_W8(R_AX_GPIO_MUXCFG, val | B_AX_ENBT);
+
+		switch (coex->direction) {
+		case MAC_AX_COEX_INNER:
+			val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
+			val = (val & ~BIT(2)) | BIT(1);
+			MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
+			break;
+		case MAC_AX_COEX_OUTPUT:
+			val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
+			val = val | BIT(1) | BIT(0);
+			MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
+			break;
+		case MAC_AX_COEX_INPUT:
+			val = MAC_REG_R8(R_AX_GPIO_MUXCFG + 1);
+			val = val & ~(BIT(2) | BIT(1));
+			MAC_REG_W8(R_AX_GPIO_MUXCFG + 1, val);
+			break;
+		default:
+			return MACNOITEM;
+		}
+
+#if MAC_AX_FW_REG_OFLD
+		if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+			ret = MAC_REG_W_OFLD(R_AX_BTC_FUNC_EN, B_AX_PTA_WL_TX_EN,
+					     1, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD(R_AX_BT_COEX_CFG_2,
+					     B_AX_GNT_BT_BYPASS_PRIORITY,
+					     1, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
+					     B_AX_WL_ACT_MSK | B_AX_STATIS_BT_EN |
+					     B_AX_BT_CNT_REST,
+					     0x4003, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD(R_AX_TRXPTCL_RESP_0, B_AX_RSP_CHK_BTCCA,
+					     0, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			ret = MAC_REG_W_OFLD(R_AX_CCA_CFG_0,
+					     B_AX_BTCCA_BRK_TXOP_EN | B_AX_BTCCA_EN,
+					     1, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("%s: write offload fail %d",
+					      __func__, ret);
+				return ret;
+			}
+			switch (coex->pta_mode) {
+			case MAC_AX_COEX_RTK_MODE:
+				val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
+				val = SET_CLR_WORD(val, MAC_AX_BT_MODE_0_3,
+						   B_AX_BTMODE);
+				MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
+
+				ret = MAC_REG_W_OFLD(R_AX_TDMA_MODE,
+						     B_AX_RTK_BT_ENABLE,
+						     1, 0);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				ret = MAC_REG_W_OFLD(R_AX_BT_COEX_CFG_5,
+						     B_AX_BT_RPT_SAMPLE_RATE_MSK <<
+						     B_AX_BT_RPT_SAMPLE_RATE_SH,
+						     MAC_AX_RTK_RATE, 1);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				break;
+			case MAC_AX_COEX_CSR_MODE:
+				val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
+				val = SET_CLR_WORD(val, MAC_AX_BT_MODE_2, B_AX_BTMODE);
+				MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
+
+				ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
+						     B_AX_BT_PRI_DETECT_TO_MSK <<
+						     B_AX_BT_PRI_DETECT_TO_SH,
+						     MAC_AX_CSR_PRI_TO, 0);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
+						     B_AX_BT_TRX_INIT_DETECT_MSK <<
+						     B_AX_BT_TRX_INIT_DETECT_SH,
+						     MAC_AX_CSR_TRX_TO, 0);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				ret = MAC_REG_W_OFLD(R_AX_CSR_MODE,
+						     B_AX_BT_STAT_DELAY_MSK <<
+						     B_AX_BT_STAT_DELAY_SH,
+						     MAC_AX_CSR_DELAY, 0);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				ret = MAC_REG_W8_OFLD(R_AX_BT_COEX_CFG_2,
+						      MAC_AX_CSR_RATE, 1);
+				if (ret != MACSUCCESS) {
+					PLTFM_MSG_ERR("%s: write offload fail %d",
+						      __func__, ret);
+					return ret;
+				}
+				break;
+			default:
+				return MACNOITEM;
+			}
+
+			return ret;
+		}
+#endif
+		val = MAC_REG_R8(R_AX_BTC_FUNC_EN);
+		MAC_REG_W8(R_AX_BTC_FUNC_EN, val | B_AX_PTA_WL_TX_EN);
+
+		val = MAC_REG_R8(R_AX_BT_COEX_CFG_2 + 1);
+		MAC_REG_W8(R_AX_BT_COEX_CFG_2 + 1, val | BIT(0));
+
+		val = MAC_REG_R8(R_AX_CSR_MODE);
+		MAC_REG_W8(R_AX_CSR_MODE, val | B_AX_STATIS_BT_EN | B_AX_WL_ACT_MSK);
+
+		val = MAC_REG_R8(R_AX_CSR_MODE + 2);
+		MAC_REG_W8(R_AX_CSR_MODE + 2, val | BIT(0));
+
+		val = MAC_REG_R8(R_AX_TRXPTCL_RESP_0 + 3);
+		MAC_REG_W8(R_AX_TRXPTCL_RESP_0 + 3, val & ~BIT(1));
+
+		val16 = MAC_REG_R16(R_AX_CCA_CFG_0);
+		val16 = (val16 | B_AX_BTCCA_EN) & ~B_AX_BTCCA_BRK_TXOP_EN;
+		MAC_REG_W16(R_AX_CCA_CFG_0, val16);
+
+		ret = mac_read_lte(adapter, R_AX_LTE_SW_CFG_2, &val32);
+		if (ret) {
+			PLTFM_MSG_ERR("%s: Read LTE fail!\n", __func__);
+			return ret;
+		}
+		val32 = val32 & B_AX_WL_RX_CTRL;
+		ret = mac_write_lte(adapter, R_AX_LTE_SW_CFG_2, val32);
+		if (ret) {
+			PLTFM_MSG_ERR("%s: Write LTE fail!\n", __func__);
+			return ret;
+		}
+
+		switch (coex->pta_mode) {
+		case MAC_AX_COEX_RTK_MODE:
+			val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
+			val = SET_CLR_WORD(val, MAC_AX_BT_MODE_0_3,
+					   B_AX_BTMODE);
+			MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
+
+			val = MAC_REG_R8(R_AX_TDMA_MODE);
+			MAC_REG_W8(R_AX_TDMA_MODE, val | B_AX_RTK_BT_ENABLE);
+
+			val = MAC_REG_R8(R_AX_BT_COEX_CFG_5);
+			val = SET_CLR_WORD(val, MAC_AX_RTK_RATE,
+					   B_AX_BT_RPT_SAMPLE_RATE);
+			MAC_REG_W8(R_AX_BT_COEX_CFG_5, val);
+			break;
+		case MAC_AX_COEX_CSR_MODE:
+			val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
+			val = SET_CLR_WORD(val, MAC_AX_BT_MODE_2, B_AX_BTMODE);
+			MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
+
+			val16 = MAC_REG_R16(R_AX_CSR_MODE);
+			val16 = SET_CLR_WORD(val16, MAC_AX_CSR_PRI_TO,
+					     B_AX_BT_PRI_DETECT_TO);
+			val16 = SET_CLR_WORD(val16, MAC_AX_CSR_TRX_TO,
+					     B_AX_BT_TRX_INIT_DETECT);
+			val16 = SET_CLR_WORD(val16, MAC_AX_CSR_DELAY,
+					     B_AX_BT_STAT_DELAY);
+			val16 = val16 | B_AX_ENHANCED_BT;
+			MAC_REG_W16(R_AX_CSR_MODE, val16);
+
+			MAC_REG_W8(R_AX_BT_COEX_CFG_2, MAC_AX_CSR_RATE);
+			break;
+		default:
+			return MACNOITEM;
+		}
+#if MAC_USB_IO_ACC
 	}
 #endif
-
-	val = MAC_REG_R8(R_AX_BTC_FUNC_EN);
-	MAC_REG_W8(R_AX_BTC_FUNC_EN, val | B_AX_PTA_WL_TX_EN);
-
-	val = MAC_REG_R8(R_AX_BT_COEX_CFG_2 + 1);
-	MAC_REG_W8(R_AX_BT_COEX_CFG_2 + 1, val | BIT(0));
-
-	val = MAC_REG_R8(R_AX_CSR_MODE);
-	MAC_REG_W8(R_AX_CSR_MODE, val | B_AX_STATIS_BT_EN | B_AX_WL_ACT_MSK);
-
-	val = MAC_REG_R8(R_AX_CSR_MODE + 2);
-	MAC_REG_W8(R_AX_CSR_MODE + 2, val | BIT(0));
-
-	val = MAC_REG_R8(R_AX_TRXPTCL_RESP_0 + 3);
-	MAC_REG_W8(R_AX_TRXPTCL_RESP_0 + 3, val & ~BIT(1));
-
-	val16 = MAC_REG_R16(R_AX_CCA_CFG_0);
-	val16 = (val16 | B_AX_BTCCA_EN) & ~B_AX_BTCCA_BRK_TXOP_EN;
-	MAC_REG_W16(R_AX_CCA_CFG_0, val16);
-
-	ret = mac_read_lte(adapter, R_AX_LTE_SW_CFG_2, &val32);
-	if (ret) {
-		PLTFM_MSG_ERR("%s: Read LTE fail!\n", __func__);
-		return ret;
-	}
-	val32 = val32 & B_AX_WL_RX_CTRL;
-	ret = mac_write_lte(adapter, R_AX_LTE_SW_CFG_2, val32);
-	if (ret) {
-		PLTFM_MSG_ERR("%s: Write LTE fail!\n", __func__);
-		return ret;
-	}
-
-	switch (coex->pta_mode) {
-	case MAC_AX_COEX_RTK_MODE:
-		val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
-		val = SET_CLR_WORD(val, MAC_AX_BT_MODE_0_3,
-				   B_AX_BTMODE);
-		MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
-
-		val = MAC_REG_R8(R_AX_TDMA_MODE);
-		MAC_REG_W8(R_AX_TDMA_MODE, val | B_AX_RTK_BT_ENABLE);
-
-		val = MAC_REG_R8(R_AX_BT_COEX_CFG_5);
-		val = SET_CLR_WORD(val, MAC_AX_RTK_RATE,
-				   B_AX_BT_RPT_SAMPLE_RATE);
-		MAC_REG_W8(R_AX_BT_COEX_CFG_5, val);
-		break;
-	case MAC_AX_COEX_CSR_MODE:
-		val = MAC_REG_R8(R_AX_GPIO_MUXCFG);
-		val = SET_CLR_WORD(val, MAC_AX_BT_MODE_2, B_AX_BTMODE);
-		MAC_REG_W8(R_AX_GPIO_MUXCFG, val);
-
-		val16 = MAC_REG_R16(R_AX_CSR_MODE);
-		val16 = SET_CLR_WORD(val16, MAC_AX_CSR_PRI_TO,
-				     B_AX_BT_PRI_DETECT_TO);
-		val16 = SET_CLR_WORD(val16, MAC_AX_CSR_TRX_TO,
-				     B_AX_BT_TRX_INIT_DETECT);
-		val16 = SET_CLR_WORD(val16, MAC_AX_CSR_DELAY,
-				     B_AX_BT_STAT_DELAY);
-		val16 = val16 | B_AX_ENHANCED_BT;
-		MAC_REG_W16(R_AX_CSR_MODE, val16);
-
-		MAC_REG_W8(R_AX_BT_COEX_CFG_2, MAC_AX_CSR_RATE);
-		break;
-	default:
-		return MACNOITEM;
-	}
-
 	return MACSUCCESS;
 }
 
@@ -368,26 +541,27 @@ u32 mac_cfg_plt(struct mac_ax_adapter *adapter, struct mac_ax_plt *plt)
 		(plt->rx & MAC_AX_PLT_GNT_WL ? B_AX_RX_PLT_GNT_WL : 0) |
 		(plt->rx || plt->tx ? B_AX_PLT_EN : 0);
 
-#if MAC_AX_FW_REG_OFLD
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		ret = MAC_REG_W_OFLD((u16)reg,
-				     B_AX_TX_PLT_GNT_LTE_RX |
-				     B_AX_TX_PLT_GNT_BT_TX |
-				     B_AX_TX_PLT_GNT_BT_RX |
-				     B_AX_TX_PLT_GNT_WL |
-				     B_AX_RX_PLT_GNT_LTE_RX |
-				     B_AX_RX_PLT_GNT_BT_TX |
-				     B_AX_RX_PLT_GNT_BT_RX |
-				     B_AX_RX_PLT_GNT_WL,
-				     val, 1);
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		ret = MAC_REG_W_OFLD2((u16)reg,
+				      B_AX_TX_PLT_GNT_LTE_RX |
+				      B_AX_TX_PLT_GNT_BT_TX |
+				      B_AX_TX_PLT_GNT_BT_RX |
+				      B_AX_TX_PLT_GNT_WL |
+				      B_AX_RX_PLT_GNT_LTE_RX |
+				      B_AX_RX_PLT_GNT_BT_TX |
+				      B_AX_RX_PLT_GNT_BT_RX |
+				      B_AX_RX_PLT_GNT_WL |
+				      B_AX_PLT_EN,
+				      val, 1);
 		if (ret != MACSUCCESS)
 			PLTFM_MSG_ERR("%s: write offload fail %d",
 				      __func__, ret);
 
 		return ret;
+	} else {
+		MAC_REG_W16(reg, val);
 	}
-#endif
-	MAC_REG_W16(reg, val);
 
 	return MACSUCCESS;
 }
@@ -444,10 +618,28 @@ void mac_cfg_sb(struct mac_ax_adapter *adapter, u32 val)
 u32 mac_cfg_ctrl_path(struct mac_ax_adapter *adapter, u32 wl)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-	u8 val = MAC_REG_R8(R_AX_SYS_SDIO_CTRL + 3);
+	u32 ret;
+	u8 val8;
 
-	val = wl ? val | BIT(2) : val & ~BIT(2);
-	MAC_REG_W8(R_AX_SYS_SDIO_CTRL + 3, val);
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		if (wl)
+			ret = MAC_REG_W_OFLD2(R_AX_SYS_SDIO_CTRL,
+					      B_AX_LTE_MUX_CTRL_PATH,
+					      B_AX_LTE_MUX_CTRL_PATH, 1);
+		else
+			ret = MAC_REG_W_OFLD2(R_AX_SYS_SDIO_CTRL,
+					      B_AX_LTE_MUX_CTRL_PATH, 0, 1);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("%s: write offload fail %d",
+				      __func__, ret);
+			return ret;
+		}
+	} else {
+		val8 = MAC_REG_R8(R_AX_SYS_SDIO_CTRL + 3);
+		val8 = wl ? val8 | BIT(2) : val8 & ~BIT(2);
+		MAC_REG_W8(R_AX_SYS_SDIO_CTRL + 3, val8);
+	}
 
 	return MACSUCCESS;
 }

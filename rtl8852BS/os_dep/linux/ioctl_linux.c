@@ -8302,7 +8302,7 @@ static const struct iw_priv_args rtw_private_args[] = {
 
 #ifdef CONFIG_APPEND_VENDOR_IE_ENABLE
 	{ VENDOR_IE_SET, IW_PRIV_TYPE_CHAR | 1024 , 0 , "vendor_ie_set" },
-	{ VENDOR_IE_GET, IW_PRIV_TYPE_CHAR | 1024, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "vendor_ie_get" },
+	{ VENDOR_IE_GET, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "vendor_ie_get" },
 #endif
 #if defined(RTW_PHL_TX) || defined(RTW_PHL_RX) || defined(CONFIG_PHL_TEST_SUITE)
 	{ PHL_TEST_SET, IW_PRIV_TYPE_CHAR | 1024 , 0 , "phl_test" },
@@ -8449,7 +8449,11 @@ static const struct iw_priv_args rtw_mp_private_args[] = {
 	{ MP_CUSTOMER_STR, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
 				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "customer_str" },
 #endif
+	{ MP_UUID , IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
+				IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_uuid"},
 
+	{ MP_GPIO, IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK,
+		IW_PRIV_TYPE_CHAR | IW_PRIV_SIZE_MASK, "mp_gpio"},
 #endif /* CONFIG_MP_INCLUDED */
 };
 

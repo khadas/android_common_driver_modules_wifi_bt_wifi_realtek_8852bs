@@ -16,6 +16,20 @@
 #define __RTL8852B_BTC_H__
 /* rtl8852b_btc.c */
 
+#define R_BTC_WL_PRI_MSK 0xDA10
+#define R_BTC_BREAK_TABLE 0xDA2C
+#define R_BTC_BT_COEX_MSK_TABLE 0xDA30
+#define R_BTC_CSR_MODE 0xDA40
+#define R_BTC_BT_STAST_HIGH 0xDA44
+#define R_BTC_BT_STAST_LOW 0xDA48
+
+#define B_BTC_PRI_MASK_TX_RESP_V1 BIT(3)
+#define B_BTC_PRI_MASK_RXCCK_V1 BIT(28)
+#define B_BTC_DBG_GNT_WL_BT BIT(27)
+#define B_BTC_BT_CNT_REST BIT(16)
+#define B_BTC_PTA_WL_PRI_MASK_BCNQ BIT(8)
+#define B_BTC_PTA_WL_PRI_MASK_MGQ BIT(4)
+
 extern const struct btc_chip chip_8852b;
 void _8852b_rfe_type(struct btc_t *btc);
 void _8852b_init_cfg(struct btc_t *btc);

@@ -16,7 +16,6 @@
 #define _HAL_API_MAC_H_
 #include "mac/mac_ax.h"
 
-
 #define POLLING_HALMAC_TIME 5
 #define POLLING_HALMAC_CNT 100
 
@@ -78,9 +77,15 @@ enum rtw_hal_status
 rtw_hal_mac_poll_hw_rx_done(struct hal_info_t *hal_info);
 enum rtw_hal_status
 rtw_hal_mac_hw_rx_resume(struct hal_info_t *hal_info);
-
-enum rtw_hal_status rtw_hal_mac_watchdog(struct hal_info_t *hal_info);
+enum rtw_hal_status rtw_hal_mac_macid_drop(struct hal_info_t *hal_info,
+                                           u16 macid);
+enum rtw_hal_status
+rtw_hal_mac_watchdog(struct hal_info_t *hal_info, struct rtw_phl_com_t *phl_com);
 #ifdef CONFIG_PCI_HCI
+#ifdef RTW_WKARD_GET_PROCESSOR_ID
+void
+rtw_hal_mac_set_custom(struct hal_info_t *hal_info, u64 proc_id, u32 cid);
+#endif
 enum rtw_hal_status rtw_hal_mac_set_pcicfg(struct hal_info_t *hal_info,
 					struct mac_ax_pcie_cfgspc_param *pci_cfgspc);
 enum rtw_hal_status rtw_hal_mac_ltr_set_pcie(struct hal_info_t *hal_info,
@@ -238,6 +243,12 @@ rtw_hal_mac_romdl(struct hal_info_t *hal_info, u8 *rom_buf, u32 rom_size);
 
 enum rtw_hal_status
 rtw_hal_mac_fwdl(struct hal_info_t *hal_info, u8 *fw_buf, u32 fw_size);
+
+enum rtw_hal_status
+rtw_hal_mac_fwredl(struct hal_info_t *hal_info, u8 *fw_buf, u32 fw_size);
+
+enum rtw_hal_status
+rtw_hal_mac_query_fw_buff(struct hal_info_t *hal_info, enum rtw_fw_type cat, u8 **fw, u32 *fw_len);
 
 enum rtw_hal_status
 rtw_hal_mac_enable_fw(struct hal_info_t *hal_info, u8 fw_type);
@@ -401,8 +412,7 @@ void rtw_hal_mac_dbg_status_dump(struct hal_info_t *hal, struct hal_mac_dbg_dump
 
 #ifdef CONFIG_PHL_DFS
 enum rtw_hal_status
-rtw_hal_mac_dfs_rpt_cfg(struct hal_info_t *hal_info,
-				bool rpt_en, u8 rpt_num, u8 rpt_to);
+rtw_hal_mac_dfs_rpt_cfg(struct hal_info_t *hal_info, struct hal_mac_dfs_rpt_cfg *conf);
 enum rtw_hal_status
 rtw_hal_mac_parse_dfs(struct hal_info_t *hal_info,
 			u8 *buf, u32 buf_len, struct mac_ax_dfs_rpt *dfs_rpt);
@@ -483,6 +493,9 @@ rtw_hal_mac_fw_dbg_dump(struct hal_info_t *hal_info);
 enum rtw_hal_status
 rtw_hal_mac_ps_notify_wake(struct hal_info_t *hal_info);
 enum rtw_hal_status
+rtw_hal_mac_lps_pvb_wait_rx(struct hal_info_t *hal_info,
+                            u16 macid, bool pvb_wait_rx);
+enum rtw_hal_status
 rtw_hal_mac_req_pwr_state(struct hal_info_t *hal_info, u8 pwr_state);
 enum rtw_hal_status
 rtw_hal_mac_chk_pwr_state(struct hal_info_t *hal_info, u8 pwr_state, u32 *mac_sts);
@@ -527,12 +540,6 @@ rtw_hal_mac_ax_bfee_set_csi_rrsc(void *mac, u8 band, u32 rrsc);
 
 u32 rtw_hal_mac_process_c2h(void *hal, struct rtw_c2h_info *c2h);
 
-enum rtw_hal_status
-rtw_hal_mac_f2p_test_cmd(struct hal_info_t *hal_info,
-						struct mp_mac_ax_f2p_test_para *info,
-						struct mp_mac_ax_f2p_wd *f2pwd,
-						struct mp_mac_ax_f2p_tx_cmd *ptxcmd,
-						u8 *psigb_addr);
 enum rtw_hal_status
 rtw_hal_mac_set_mu_edca(struct rtw_hal_com_t *hal_com, u8 band, u8 ac,
 	u16 timer, u8 cw_min, u8 cw_max, u8 aifs);
@@ -580,7 +587,8 @@ enum rtw_hal_status rtw_hal_mac_add_mcc(struct hal_info_t *hal,
 
 enum rtw_hal_status rtw_hal_mac_start_mcc(struct hal_info_t *hal,
 		u8 group, u8 macid, u32 tsf_high, u32 tsf_low, u8 btc_in_group,
-		u8 old_group_action, u8 old_group);
+		u8 old_group_action, u8 old_group,
+		struct rtw_phl_mcc_dbg_info *dbg_i);
 
 enum rtw_hal_status rtw_hal_mac_stop_mcc(struct hal_info_t *hal, u8 group,
 					u8 macid);
@@ -681,4 +689,7 @@ rtw_hal_mac_set_tx_duty(struct hal_info_t *hal_info,
 
 enum rtw_hal_status
 rtw_hal_mac_stop_tx_duty(struct hal_info_t *hal_info);
+
+void rtw_hal_mac_init_txagg_num(struct hal_info_t *hal_info);
+
 #endif /*_HAL_API_MAC_H_*/

@@ -210,7 +210,7 @@ u32 set_hw_edca_param(struct mac_ax_adapter *adapter,
 	u32 val32;
 	u32 reg_edca;
 	u32 ret;
-	u16 val16;
+	u32 cw;
 	enum mac_ax_cmac_path_sel path;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 
@@ -223,45 +223,70 @@ u32 set_hw_edca_param(struct mac_ax_adapter *adapter,
 		return ret;
 
 	path = param->path;
+	cw = (param->ecw_max << 4) | param->ecw_min;
 
-#if MAC_AX_FW_REG_OFLD
-	if (adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
-		if (path == MAC_AX_CMAC_PATH_SEL_MG0_1 ||
-		    path == MAC_AX_CMAC_PATH_SEL_MG2 ||
-		    path == MAC_AX_CMAC_PATH_SEL_BCN) {
-			val16 = SET_WORD((param->ecw_max << 4) | param->ecw_min,
-					 B_AX_BE_0_CW) |
-				SET_WORD(param->aifs_us, B_AX_BE_0_AIFS);
-			ret = MAC_REG_W16_OFLD((u16)reg_edca, val16, 1);
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		if (path == MAC_AX_CMAC_PATH_SEL_MG0_1) {
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_MGQ_CW), cw, 0);
 			if (ret != MACSUCCESS)
 				return ret;
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_MGQ_AIFS),
+					     param->aifs_us, 1);
+		} else if (path == MAC_AX_CMAC_PATH_SEL_MG2) {
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_CPUMGQ_CW), cw, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_CPUMGQ_AIFS),
+					     param->aifs_us, 1);
+		} else if (path == MAC_AX_CMAC_PATH_SEL_BCN) {
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_BCNQ_CW), cw, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_BCNQ_AIFS),
+					     param->aifs_us, 1);
 		} else {
-			val32 = SET_WORD(param->txop_32us, B_AX_BE_0_TXOPLMT) |
-				SET_WORD((param->ecw_max << 4) | param->ecw_min,
-					 B_AX_BE_0_CW) |
-				SET_WORD(param->aifs_us, B_AX_BE_0_AIFS);
-			ret = MAC_REG_W32_OFLD((u16)reg_edca, val32, 1);
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_BE_0_TXOPLMT),
+					     param->txop_32us, 0);
 			if (ret != MACSUCCESS)
 				return ret;
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_BE_0_CW), cw, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+			ret = MAC_REG_W_OFLD((u16)reg_edca,
+					     GET_MSK(B_AX_BE_0_AIFS),
+					     param->aifs_us, 1);
 		}
-		return MACSUCCESS;
+		return ret;
 	}
 #endif
 
-	if (path == MAC_AX_CMAC_PATH_SEL_MG0_1 ||
-	    path == MAC_AX_CMAC_PATH_SEL_MG2 ||
-	    path == MAC_AX_CMAC_PATH_SEL_BCN) {
-		val16 = SET_WORD((param->ecw_max << 4) | param->ecw_min,
-				 B_AX_BE_0_CW) |
-			SET_WORD(param->aifs_us, B_AX_BE_0_AIFS);
-		MAC_REG_W16(reg_edca, val16);
+	val32 = MAC_REG_R32(reg_edca);
+	if (path == MAC_AX_CMAC_PATH_SEL_MG0_1) {
+		val32 = SET_CLR_WORD(val32, cw, B_AX_MGQ_CW);
+		val32 = SET_CLR_WORD(val32, param->aifs_us, B_AX_MGQ_AIFS);
+	} else if (path == MAC_AX_CMAC_PATH_SEL_MG2) {
+		val32 = SET_CLR_WORD(val32, cw, B_AX_CPUMGQ_CW);
+		val32 = SET_CLR_WORD(val32, param->aifs_us, B_AX_CPUMGQ_AIFS);
+	} else if (path == MAC_AX_CMAC_PATH_SEL_BCN) {
+		val32 = SET_CLR_WORD(val32, cw, B_AX_BCNQ_CW);
+		val32 = SET_CLR_WORD(val32, param->aifs_us, B_AX_BCNQ_AIFS);
 	} else {
-		val32 = SET_WORD(param->txop_32us, B_AX_BE_0_TXOPLMT) |
-			SET_WORD((param->ecw_max << 4) | param->ecw_min,
-				 B_AX_BE_0_CW) |
-			SET_WORD(param->aifs_us, B_AX_BE_0_AIFS);
-		MAC_REG_W32(reg_edca, val32);
+		val32 = SET_CLR_WORD(val32,
+				     param->txop_32us, B_AX_BE_0_TXOPLMT);
+		val32 = SET_CLR_WORD(val32, cw, B_AX_BE_0_CW);
+		val32 = SET_CLR_WORD(val32, param->aifs_us, B_AX_BE_0_AIFS);
 	}
+	MAC_REG_W32(reg_edca, val32);
 
 	return MACSUCCESS;
 }
@@ -795,6 +820,7 @@ u32 stop_sch_tx(struct mac_ax_adapter *adapter, enum sch_tx_sel sel,
 
 	cfg.band = bak->band;
 	u16_2_sch(adapter, &cfg.tx_en_mask, 0);
+	u16_2_sch(adapter, &cfg.tx_en, 0);
 
 	switch (sel) {
 	case SCH_TX_SEL_ALL:
@@ -1031,18 +1057,13 @@ u32 get_edca_addr(struct mac_ax_adapter *adapter,
 			band ? R_AX_EDCA_VO_PARAM_1_C1 : R_AX_EDCA_VO_PARAM_1;
 		break;
 	case MAC_AX_CMAC_PATH_SEL_MG0_1:
+	case MAC_AX_CMAC_PATH_SEL_MG2:
 		*reg_edca =
 			band ? R_AX_EDCA_MGQ_PARAM_C1 : R_AX_EDCA_MGQ_PARAM;
 		break;
-	case MAC_AX_CMAC_PATH_SEL_MG2:
-		*reg_edca =
-			band ? (R_AX_EDCA_MGQ_PARAM_C1 + 2) :
-			(R_AX_EDCA_MGQ_PARAM + 2);
-		break;
 	case MAC_AX_CMAC_PATH_SEL_BCN:
 		*reg_edca =
-			band ? (R_AX_EDCA_BCNQ_PARAM_C1 + 2) :
-			(R_AX_EDCA_BCNQ_PARAM + 2);
+			band ? R_AX_EDCA_BCNQ_PARAM_C1 : R_AX_EDCA_BCNQ_PARAM;
 		break;
 	case MAC_AX_CMAC_PATH_SEL_TF:
 		*reg_edca = R_AX_EDCA_ULQ_PARAM;

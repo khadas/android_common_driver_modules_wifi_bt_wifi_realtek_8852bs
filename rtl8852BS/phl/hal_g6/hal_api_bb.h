@@ -14,7 +14,6 @@
  *****************************************************************************/
 #ifndef _HAL_API_BB_H_
 #define _HAL_API_BB_H_
-enum phl_phy_idx rtw_hal_bb_band_to_phy_idx(struct rtw_hal_com_t *hal_com, u8 band_idx);
 void rtw_hal_bb_dfs_en(struct hal_info_t *hal_info, bool en);
 void rtw_hal_bb_tssi_cont_en(struct hal_info_t *hal_info, bool en, enum rf_path path);
 void rtw_hal_bb_adc_en(struct hal_info_t *hal_info,bool en);
@@ -47,6 +46,14 @@ void rtw_hal_bb_deinit(struct rtw_phl_com_t *phl_com,
 			struct hal_info_t *hal_info);
 
 void rtw_hal_init_bb_reg(struct hal_info_t *hal_info);
+
+u8 rtw_hal_ex_cn_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_1ss_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_max_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_min_report(struct rtw_hal_com_t *hal_com);
 
 u32 rtw_hal_read_rf_reg(struct rtw_hal_com_t *hal_com,
 			enum rf_path path, u32 addr, u32 mask);
@@ -99,6 +106,11 @@ rtw_hal_bb_set_ch_bw(struct hal_info_t *hal_info,
 		      		u8 central_ch_seg1,
 					enum band_type band,
 					enum channel_width bw);
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+bool
+rtw_hal_bb_fw_delay(struct hal_info_t *hal_info, u32 val);
+#endif
+
 #ifdef CONFIG_PHL_CUSTOM_FEATURE
 enum rtw_hal_status
 rtw_hal_bb_set_pop_en(struct hal_info_t *hal_info,
@@ -118,16 +130,15 @@ rtw_hal_bb_query_pkt_detect_thold(struct hal_info_t *hal_info,
                                   enum phl_phy_idx phy_idx);
 #endif
 #ifdef CONFIG_RTW_ACS
-void rtw_hal_bb_acs_mntr_trigger(struct hal_info_t *hal_info, u16 monitor_time);
-enum rtw_hal_status rtw_hal_bb_acs_mntr_result(struct hal_info_t *hal_info, void *rpt);
+void rtw_hal_bb_acs_mntr_trigger(struct hal_info_t *hal_info, struct acs_mntr_parm *parm);
+enum rtw_hal_status rtw_hal_bb_acs_mntr_result(struct hal_info_t *hal_info, struct acs_mntr_rpt *rpt);
 #endif /* CONFIG_RTW_ACS */
 #ifdef CONFIG_PHL_DFS
 enum rtw_hal_status
 rtw_hal_bb_dfs_rpt_cfg(struct hal_info_t *hal_info, bool dfs_en);
 bool
 rtw_hal_bb_radar_detect(struct hal_info_t *hal_info,
-				struct hal_dfs_rpt *hal_dfs);
-
+			struct hal_dfs_rpt *hal_dfs);
 #endif
 
 #ifdef CONFIG_PHL_CHANNEL_INFO

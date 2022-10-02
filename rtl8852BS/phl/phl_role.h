@@ -58,8 +58,6 @@ phl_cmd_stop_bcn_hdl(struct phl_info_t *phl_info, u8 *param);
 #endif
 #endif
 
-bool rtw_phl_role_is_client_category(struct rtw_wifi_role_t *wrole);
-
 u16 phl_role_get_bcn_intvl(struct phl_info_t *phl, struct rtw_wifi_role_t *wrole);
 
 #ifdef CONFIG_CMD_DISP

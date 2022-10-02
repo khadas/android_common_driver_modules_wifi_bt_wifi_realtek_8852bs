@@ -537,6 +537,7 @@ hal_handle_rx_buffer_8852b(struct rtw_phl_com_t *phl_com,
 		#ifdef CONFIG_PHL_DFS
 		struct mac_ax_dfs_rpt dfs_rpt = {0};
 		struct hal_dfs_rpt hal_dfs = {0};
+		struct phl_msg msg = {0};
 
 		phl_rx->type = RTW_RX_TYPE_DFS_RPT;
 
@@ -552,9 +553,14 @@ hal_handle_rx_buffer_8852b(struct rtw_phl_com_t *phl_com,
 		hal_dfs.dfs_num = dfs_rpt.dfs_num;
 		hal_dfs.phy_idx = 0;
 
-		if (rtw_hal_bb_radar_detect(hal, &hal_dfs))
-			PHL_INFO("[DFS] radar detected\n");
+		if (rtw_hal_bb_radar_detect(hal, &hal_dfs)) {
+			SET_MSG_MDL_ID_FIELD(msg.msg_id, PHL_MDL_RX);
+			SET_MSG_EVT_ID_FIELD(msg.msg_id, MSG_EVT_DFS_RD_IS_DETECTING);
+			rtw_phl_msg_hub_hal_send(phl_com, NULL, &msg);
 
+			phl_com->dfs_info.is_radar_detectd = true;
+			PHL_INFO("[DFS] radar detected\n");
+		}
 		#endif
 	}
 	break;

@@ -930,6 +930,68 @@ static u32 scheduler_init(struct mac_ax_adapter *adapter, u8 band)
 	if (ret != MACSUCCESS)
 		return ret;
 
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = band == MAC_AX_BAND_1 ? R_AX_PREBKF_CFG_1_C1 :
+		      R_AX_PREBKF_CFG_1;
+		ret = MAC_REG_W_OFLD((u16)reg, GET_MSK(B_AX_SIFS_MACTXEN_T1),
+				     SIFS_MACTXEN_T1, 0);
+		if (ret != MACSUCCESS)
+			return ret;
+
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			reg = band == MAC_AX_BAND_1 ?
+			      R_AX_SCH_EXT_CTRL_C1 : R_AX_SCH_EXT_CTRL;
+			ret = MAC_REG_W_OFLD((u16)reg, B_AX_PORT_RST_TSF_ADV,
+					     1, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+		}
+
+#if MAC_AX_ASIC_TEMP
+		reg = band == MAC_AX_BAND_1 ? R_AX_CCA_CFG_0_C1 : R_AX_CCA_CFG_0;
+		ret = MAC_REG_W_OFLD((u16)reg, B_AX_BTCCA_EN,
+				     0, 0);
+		if (ret != MACSUCCESS)
+			return ret;
+#endif
+
+#ifdef PHL_FEATURE_AP
+		reg = band == MAC_AX_BAND_1 ? R_AX_PREBKF_CFG_0_C1 :
+		      R_AX_PREBKF_CFG_0;
+		ret = MAC_REG_W_OFLD((u16)reg, GET_MSK(B_AX_PREBKF_TIME),
+				     SCH_PREBKF_16US, 0);
+		if (ret != MACSUCCESS)
+			return ret;
+
+		reg = band == MAC_AX_BAND_1 ?
+		      R_AX_CCA_CFG_0_C1 : R_AX_CCA_CFG_0;
+		ret = MAC_REG_W_OFLD((u16)reg,
+				     GET_MSK(B_AX_R_SIFS_AGGR_TIME),
+				     0x6a, 0);
+		if (ret != MACSUCCESS)
+			return ret;
+
+#else /*for NIC mode setting*/
+		reg = band == MAC_AX_BAND_1 ? R_AX_PREBKF_CFG_0_C1 :
+		      R_AX_PREBKF_CFG_0;
+		ret = MAC_REG_W_OFLD((u16)reg, GET_MSK(B_AX_PREBKF_TIME),
+				     SCH_PREBKF_24US, 0);
+		if (ret != MACSUCCESS)
+			return ret;
+#endif
+		edca_para.band = band;
+		edca_para.path = MAC_AX_CMAC_PATH_SEL_BCN;
+		edca_para.ecw_min = 0;
+		edca_para.ecw_max = 1;
+		edca_para.aifs_us = BCN_IFS_25US;
+		ret = set_hw_edca_param(adapter, &edca_para);
+
+		return ret;
+	}
+#endif /*#if MAC_USB_IO_ACC*/
+
 	reg = band == MAC_AX_BAND_1 ? R_AX_PREBKF_CFG_1_C1 : R_AX_PREBKF_CFG_1;
 	val32 = MAC_REG_R32(reg);
 	val32 = SET_CLR_WORD(val32, SIFS_MACTXEN_T1, B_AX_SIFS_MACTXEN_T1);
@@ -1234,7 +1296,7 @@ static u32 cmac_com_init(struct mac_ax_adapter *adapter, u8 band,
 	return MACSUCCESS;
 }
 
-static void _patch_vht_ampdu_max_len(struct mac_ax_adapter *adapter, u8 band)
+u32 _patch_vht_ampdu_max_len(struct mac_ax_adapter *adapter, u8 band)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	u32 val32;
@@ -1242,14 +1304,25 @@ static void _patch_vht_ampdu_max_len(struct mac_ax_adapter *adapter, u8 band)
 
 	if (!is_chip_id(adapter, MAC_AX_CHIP_ID_8852A) &&
 	    !is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
-		return;
+		return MACSUCCESS;
 
 	reg = band == MAC_AX_BAND_1 ?
 	      R_AX_AGG_LEN_VHT_0_C1 : R_AX_AGG_LEN_VHT_0;
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		return MAC_REG_W_OFLD((u16)reg,
+				      GET_MSK(B_AX_AMPDU_MAX_LEN_VHT),
+				      AMPDU_MAX_LEN_VHT_262K, 1);
+	}
+#endif /*#if MAC_USB_IO_ACC*/
+
 	val32 = MAC_REG_R32(reg);
 	val32 = SET_CLR_WORD(val32, AMPDU_MAX_LEN_VHT_262K,
 			     B_AX_AMPDU_MAX_LEN_VHT);
 	MAC_REG_W32(reg, val32);
+	return MACSUCCESS;
 }
 
 static u32 ptcl_init(struct mac_ax_adapter *adapter, u8 band,
@@ -1260,10 +1333,55 @@ static u32 ptcl_init(struct mac_ax_adapter *adapter, u8 band,
 	u32 ret;
 	u8 val8;
 	u32 reg;
+#if MAC_USB_IO_ACC
+	u32 msk;
+#endif /*#if MAC_USB_IO_ACC*/
 
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS)
 		return ret;
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		if (band == MAC_AX_BAND_0) {
+			val32 = 0;
+			if (info->trx_mode == MAC_AX_TRX_SW_MODE) {
+				val32 |= B_AX_PTCL_TRIGGER_SS_EN_0 |
+					 B_AX_PTCL_TRIGGER_SS_EN_1 |
+					 B_AX_PTCL_TRIGGER_SS_EN_UL;
+			} else {
+				val32 |= B_AX_CMAC_TX_MODE_0 |
+					 B_AX_CMAC_TX_MODE_1;
+			}
+			msk = (B_AX_CMAC_TX_MODE_0 |
+			       B_AX_CMAC_TX_MODE_1 |
+			       B_AX_PTCL_TRIGGER_SS_EN_0 |
+			       B_AX_PTCL_TRIGGER_SS_EN_1 |
+			       B_AX_PTCL_TRIGGER_SS_EN_UL);
+			ret = MAC_REG_W_OFLD2((u16)R_AX_PTCL_COMMON_SETTING_0,
+					      msk, val32, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+
+			ret = MAC_REG_W_OFLD((u16)R_AX_PTCLRPT_FULL_HDL,
+					     GET_MSK(B_AX_SPE_RPT_PATH),
+					     FWD_TO_WLCPU, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+		} else if (band == MAC_AX_BAND_1) {
+			ret = MAC_REG_W_OFLD((u16)R_AX_PTCLRPT_FULL_HDL_C1,
+					     GET_MSK(B_AX_SPE_RPT_PATH),
+					     FWD_TO_WLCPU, 0);
+			if (ret != MACSUCCESS)
+				return ret;
+		}
+
+		ret = _patch_vht_ampdu_max_len(adapter, band);
+
+		return ret;
+	}
+#endif /*#if MAC_USB_IO_ACC*/
 
 	if (adapter->hw_info->intf == MAC_AX_INTF_PCIE) {
 		ret = is_qta_poh(adapter, info->qta_mode, &val8);
@@ -1314,9 +1432,9 @@ static u32 ptcl_init(struct mac_ax_adapter *adapter, u8 band,
 		MAC_REG_W8(R_AX_PTCLRPT_FULL_HDL_C1, val8);
 	}
 
-	_patch_vht_ampdu_max_len(adapter, band);
+	ret = _patch_vht_ampdu_max_len(adapter, band);
 
-	return MACSUCCESS;
+	return ret;
 }
 
 static u32 cmac_dma_init(struct mac_ax_adapter *adapter, u8 band)
@@ -1442,7 +1560,13 @@ static u32 nav_ctrl_init(struct mac_ax_adapter *adapter, u8 band)
 
 	info.plcp_upd_nav_en = 1;
 	info.tgr_fram_upd_nav_en = 1;
+
+#ifdef PHL_FEATURE_AP
 	info.nav_up = NAV_12MS;
+#else
+	info.nav_up = NAV_25MS;
+#endif
+
 	ret = mac_two_nav_cfg(adapter, &info);
 
 	return MACSUCCESS;
@@ -1477,6 +1601,7 @@ u32 dmac_init(struct mac_ax_adapter *adapter, struct mac_ax_trx_info *info,
 		return ret;
 	}
 
+	ret = sec_info_tbl_init(adapter, SEC_CAM_NORMAL);
 	ret = sec_eng_init(adapter);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("[ERR]Security Engine init %d\n", ret);

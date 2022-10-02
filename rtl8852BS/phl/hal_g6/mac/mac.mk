@@ -82,6 +82,9 @@ halmac-y +=		$(path_hm_d1)/addr_cam.o \
 			$(path_hm_d1)/spatial_reuse.o \
 			$(path_hm_d1)/pwr_seq_func.o \
 			$(path_hm_d1)/phy_misc.o \
+			$(path_hm_d1)/secure_boot.o \
+			$(path_hm_d1)/otpkeysinfo.o \
+			$(path_hm_d1)/common.o \
 
 halmac-$(pci) += 	$(path_hm_d1)/_pcie.o
 halmac-$(usb) += 	$(path_hm_d1)/_usb.o

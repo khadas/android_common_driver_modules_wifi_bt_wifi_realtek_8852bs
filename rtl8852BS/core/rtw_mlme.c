@@ -433,6 +433,7 @@ struct	wlan_network *_rtw_alloc_network(struct	mlme_priv *pmlmepriv) /* (_queue 
 	pnetwork->network_type = 0;
 	pnetwork->fixed = _FALSE;
 	pnetwork->last_scanned = rtw_get_current_time();
+	pnetwork->last_non_hidden_ssid_ap = pnetwork->last_scanned;
 #if defined(CONFIG_RTW_MESH) && CONFIG_RTW_MESH_ACNODE_PREVENT
 	pnetwork->acnode_stime = 0;
 	pnetwork->acnode_notify_etime = 0;
@@ -634,6 +635,16 @@ void rtw_free_network_nolock(_adapter *padapter, struct wlan_network *pnetwork)
 void rtw_free_network_queue(_adapter *dev, u8 isfreeall)
 {
 	_rtw_free_network_queue(dev, isfreeall);
+}
+
+struct _ADAPTER_LINK *rtw_get_adapter_link_by_hwband(_adapter *padapter, u8 band_idx)
+{
+	/* this driver has only one adapter_link */
+	if (band_idx < HW_BAND_MAX
+		&& rtw_is_adapter_up(padapter) == _TRUE
+		&& band_idx == padapter->phl_role->hw_band)
+		return &padapter->adapter_link;
+	return NULL;
 }
 
 struct wlan_network *_rtw_find_network(_queue *scanned_queue, const u8 *addr)
@@ -2712,8 +2723,23 @@ void rtw_iface_dynamic_check_handlder(struct _ADAPTER *a)
 	if (!a->netif_up)
 		return;
 
+	#ifdef CONFIG_ACTIVE_KEEP_ALIVE_CHECK
+	#ifdef CONFIG_AP_MODE
+	if (MLME_IS_AP(a) || MLME_IS_MESH(a)) {
+		expire_timeout_chk(a);
+		#ifdef CONFIG_RTW_MESH
+		if (MLME_IS_MESH(a) && MLME_IS_ASOC(a))
+			rtw_mesh_peer_status_chk(a);
+		#endif
+	}
+	#endif
+	#endif /* CONFIG_ACTIVE_KEEP_ALIVE_CHECK */
+
 	/* auto site survey */
 	rtw_auto_scan_handler(a);
+	dynamic_update_bcn_check(a);
+	linked_status_chk(a, 0);
+	traffic_status_watchdog(a, 0);
 
 #ifdef CONFIG_BR_EXT
 if (!adapter_use_wds(a)) {
@@ -2742,6 +2768,9 @@ if (!adapter_use_wds(a)) {
 	#endif /* (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 35)) */
 }
 #endif /* CONFIG_BR_EXT */
+#ifdef CONFIG_RTW_CFGVENDOR_RSSIMONITOR
+        rtw_cfgvendor_rssi_monitor_evt(a);
+#endif
 }
 
 void rtw_iface_dynamic_check_timer_handlder(_adapter *adapter)
@@ -3395,16 +3424,9 @@ sint rtw_set_auth(_adapter *adapter, struct security_priv *psecuritypriv)
 		goto exit;
 	}
 
-	_rtw_memset(psetauthparm, 0, sizeof(struct setauth_parm));
 	psetauthparm->mode = (unsigned char)psecuritypriv->dot11AuthAlgrthm;
 
-	pcmd->cmdcode = CMD_SET_AUTH; /* _SetAuth_CMD_;*/
-	pcmd->parmbuf = (unsigned char *)psetauthparm;
-	pcmd->cmdsz = (sizeof(struct setauth_parm));
-	pcmd->rsp = NULL;
-	pcmd->rspsz = 0;
-
-	_rtw_init_listhead(&pcmd->list);
+	init_h2fwcmd_w_parm_no_rsp(pcmd, psetauthparm, CMD_SET_AUTH);
 
 	res = rtw_enqueue_cmd(pcmdpriv, pcmd);
 exit:
@@ -3561,13 +3583,7 @@ sint rtw_set_key(_adapter *adapter, struct security_priv *psecuritypriv, sint ke
 		}
 		pcmd->padapter = adapter;
 
-		pcmd->cmdcode = CMD_SET_KEY; /*_SetKey_CMD_*/
-		pcmd->parmbuf = (u8 *)psetkeyparm;
-		pcmd->cmdsz = (sizeof(struct setkey_parm));
-		pcmd->rsp = NULL;
-		pcmd->rspsz = 0;
-
-		_rtw_init_listhead(&pcmd->list);
+		init_h2fwcmd_w_parm_no_rsp(pcmd, psetkeyparm, CMD_SET_KEY);
 
 		/* _rtw_init_sema(&(pcmd->cmd_sem), 0); */
 
@@ -3898,6 +3914,18 @@ sint rtw_restruct_sec_ie(_adapter *adapter, u8 *out_ie)
 		iEntry = SecIsInPMKIDList(adapter, pmlmepriv->assoc_bssid);
 		ielength = rtw_rsn_sync_pmkid(adapter, out_ie, ielength, iEntry);
 	}
+
+	if ((psecuritypriv->auth_type == MLME_AUTHTYPE_SAE) &&
+		(psecuritypriv->rsnx_ie_len >= 3)) {
+		u8 *_pos = out_ie + \
+			(psecuritypriv->supplicant_ie[1] + 2);
+		_rtw_memcpy(_pos, psecuritypriv->rsnx_ie,
+			psecuritypriv->rsnx_ie_len);
+		ielength += psecuritypriv->rsnx_ie_len;
+		RTW_INFO_DUMP("update IE for RSNX :",
+			out_ie, ielength);
+	}
+
 
 	return ielength;
 }
@@ -4248,7 +4276,7 @@ unsigned int rtw_restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, ui
 		if (oper_bw == CHANNEL_WIDTH_40
 			&& oper_offset != CHAN_OFFSET_NO_EXT /* check this because TDLS has no info to set offset */
 		) {
-			if ((req_chplan && !rtw_country_chplan_is_chbw_valid(req_chplan, band, channel, oper_bw, oper_offset, 1, 1, pregistrypriv))
+			if ((req_chplan && !rtw_country_chplan_is_bchbw_valid(req_chplan, band, channel, oper_bw, oper_offset, 1, 1, pregistrypriv))
 				|| (!req_chplan && !rtw_chset_is_chbw_valid(chset, channel, oper_bw, oper_offset, 1, 1))
 				|| (IS_DFS_SLAVE_WITH_RD(rfctl)
 					&& !rtw_rfctl_dfs_domain_unknown(rfctl)
@@ -4256,7 +4284,7 @@ unsigned int rtw_restructure_ht_ie(_adapter *padapter, u8 *in_ie, u8 *out_ie, ui
 			) {
 				oper_bw = CHANNEL_WIDTH_20;
 				oper_offset = CHAN_OFFSET_NO_EXT;
-				rtw_warn_on(req_chplan && !rtw_country_chplan_is_chbw_valid(req_chplan, band, channel, oper_bw, oper_offset, 1, 1, pregistrypriv));
+				rtw_warn_on(req_chplan && !rtw_country_chplan_is_bchbw_valid(req_chplan, band, channel, oper_bw, oper_offset, 1, 1, pregistrypriv));
 				rtw_warn_on(!req_chplan && !rtw_chset_is_chbw_valid(chset, channel, oper_bw, oper_offset, 1, 1));
 				if (IS_DFS_SLAVE_WITH_RD(rfctl) && !rtw_rfctl_dfs_domain_unknown(rfctl))
 					rtw_warn_on(rtw_chset_is_chbw_non_ocp(chset, channel, oper_bw, oper_offset));
@@ -5285,6 +5313,10 @@ static enum phl_mdl_ret_code _connect_msg_hdlr(void* dispr, void* priv,
 		rtw_joinbss_update_regulatory(a, network);
 		#endif
 
+		#ifdef CONFIG_DFS_MASTER
+		rtw_dfs_rd_en_dec_on_mlme_act(a, GET_PRIMARY_LINK(a), MLME_STA_CONNECTING, 0);
+		#endif
+
 		SET_MSG_EVT_ID_FIELD(nextmsg.msg_id, MSG_EVT_SWCH_START);
 		status = rtw_phl_send_msg_to_dispr(GET_PHL_INFO(d),
 						   &nextmsg, &attr, NULL);
@@ -5315,6 +5347,15 @@ static enum phl_mdl_ret_code _connect_msg_hdlr(void* dispr, void* priv,
 	case MSG_EVT_SWCH_DONE:
 		RTW_DBG(FUNC_ADPT_FMT ": MSG_EVT_SWCH_DONE\n",
 			FUNC_ADPT_ARG(a));
+
+#ifdef RTK_WKARD_CORE_BTC_STBC_CAP
+		/* In normal mode, reconsider STBC capability setting
+		   before doing client join */
+		if (a->registrypriv.wifi_spec == 0)
+			rtw_phl_cmd_wrole_change(GET_PHL_INFO(d), role,
+						 WR_CHG_STBC_CFG, NULL, 0,
+						 PHL_CMD_DIRECTLY, 0);
+#endif
 
 		/* ref: last part of rtw_join_cmd_hdl() */
 		cancel_link_timer(&a->mlmeextpriv);

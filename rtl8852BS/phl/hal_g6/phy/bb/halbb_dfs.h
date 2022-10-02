@@ -28,16 +28,24 @@
 #define DFS_RPT_LENGTH 8
 #define DFS_RDR_TYP_NUM 8
 #define DFS_L_RDR_IDX 6
+#define DFS_SPCL_RDR_IDX_ETSI 3
 #define PW_FTR_IDLE 1
 #define PRI_FTR_IDLE 1
 #define PW_FTR 3
 #define PRI_FTR 3
 #define DFS_PPB_PRCNT 4
 #define DFS_PPB_IDLE_PRCNT 5
-#define DFS_PPB_ADPTV_PRCNT 8
+
 #define DFS_CHIRP_TH 3
 #define DFS_FCC_LP_LNGTH 12	/*Real Waveform length of FCC-LP is 12 secs*/
 #define DFS_MAX_SEQ_NUM 127
+
+#define DFS_ADPTV_CNT1 1
+#define DFS_ADPTV_CNT2 1
+#define DFS_ADPTV_CNT_TH 30
+
+#define DFS_Normal_State 0
+#define DFS_Adaptive_State 1
 /*@--------------------------[Enum]------------------------------------------*/
 /*@--------------------------[Structure]-------------------------------------*/
 struct bb_dfs_cr_info {
@@ -52,11 +60,11 @@ struct bb_dfs_info {
 	u16 pw_rpt[DFS_MAX_SEQ_NUM];
 	u8 pri_rpt[DFS_MAX_SEQ_NUM];
 	bool chrp_rpt[DFS_MAX_SEQ_NUM];
-	u8 chrp_cnt;
-	u8 chrp_th;
 	u32 chrp_srt_t;
 	u8 n_cnfd_lvl;
 	u8 lng_rdr_cnt;
+	u8 chrp_rdr_cnt;
+
 	u8 srt_rdr_cnt[DFS_RDR_TYP_NUM];
 	u8 pw_lbd[DFS_RDR_TYP_NUM];
 	u16 pw_ubd[DFS_RDR_TYP_NUM];
@@ -67,9 +75,10 @@ struct bb_dfs_info {
 	u8 pri_min_tab[DFS_RDR_TYP_NUM];
 	u8 pri_max_tab[DFS_RDR_TYP_NUM];
 	u8 ppb_tab[DFS_RDR_TYP_NUM];
+	u8 ppb_typ_th[DFS_RDR_TYP_NUM];
 	u8 lst_seq_num;
-	u8 pri_tmp;
-	u16 pw_tmp;
+	u8 pw_factor;
+	u8 pri_factor;
 	bool is_mic_w53;
 	bool is_mic_w56;
 	bool l_rdr_exst_flag;
@@ -77,18 +86,64 @@ struct bb_dfs_info {
 	bool n_cnfd_flag;
 	bool n_seq_flag;
 	bool idle_flag;
+	bool first_dyn_set_flag;
+	bool dyn_reset_flag;
 
 	bool dfs_sw_trgr_mode;
 	bool dfs_dbg_mode;
-	bool dbg_prnt_en;
+	bool dbg_dyn_prnt_en;
+	bool dbg_hwdet_prnt_en;
+	bool dbg_swdet_prnt_en;
+	bool dbg_trivil_prnt_en;
+	bool dbg_brk_prnt_en;
 	u8 fk_dfs_num_th;
 	u8 dfs_tp_th;
 	u8 dfs_idle_prd_th;
+
 	u8 dfs_fa_th;
 	u8 dfs_nhm_th;
 	u8 dfs_n_cnfd_lvl_th;
 
 	bool dfs_dyn_setting_en;
+
+	u8 adap_detect_cnt;
+	u8 adap_detect_cnt_init;
+	u8 adap_detect_cnt_add;
+	u8 adap_detect_cnt_all;
+	u8 adap_detect_cnt_th;
+	u8 detect_state;
+	bool adap_detect_brk_en;
+
+	bool dfs_dyn_aci_en;
+	u8 dfs_aci_adaptv_th0;
+	u8 dfs_aci_adaptv_th1;
+	u8 dfs_aci_idx;
+	s8 ACI2SIG_db;
+	bool dfs_aci_is_read;
+	u8 no_aci_rpt_cnt;
+	u8 no_aci_rpt_th;
+
+	bool In_CAC_Flag;
+
+	u16 pw_diff_th;
+	u16 pw_lng_chrp_diff_th;
+	u16 pri_diff_th;
+	u16 pw_max_th;
+	u16 invalid_lng_pulse_th;
+
+	u16 min_pw_shrt[DFS_RDR_TYP_NUM];
+	u16 min_pw_lng;
+	u16 min_pw_chrp;
+	u16 min_pri_shrt[DFS_RDR_TYP_NUM];
+
+	u16 max_pw_shrt[DFS_RDR_TYP_NUM];
+	u16 max_pw_lng;
+	u16 max_pw_chrp;
+	u16 max_pri_shrt[DFS_RDR_TYP_NUM];
+
+	u16 pw_diff_shrt[DFS_RDR_TYP_NUM];
+	u16 pri_diff_shrt[DFS_RDR_TYP_NUM];
+
 };
 
 struct bb_dfs_rpt {
@@ -156,6 +211,7 @@ struct bb_rdr_info {
 struct bb_info;
 struct hal_dfs_rpt;
 void halbb_dfs(struct bb_info *bb);
+void halbb_mac_cfg_dfs_rpt(struct bb_info *bb, bool rpt_en);
 void halbb_dfs_rgn_dmn_dflt_cnfg(struct bb_info *bb);
 void halbb_dfs_rgn_dmn_cnfg_by_ch(struct bb_info *bb, bool w53_band,
 				  bool w56_band);
@@ -166,6 +222,7 @@ void halbb_radar_ptrn_cmprn(struct bb_info *bb, u16 dfs_rpt_idx,
 			    u8 pri, u16 pw, bool chrp_flag);
 void halbb_radar_info_processing(struct bb_info *bb,
 				 struct hal_dfs_rpt *dfs_rpt, u16 dfs_rpt_idx);
+void halbb_parsing_aci2sig(struct bb_info* bb, u32 physts_bitmap);
 void halbb_dfs_dyn_setting(struct bb_info *bb);
 void halbb_dfs_debug(struct bb_info *bb, char input[][16], u32 *_used,
 		     char *output, u32 *_out_len);

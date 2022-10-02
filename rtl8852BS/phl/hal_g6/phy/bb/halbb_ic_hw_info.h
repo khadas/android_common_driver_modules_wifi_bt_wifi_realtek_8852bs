@@ -34,6 +34,11 @@ enum bb_ic_t {
 	BB_RTL8192XB	=	BIT(5)
 };
 
+enum bb_ic_sub_t {
+	BB_IC_SUB_TYPE_8852B_8852B	=	20,
+	BB_IC_SUB_TYPE_8852B_8852BVS,
+};
+
 enum bb_cr_t {
 	BB_52AA		=	0,
 	BB_AP		=	1,

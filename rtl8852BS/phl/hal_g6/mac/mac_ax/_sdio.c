@@ -1428,6 +1428,11 @@ u32 sdio_autok_counter_avg(struct mac_ax_adapter *adapter)
 	return MACSUCCESS;
 }
 
+u32 sdio_tp_adjust(struct mac_ax_adapter *adapter, struct mac_ax_tp_param tp)
+{
+	return MACSUCCESS;
+}
+
 u32 dbcc_hci_ctrl_sdio(struct mac_ax_adapter *adapter,
 		       struct mac_ax_dbcc_hci_ctrl *info)
 {

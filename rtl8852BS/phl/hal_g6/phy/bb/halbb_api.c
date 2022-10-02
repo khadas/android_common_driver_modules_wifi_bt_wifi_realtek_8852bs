@@ -15,6 +15,78 @@
 
 #include "halbb_precomp.h"
 
+u8 halbb_ex_cn_report(struct bb_info * bb)
+{
+	u8 rpt = 0;
+
+	switch (bb->ic_type) {
+
+	#ifdef BB_8852B_SUPPORT
+	case BB_RTL8852B:
+		 rpt = halbb_ex_cn_report_8852b(bb);
+		 break;
+	#endif
+	default:
+		break;
+	}
+
+	return rpt;
+}
+
+u8 halbb_ex_evm_1ss_report(struct bb_info * bb)
+{
+	u8 rpt = 0;
+
+	switch (bb->ic_type) {
+
+	#ifdef BB_8852B_SUPPORT
+	case BB_RTL8852B:
+		 rpt = halbb_ex_evm_1ss_report_8852b(bb);
+		 break;
+	#endif
+	default:
+		break;
+	}
+
+	return rpt;
+}
+
+u8 halbb_ex_evm_max_report(struct bb_info * bb)
+{
+	u8 rpt = 0;
+
+	switch (bb->ic_type) {
+
+	#ifdef BB_8852B_SUPPORT
+	case BB_RTL8852B:
+		 rpt = halbb_ex_evm_max_report_8852b(bb);
+		 break;
+	#endif
+	default:
+		break;
+	}
+
+	return rpt;
+}
+
+u8 halbb_ex_evm_min_report(struct bb_info * bb)
+{
+	u8 rpt = 0;
+
+	switch (bb->ic_type) {
+
+	#ifdef BB_8852B_SUPPORT
+	case BB_RTL8852B:
+		 rpt = halbb_ex_evm_min_report_8852b(bb);
+		 break;
+	#endif
+	default:
+		break;
+	}
+
+	return rpt;
+}
+
 void halbb_dyn_1r_cca_en(struct bb_info *bb, bool en)
 {
 	switch (bb->ic_type) {
@@ -53,10 +125,17 @@ u8 halbb_wifi_event_notify(struct bb_info *bb, enum phl_msg_evt_id event, enum p
 		pause_result = halbb_pause_func(bb, F_DIG, HALBB_RESUME_NO_RECOVERY, HALBB_PAUSE_LV_2, 2, val);
 		halbb_edcca_event_nofity(bb, HALBB_RESUME_NO_RECOVERY);
 		halbb_dig_new_entry_connect(bb);
+		if (hw_band->cur_chandef.band == BAND_ON_24G)
+			halbb_set_crc32_cnt3_format(bb, STATE_CTS);
+		else
+			halbb_set_crc32_cnt3_format(bb, STATE_BEACON);
 	} else if (event == MSG_EVT_DBG_RX_DUMP || event == MSG_EVT_DBG_TX_DUMP) {
 		halbb_dump_bb_reg(bb, &val[0], &val_char, &val[0], false);
 		halbb_dump_bb_reg(bb, &val[0], &val_char, &val[0], false);
 	}
+	#ifdef HALBB_FW_OFLD_SUPPORT
+	bb->bb_phl_evt = event;
+	#endif
 
 	return pause_result;
 }
@@ -643,7 +722,15 @@ void halbb_reset_bb_phy(struct bb_info *bb, enum phl_phy_idx phy_idx)
 
 	#ifdef BB_8852B_SUPPORT
 	case BB_RTL8852B:
+		#ifdef HALBB_FW_OFLD_SUPPORT
+		if (halbb_check_fw_ofld(bb)) {
+			halbb_fwofld_bb_reset_8852b(bb, phy_idx);
+		} else {
+			halbb_bb_reset_8852b(bb, phy_idx);
+		}
+		#else
 		halbb_bb_reset_8852b(bb, phy_idx);
+		#endif
 		break;
 	#endif
 
@@ -964,6 +1051,22 @@ void halbb_ctrl_rf_mode(struct bb_info *bb, enum phl_rf_mode mode)
 		break;
 	}
 }
+
+void halbb_ctrl_rf_mode_rx_path(struct bb_info *bb, enum rf_path rx_path)
+{
+	switch (bb->ic_type) {
+
+	#ifdef BB_8852B_SUPPORT
+	case BB_RTL8852B:
+		halbb_ctrl_rf_mode_rx_path_8852b(bb, rx_path);
+		break;
+	#endif
+
+	default:
+		break;
+	}
+}
+
 
 bool halbb_ctrl_rx_path(struct bb_info *bb, enum rf_path rx_path)
 {
@@ -1965,6 +2068,9 @@ void halbb_ic_hw_setting(struct bb_info *bb)
 		#ifdef HALBB_DYN_CSI_RSP_SUPPORT
 		halbb_dyn_csi_rsp_main(bb);
 		#endif
+		#ifdef HALBB_DYN_DTR_SUPPORT
+		halbb_dyn_dtr_watchdog(bb);
+		#endif
 		break;
 	#endif
 
@@ -2010,6 +2116,12 @@ void halbb_ic_hw_setting_dbg(struct bb_info *bb, char input[][16],
 			 "cfo_trk para {0:SNR, 1:link} {data_val} {pilot_val}\n");
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
 			 "cfo_trk snr_th {th_l} {th_h}\n");
+#endif
+#ifdef BB_DYN_DTR
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			"dyn_dtr en {0/1}\n");
+		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			"dyn_dtr rssi_th {val}\n");
 #endif
 		return;
 	}
@@ -2091,9 +2203,29 @@ void halbb_ic_hw_setting_dbg(struct bb_info *bb, char input[][16],
 			    bb->bb_8852a_2_i.dyn_1r_cca_rssi_min_th >> 5);
 	} else 
 #endif
+#ifdef BB_DYN_DTR
+	if (_os_strcmp(input[1], "dyn_dtr") == 0) {
+		HALBB_SCAN(input[3], DCMD_DECIMAL, &val[0]);
+		if (_os_strcmp(input[2], "en") == 0) {
+			halbb_dyn_dtr_en(bb, (bool)val[0]);
+			if (val[0] == 1)
+				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+									"DYN DTR Enable\n");
+			else
+				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+					"DYN DTR Disable\n");
+		} else if (_os_strcmp(input[2], "rssi_th") == 0) {
+				bb->bb_dyn_dtr_i.dyn_dtr_rssi_th = (u8)(val[0]);
+				BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
+			    "[Dyn DTR]en=%d, rssi_th=%d\n",
+			    bb->bb_dyn_dtr_i.dyn_dtr_en,
+			    bb->bb_dyn_dtr_i.dyn_dtr_rssi_th);
+		}
+	} else 
+#endif
 	{
 		BB_DBG_CNSL(*_out_len, *_used, output + *_used, *_out_len - *_used,
-			"Set Err\n");
+					"Set Err\n");
 	}
 }
 

@@ -48,6 +48,7 @@
 #include "halbb_env_mntr_ex.h"
 #include "halbb_pwr_ctrl_ex.h"
 #include "halbb_dyn_csi_rsp_ex.h"
+#include "halbb_fwofld_ex.h"
 #ifdef BB_8852A_CAV_SUPPORT
 	#include "halbb_8852a/halbb_8852a_api_ex.h"
 #endif

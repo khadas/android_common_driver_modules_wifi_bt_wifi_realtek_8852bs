@@ -19,6 +19,12 @@ void halbtc_cmd_parser(struct btc_t *btc, char input[][MAX_ARGV],
 		      u32 input_num, char *output, u32 out_len);
 s32 halbtc_cmd(struct btc_t *btc, char *input, char *output, u32 out_len);
 void _get_wl_nhm_dbm(struct btc_t *btc);
+void _get_wl_cn_report(struct btc_t *btc);
+void _get_wl_evm_report(struct btc_t *btc);
+
+
+
+
 
 
 #endif

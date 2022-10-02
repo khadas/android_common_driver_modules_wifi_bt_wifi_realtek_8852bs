@@ -740,8 +740,8 @@ enum rtw_phl_status phl_register_handler(struct rtw_phl_com_t *phl_com,
 		phl_status = _os_workitem_init(drv_priv, workitem,
 										handler->callback, workitem);
 	} else if (handler->type == RTW_PHL_HANDLER_PRIO_NORMAL) {
-		_os_sema_init(drv_priv, &(handler->os_handler.os_sema), 0);
-		handler->os_handler.created = 0;
+		_os_sema_init(drv_priv, &(handler->os_handler.hdlr_sema), 0);
+		handler->os_handler.hdlr_created = false;
 		phl_status = RTW_PHL_STATUS_SUCCESS;
 	} else {
 		PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "[WARNING] unknown handle type(%d)\n",
@@ -774,12 +774,15 @@ enum rtw_phl_status phl_deregister_handler(
 		phl_status = _os_workitem_deinit(drv_priv, workitem);
 	} else if (handler->type == RTW_PHL_HANDLER_PRIO_NORMAL) {
 		thread = &handler->os_handler.u.thread;
-		if (handler->os_handler.created == 1) {
+		if (handler->os_handler.hdlr_created == true) {
 			_os_thread_stop(drv_priv, thread);
-			_os_sema_up(drv_priv, &(handler->os_handler.os_sema));
-			_os_thread_deinit(drv_priv, thread);
+			_os_sema_up(drv_priv, &(handler->os_handler.hdlr_sema));
+			phl_status = _os_thread_deinit(drv_priv, thread);
+		} else {
+			phl_status = RTW_PHL_STATUS_SUCCESS;
 		}
-		phl_status = RTW_PHL_STATUS_SUCCESS;
+
+		_os_sema_free(drv_priv, &(handler->os_handler.hdlr_sema));
 	} else {
 		PHL_TRACE(COMP_PHL_DBG, _PHL_INFO_, "[WARNING] unknown handle type(%d)\n",
 				handler->type);
@@ -814,15 +817,16 @@ enum rtw_phl_status phl_schedule_handler(
 		phl_status = _os_workitem_schedule(drv_priv, workitem);
 	} else if (handler->type == RTW_PHL_HANDLER_PRIO_NORMAL) {
 		thread = &handler->os_handler.u.thread;
-		if (handler->os_handler.created == 0) {
+		if (handler->os_handler.hdlr_created == false) {
 			phl_status = _os_thread_init(drv_priv, thread, (int(*)(void*))handler->callback,
-				thread, handler->cb_name);
+						     thread, handler->cb_name);
 			if (phl_status == RTW_PHL_STATUS_SUCCESS) {
-				handler->os_handler.created = 1;
-				_os_sema_up(drv_priv, &(handler->os_handler.os_sema));
+				handler->os_handler.hdlr_created = true;
+				_os_thread_schedule(drv_priv, thread);
+				_os_sema_up(drv_priv, &(handler->os_handler.hdlr_sema));
 			}
 		} else {
-			_os_sema_up(drv_priv, &(handler->os_handler.os_sema));
+			_os_sema_up(drv_priv, &(handler->os_handler.hdlr_sema));
 			phl_status = RTW_PHL_STATUS_SUCCESS;
 		}
 	} else {
@@ -1284,7 +1288,11 @@ enum rtw_phl_status phl_datapath_start(struct phl_info_t *phl_info)
 		pstatus = hci_trx_ops->trx_cfg(phl_info);
 		if (RTW_PHL_STATUS_SUCCESS != pstatus)
 			break;
+#ifdef RTW_WKARD_FW_OFFLOAD_C2H_TYPE
+		rtw_hal_notification(phl_info->hal, MSG_EVT_DATA_PATH_STOP, HW_BAND_MAX); // for slow io
+#else
 		rtw_hal_notification(phl_info->hal, MSG_EVT_DATA_PATH_START, HW_BAND_MAX);
+#endif
 	}while (false);
 
 	return pstatus;
@@ -1297,6 +1305,13 @@ void phl_datapath_stop(struct phl_info_t *phl_info)
 	hci_trx_ops->trx_stop(phl_info);
 	rtw_hal_notification(phl_info->hal, MSG_EVT_DATA_PATH_STOP, HW_BAND_MAX);
 	phl_free_deferred_tx_ring(phl_info);
+}
+
+void phl_datapath_reset(struct phl_info_t *phl_info, u8 type)
+{
+	struct phl_hci_trx_ops *hci_trx_ops = phl_info->hci_trx_ops;
+
+	hci_trx_ops->trx_reset(phl_info, type);
 }
 
 void phl_datapath_deinit(struct phl_info_t *phl_info)
@@ -2237,3 +2252,55 @@ phl_data_ctrler(struct phl_info_t *phl_info, struct phl_data_ctl_t *ctl,
 	}
 	return sts;
 }
+
+#ifdef CONFIG_CMD_DISP
+static void
+_phl_packet_notify_done(void *drv_priv, u8 *cmd, u32 cmd_len,
+			enum rtw_phl_status status)
+{
+	if (cmd && cmd_len){
+		_os_kmem_free(drv_priv, cmd, cmd_len);
+		cmd = NULL;
+		PHL_INFO("%s.....\n", __func__);
+	}
+}
+
+void rtw_phl_packet_event_notify(void *phl,
+	struct rtw_wifi_role_t *wifi_role,
+	enum phl_pkt_evt_type pkt_evt)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+	enum phl_pkt_evt_type *pkt_evt_type = NULL;
+	enum rtw_phl_status phl_status = RTW_PHL_STATUS_FAILURE;
+
+	pkt_evt_type = (enum phl_pkt_evt_type *)_os_kmem_alloc(
+		phl_to_drvpriv(phl_info), sizeof(enum phl_pkt_evt_type));
+	if (pkt_evt_type == NULL) {
+		PHL_ERR("%s: alloc packet cmd fail.\n", __func__);
+		return;
+	}
+
+	*pkt_evt_type = pkt_evt;
+
+	phl_status = phl_cmd_enqueue(phl_info,
+                                     wifi_role->hw_band,
+                                     MSG_EVT_PKT_EVT_NTFY,
+                                     (u8 *)pkt_evt_type,
+                                     sizeof(enum phl_pkt_evt_type),
+                                     _phl_packet_notify_done,
+                                     PHL_CMD_NO_WAIT,
+                                     0);
+
+	if (is_cmd_failure(phl_status)) {
+		/* Send cmd success, but wait cmd fail*/
+		PHL_ERR("%s event: %d status: %d\n",
+			__func__, pkt_evt, phl_status);
+	} else if (phl_status != RTW_PHL_STATUS_SUCCESS) {
+		/* Send cmd fail */
+		PHL_ERR("%s event: %d status: %d\n",
+			__func__, pkt_evt, phl_status);
+		_os_kmem_free(phl_to_drvpriv(phl_info), pkt_evt_type,
+			sizeof(enum phl_pkt_evt_type));
+	}
+}
+#endif /* #ifdef CONFIG_CMD_DISP */

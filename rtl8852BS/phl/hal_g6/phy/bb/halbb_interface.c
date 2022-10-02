@@ -86,55 +86,6 @@ u32 halbb_phy0_to_phy1_ofst(struct bb_info *bb, u32 addr)
 	return ofst;
 }
 
-#ifdef BB_FW_OFLD_SUPPORT
-bool halbb_check_fw_ofld(struct bb_info *bb)
-{
-	bool ret = bb->phl_com->dev_cap.fw_cap.offload_cap & BIT0;
-	BB_DBG(bb, DBG_FW_INFO, "FW ofld ret = %d\n", (u8)ret);
-	return ret;
-}
-
-bool halbb_fw_set_reg(struct bb_info *bb, u32 addr, u32 mask, u32 val, u8 lc)
-{
-/* halbb_set_reg */
-	struct rtw_mac_cmd cmd;
-	u32 ret; 
-	
-	cmd.src = RTW_MAC_BB_CMD_OFLD;
-	cmd.type = RTW_MAC_WRITE_OFLD;
-	cmd.lc = lc;
-	cmd.offset = (u16)addr;
-	cmd.value = val;
-	cmd.mask = mask;
-	ret = rtw_hal_mac_add_cmd_ofld(bb->hal_com, &cmd);
-	BB_DBG(bb, DBG_FW_INFO, "FW ofld addr:%x, val:%x, msk:%x\n", addr, val, mask);
-	if (ret) {
-		BB_WARNING("IO offload fail: %d\n", ret);
-		return false;
-	}
-	else {
-		return true;
-	}
-	
-}
-
-bool halbb_fw_set_reg_cmn(struct bb_info *bb, u32 addr, 
-			            u32 mask, u32 val, enum phl_phy_idx phy_idx, u8 lc)
-{
-	bool ret = true;
-	u32 val_mod = val;
-
-	#ifdef HALBB_DBCC_SUPPORT
-	if (bb->hal_com->dbcc_en && phy_idx == HW_PHY_1)
-		addr += halbb_phy0_to_phy1_ofst(bb, addr);
-	#endif
-
-	ret = halbb_fw_set_reg(bb, addr, mask, val_mod, lc);
-	return ret;
-}
-
-#endif
-
 void halbb_set_cr(struct bb_info *bb, u32 addr, u32 val)
 {
 	if (bb->bb_dbg_i.cr_recorder_en)
@@ -157,6 +108,14 @@ void halbb_set_reg(struct bb_info *bb, u32 addr, u32 mask, u32 val)
 {
 	u32 ori_val = 0;
 	u32 shift;
+	#ifdef HALBB_FW_OFLD_SUPPORT
+	bool ret = true;
+	
+	if (bb->bb_cmn_hooker->bbcr_fwofld_state) {
+		ret = halbb_fw_set_reg(bb, addr, mask, val, 0);
+		return;
+	}
+	#endif
 
 	if (mask != MASKDWORD) {
 		ori_val = halbb_get_32(bb, addr);
@@ -171,7 +130,14 @@ void halbb_set_reg_cmn(struct bb_info *bb, u32 addr, u32 mask, u32 val, enum phl
 {
 	u32 ori_val, shift;
 	u32 val_mod = val;
+	#ifdef HALBB_FW_OFLD_SUPPORT
+	bool ret = true;
 
+	if (bb->bb_cmn_hooker->bbcr_fwofld_state) {
+		ret = halbb_fw_set_reg_cmn(bb, addr, mask, val, phy_idx, 0);
+		return;
+	}
+	#endif
 	#ifdef HALBB_DBCC_SUPPORT
 	if (bb->hal_com->dbcc_en && phy_idx == HW_PHY_1)
 		addr += halbb_phy0_to_phy1_ofst(bb, addr);

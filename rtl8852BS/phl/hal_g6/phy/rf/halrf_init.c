@@ -81,6 +81,9 @@ void halrf_rfk_self_init(struct rf_info *rf)
 	/*[IQK init]*/
 	iqk_info->is_iqk_init = false;
 
+	/*[TSSI init]*/
+	halrf_tssi_init(rf);
+
 	/*[DPK init]*/
 	halrf_dpk_init(rf);
 
@@ -334,8 +337,13 @@ enum rtw_hal_status halrf_dm_init(void *rf_void)
 	/*halrf_tssi_get_efuse_ex(rf, HW_PHY_1);*/
 
 	/*Set MAC 0xd220[1]=0  r_txagc_BT_en=0 by Bryant*/
-	if (rf->phl_com->drv_mode == RTW_DRV_MODE_MP)
-		halrf_wl_tx_power_control(rf, 0xffffffff);
+	if (rf->phl_com->drv_mode == RTW_DRV_MODE_MP) {
+		/*halrf_wl_tx_power_control(rf, 0xffffffff);*/
+		halrf_wlan_tx_power_control(rf, HW_PHY_0, ALL_TIME_CTRL,
+			0x0, false);
+		halrf_wlan_tx_power_control(rf, HW_PHY_0, GNT_TIME_CTRL,
+			0x0, false);
+	}
 
 	halrf_fcs_init(rf);
 

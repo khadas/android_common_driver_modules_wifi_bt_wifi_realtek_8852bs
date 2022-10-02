@@ -141,6 +141,19 @@ enum rtw_hal_status efuse_set_hw_cap(struct efuse_t *efuse)
 	return status;
 }
 
+/*
+ * This function is used for backward compatible by calling RF-API.
+ * ex:
+ *     In 1T2R setting, backward to 1T1R by checking rfe_type
+ *     RFE_43(efuse_x02CA=0x2B): 1T2R(Tx diversity + Rx MRC)
+ *     RFE_41(efuse_x02CA=0x29): 1T1R(Tx/Rx@pathB)
+ *
+ */
+void efuse_compatible_chk(struct efuse_t *efuse)
+{
+	rtw_hal_rf_rfe_ant_num_chk(efuse->hal_com);
+}
+
 enum rtw_hal_status rtw_efuse_logicmap_buf_load(void *efuse, u8* buf, bool is_limit)
 {
 	enum rtw_hal_status status = RTW_HAL_STATUS_FAILURE;
@@ -741,11 +754,6 @@ void rtw_efuse_process(void *efuse, char *ic_name)
 {
 	struct efuse_t *efuse_info = (struct efuse_t *)efuse;
 
-	if(TEST_STATUS_FLAG(efuse_info->status, EFUSE_STATUS_PROCESS) == true) {
-		PHL_INFO("%s EFUSE module is already initialized.\n", __FUNCTION__);
-		return;
-	}
-
 	efuse_check_autoload(efuse_info);
 	/* Load wifi full map to shadow map */
 	rtw_efuse_shadow_load(efuse_info, false);
@@ -764,6 +772,8 @@ void rtw_efuse_process(void *efuse, char *ic_name)
 	 */
 	efuse_set_hw_cap(efuse_info);
 
+	efuse_compatible_chk(efuse_info);
+
 	if (RTW_DRV_MODE_EQC == efuse_info->phl_com->drv_mode) {
 		rtw_hal_rf_get_default_rfe_type(efuse_info->hal_com);
 		rtw_hal_rf_get_default_xtal(efuse_info->hal_com);
@@ -772,6 +782,16 @@ void rtw_efuse_process(void *efuse, char *ic_name)
 			 efuse_info->hal_com->dev_hw_cap.rfe_type,
 			 efuse_info->hal_com->dev_hw_cap.xcap);
 	}
+}
+
+bool rtw_efuse_is_processed(void *efuse)
+{
+	struct efuse_t *efuse_info = (struct efuse_t *)efuse;
+
+	if (TEST_STATUS_FLAG(efuse_info->status, EFUSE_STATUS_PROCESS) == true)
+		return true;
+	else
+		return false;
 }
 
 u32 rtw_efuse_init(struct rtw_phl_com_t *phl_com,

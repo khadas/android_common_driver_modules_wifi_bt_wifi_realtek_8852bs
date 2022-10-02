@@ -3163,7 +3163,8 @@ enum rtw_phl_status rtw_phl_mcc_ap_bt_coex_enable(struct phl_info_t *phl,
 	}
 	_mcc_set_state(minfo, MCC_TRIGGER_FW_EN);
 	if (rtw_hal_mcc_enable(phl->hal, en_info, &minfo->bt_info,
-				minfo->mcc_mode) != RTW_HAL_STATUS_SUCCESS) {
+				minfo->mcc_mode,
+				&minfo->mcc_dbg_i) != RTW_HAL_STATUS_SUCCESS) {
 		_mcc_set_state(minfo, MCC_FW_EN_FAIL);
 		PHL_TRACE(COMP_PHL_MCC, _PHL_ERR_, "rtw_phl_mcc_ap_bt_coex_enable(): Enable FW mcc Fail\n");
 		goto exit;
@@ -3637,7 +3638,8 @@ enum rtw_phl_status rtw_phl_mcc_enable(struct phl_info_t *phl,
 	}
 	_mcc_set_state(minfo, MCC_TRIGGER_FW_EN);
 	if (rtw_hal_mcc_enable(phl->hal, en_info, &minfo->bt_info,
-				minfo->mcc_mode) != RTW_HAL_STATUS_SUCCESS) {
+				minfo->mcc_mode,
+				&minfo->mcc_dbg_i) != RTW_HAL_STATUS_SUCCESS) {
 		_mcc_set_state(minfo, MCC_FW_EN_FAIL);
 		PHL_TRACE(COMP_PHL_MCC, _PHL_ERR_, "rtw_phl_mcc_enable(): Enable FW mcc Fail\n");
 		goto exit;
@@ -3951,5 +3953,25 @@ exit:
 	return get_ok;
 }
 
+bool phl_mcc_set_dbg_info(struct phl_info_t *phl,
+				struct rtw_phl_mcc_dbg_info *mcc_dbg_i)
+{
+	struct phl_mcc_info *minfo = NULL;
+	u8 i = 0;
 
+	if (!is_mcc_init(phl)) {
+		PHL_TRACE(COMP_PHL_MCC, _PHL_ERR_, "%s(): mcc is not init, please check code\n",
+			__FUNCTION__);
+		return false;
+	}
+	for(i = 0; i < HW_BAND_MAX; i++) {
+		minfo = get_mcc_info(phl, i);
+		_os_mem_cpy(phl_to_drvpriv(phl), &minfo->mcc_dbg_i, mcc_dbg_i,
+				sizeof(struct rtw_phl_mcc_dbg_info));
+		PHL_TRACE(COMP_PHL_MCC, _PHL_INFO_, "%s(): band_idx(%d), ntfy_cnt(%d), ntfy_rx(%d)\n",
+			__FUNCTION__, i, minfo->mcc_dbg_i.ntfy_cnt,
+			minfo->mcc_dbg_i.ntfy_rx);
+	}
+	return true;
+}
 #endif /* CONFIG_MCC_SUPPORT */

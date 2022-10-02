@@ -22,6 +22,10 @@ u8 rtw_mi_stayin_union_band_chk(_adapter *adapter);
 int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 *ch, u8 *bw, u8 *offset);
 int rtw_mi_get_ch_setting_union(_adapter *adapter, u8 *ch, u8 *bw, u8 *offset);
 int rtw_mi_get_ch_setting_union_no_self(_adapter *adapter, u8 *ch, u8 *bw, u8 *offset);
+int rtw_mi_get_bch_setting_union_by_hwband(struct dvobj_priv *dvobj, u8 band_idx
+	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset);
+int rtw_mi_get_bch_setting_union_by_hwband_ifbmp(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp
+	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset);
 
 struct mi_state {
 	u8 sta_num;			/* WIFI_STATION_STATE */
@@ -135,6 +139,8 @@ void rtw_mi_status_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, struct mi_state 
 void rtw_mi_status(_adapter *adapter, struct mi_state *mstate);
 void rtw_mi_status_no_self(_adapter *adapter, struct mi_state *mstate);
 void rtw_mi_status_no_others(_adapter *adapter, struct mi_state *mstate);
+void rtw_mi_status_by_hwband(struct dvobj_priv *dvobj, u8 band_idx, struct mi_state *mstate);
+void rtw_mi_status_by_hwband_ifbmp(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp, struct mi_state *mstate);
 
 /* For now, not handle union_ch/bw/offset */
 void rtw_mi_status_merge(struct mi_state *d, struct mi_state *a);
@@ -198,6 +204,8 @@ u8 rtw_mi_buddy_check_mlmeinfo_state(_adapter *padapter, u32 state);
 
 u8 rtw_mi_check_fwstate(_adapter *padapter, sint state);
 u8 rtw_mi_buddy_check_fwstate(_adapter *padapter, sint state);
+u8 rtw_mi_check_fwstate_by_hwband(struct dvobj_priv *dvobj, u8 band_idx, sint state);
+
 enum {
 	MI_LINKED,
 	MI_ASSOC,
@@ -283,11 +291,18 @@ void rtw_mi_buddy_clone_bcmc_packet(_adapter *padapter, union recv_frame *precvf
 _adapter *rtw_mi_get_ap_adapter(_adapter *padapter);
 #endif
 
+u8 rtw_mi_get_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx);
+_adapter *rtw_mi_get_iface_by_hwband(struct dvobj_priv *dvobj, u8 band_idx);
 u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter);
+u8 rtw_mi_get_ld_sta_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx);
 u8 rtw_mi_get_ap_mesh_ifbmp(_adapter *adapter);
+u8 rtw_mi_get_ap_mesh_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx);
+_adapter *rtw_mi_get_ap_mesh_iface_by_hwband(struct dvobj_priv *dvobj, u8 band_idx);
 
 
 u8 rtw_mi_disconnect(_adapter *adapter);
 u8 rtw_mi_buddy_disconnect(_adapter *adapter, Disconnect_type disc_code);
+
+bool rtw_iface_is_operate_at_hwband(_adapter *adapter, u8 band_idx);
 
 #endif /*__RTW_MI_H_*/

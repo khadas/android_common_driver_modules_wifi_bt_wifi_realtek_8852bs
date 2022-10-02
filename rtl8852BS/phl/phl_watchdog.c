@@ -37,7 +37,7 @@ void rtw_phl_watchdog_callback(void *phl)
 		#endif
 		#endif
 		phl_mr_watchdog(phl_info);
-		rtw_hal_watchdog(phl_info->hal);
+		rtw_hal_watchdog(phl_info->hal, phl_info->phl_com);
 	} while (false);
 }
 #endif
@@ -67,7 +67,7 @@ static void _phl_watchdog_hw(struct phl_info_t *phl)
 	#endif
 
 	phl_mr_watchdog(phl);
-	rtw_hal_watchdog(phl->hal);
+	rtw_hal_watchdog(phl->hal, phl->phl_com);
 	phl_bcn_watchdog(phl);
 }
 
@@ -172,7 +172,9 @@ _phl_watchdog_sw_cmd(struct phl_info_t *phl_info,
 	                             cmd_type,
 	                             cmd_timeout);
 
-	 if (phl_status != RTW_PHL_STATUS_SUCCESS) {
+	if (is_cmd_failure(phl_status)) {
+		/* Send cmd success, but wait cmd fail*/
+	} else if (phl_status != RTW_PHL_STATUS_SUCCESS) {
 		/* Send cmd fail */
 		phl_status = RTW_PHL_STATUS_FAILURE;
 	}

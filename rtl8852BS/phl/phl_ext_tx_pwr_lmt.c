@@ -22,14 +22,16 @@
  *
  */
 enum rtw_phl_status
-rtw_phl_set_power_lmt(void *phl, u8 hw_band)
+rtw_phl_set_power_lmt(void *phl)
 {
 	struct	phl_info_t *phl_info = (struct phl_info_t *)phl;
 	enum rtw_phl_status phl_status = RTW_PHL_STATUS_FAILURE;
+	u8 hw_band = 0;
 
-	if (rtw_hal_set_power_lmt(phl_info->hal, hw_band)==RTW_HAL_STATUS_SUCCESS)
-		phl_status = RTW_PHL_STATUS_SUCCESS;
-
+	for (hw_band = 0; hw_band < HW_BAND_MAX; hw_band++) {
+		if (rtw_hal_set_power_lmt(phl_info->hal, hw_band)==RTW_HAL_STATUS_SUCCESS)
+			phl_status = RTW_PHL_STATUS_SUCCESS;
+	}
 	return phl_status;
 }
 
@@ -92,4 +94,11 @@ rtw_phl_enable_ext_pwr_lmt(void *phl, u8 hw_band,
 				   &tpu_ext_pwr_lmt_info);
 }
 
+void
+rtw_phl_set_ext_pwr_lmt_en(void *phl, bool enable)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+
+	rtw_hal_set_ext_pwr_lmt_en(phl_info->hal, enable);
+}
 

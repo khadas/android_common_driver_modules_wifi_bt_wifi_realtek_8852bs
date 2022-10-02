@@ -1172,7 +1172,7 @@ void count_rx_stats(_adapter *padapter, union recv_frame *prframe, struct sta_in
 		}
 
 		if (!is_ra_bmc) {
-			pstats->rxratecnt[pattrib->data_rate]++;
+			/*pstats->rxratecnt[pattrib->data_rate]++;*/ /* FIXME overflow */
 			/*record rx packets for every tid*/
 			pstats->rx_data_qos_pkts[pattrib->priority]++;
 		}
@@ -4925,6 +4925,8 @@ void core_update_recvframe_mdata(union recv_frame *prframe, struct rtw_recv_pkt 
 	prxattrib->pkt_len = mdata->pktlen;
 	prxattrib->icv_err = mdata->icverr;
 	prxattrib->crc_err = mdata->crc32;
+	prxattrib->data_rate = mdata->rx_rate; /* enum rtw_data_rate */
+	prxattrib->gi_ltf = mdata->rx_gi_ltf;
 #ifdef CONFIG_TCP_CSUM_OFFLOAD_RX
 	prxattrib->csum_valid = mdata->chksum_ofld_en;
 	prxattrib->csum_err = mdata->chksum_status;
@@ -5040,11 +5042,16 @@ void rx_process_phy_info(union recv_frame *precvframe)
 	is_packet_beacon = is_packet_match_bssid
 			 && (get_frame_sub_type(wlanhdr) == WIFI_BEACON);
 
+
 	if (psta && IsFrameTypeData(wlanhdr)) {
+
+
 		if (is_ra_bmc)
 			psta->curr_rx_rate_bmc = pattrib->data_rate;
-		else
+		else {
 			psta->curr_rx_rate = pattrib->data_rate;
+			psta->curr_rx_gi_ltf = pattrib->gi_ltf;
+		}
 	}
 
 	#if 0
@@ -5485,8 +5492,10 @@ enum rtw_phl_status rtw_core_rx_process(void *drv_priv)
 		if (pre_process_ret != CORE_RX_CONTINUE)
 			goto rx_next;
 
-		if(rtw_core_rx_data_post_process(adapter, prframe) == CORE_RX_DONE)
+		if(rtw_core_rx_data_post_process(adapter, prframe) == CORE_RX_DONE) {
+			adapter->recvinfo.rx_pkts++;
 			continue;
+		}
 
 rx_next:
 		rtw_free_recvframe(prframe);

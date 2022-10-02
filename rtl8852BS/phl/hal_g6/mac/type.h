@@ -26,6 +26,8 @@
 #include "mac_ax/mac_ax_dfs.h"
 #include "mac_ax/mac_ax_mac_info.h"
 #include "mac_ax/mac_txccxrpt.h"
+#include "mac_ax/mac_ftmrpt.h"
+#include "mac_ax/mac_ftmackrpt.h"
 
 #if MAC_AX_FEATURE_DBGPKG
 #include "mac_ax/dbgpkg.h"

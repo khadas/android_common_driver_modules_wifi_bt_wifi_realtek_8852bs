@@ -679,6 +679,7 @@ struct bb_physts_cr_info {
 };
 
 struct bb_physts_info {
+	bool init_physts_cr_success;
 	u32 physts_bitmap_recv;
 	u32 bitmap_type[PHYSTS_BITMAP_NUM];
 	u8 rx_path_en;
@@ -687,6 +688,7 @@ struct bb_physts_info {
 	u16 physts_dump_idx;
 	bool is_valid; // used for UI parsing
 	bool show_phy_sts_all_pkt;
+	bool dfs_phy_sts_privilege;// used for CAC period in DFS channel
 	u16 show_phy_sts_cnt;
 	u16 show_phy_sts_max_cnt;
 	// long term cfo rslt
@@ -741,7 +743,10 @@ void halbb_physts_ie_bitmap_en(struct bb_info *bb, enum bb_physts_bitmap_t type,
 			       enum bb_physts_ie_t ie, bool en);
 void halbb_phy_sts_manual_trig(struct bb_info *bb, enum bb_mode_type mode, u8 ss);
 void halbb_physts_watchdog(struct bb_info *bb);
+void halbb_physts_parsing_init_io_en(struct bb_info *bb);
 void halbb_physts_parsing_init(struct bb_info *bb);
+
+void halbb_physts_brk_fail_rpt_en(struct bb_info* bb, bool enable, enum phl_phy_idx phy_idx);
 
 void halbb_physts_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		  char *output, u32 *_out_len);

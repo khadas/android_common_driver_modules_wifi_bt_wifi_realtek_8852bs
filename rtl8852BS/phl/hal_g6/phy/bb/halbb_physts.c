@@ -2357,7 +2357,7 @@ bool halbb_physts_parsing(struct bb_info *bb,
 		}
 	}
 
-	if (!desc->is_to_self && !physts->show_phy_sts_all_pkt) {
+	if (!desc->is_to_self && !physts->show_phy_sts_all_pkt && !physts->dfs_phy_sts_privilege) {
 		/*Only parsing Hdr if the packet is not "to_self"*/
 		is_valid = true;
 		goto PARSING_END;
@@ -2491,7 +2491,15 @@ PARSING_END:
 		#ifdef HALBB_ANT_DIV_SUPPORT
 		halbb_antdiv_phy_sts(bb);
 		#endif
+
+		#ifdef HALBB_PATH_DIV_SUPPORT
+		halbb_pathdiv_phy_sts(bb, desc);
+		#endif
 	}
+
+	#ifdef HALBB_DFS_SUPPORT
+	halbb_parsing_aci2sig(bb, physts_bitmap);
+	#endif
 
 	halbb_physts_print(bb, desc, physts_total_length, addr_in_bkp, physts_bitmap);
 
@@ -2554,6 +2562,15 @@ void halbb_physts_watchdog(struct bb_info *bb)
 	struct bb_physts_info *physts = &bb->bb_physts_i;
 	struct bb_cmn_rpt_info	*cmn_rpt = &bb->bb_cmn_rpt_i;
 
+#ifdef HALBB_FW_OFLD_SUPPORT
+	if (bb->bb_cmn_hooker->skip_io_init_en) {
+		if (!physts->init_physts_cr_success) {
+			halbb_physts_parsing_init_io_en(bb);
+			BB_DBG(bb, DBG_PHY_STS, "init_physts_cr_success = %d\n", physts->init_physts_cr_success);
+			return;
+		}
+	}
+#endif
 	if (cmn_rpt->bb_pkt_cnt_mu_i.pkt_cnt_all != 0)
 		cmn_rpt->consec_idle_prd_mu = 0;
 	else
@@ -2573,13 +2590,14 @@ void halbb_physts_watchdog(struct bb_info *bb)
 	physts->bb_physts_cnt_i.err_len_cnt = 0;
 }
 
-void halbb_physts_parsing_init(struct bb_info *bb)
+void halbb_physts_parsing_init_io_en(struct bb_info *bb)
 {
 	struct bb_physts_info *physts = &bb->bb_physts_i;
 	struct bb_physts_cr_info *cr = &physts->bb_physts_cr_i;
 	u32 u32_tmp = 0;
 	u32 mask_tmp = 0;
 	u8 i = 0;
+	BB_DBG(bb, DBG_PHY_STS, "[%s]\n", __func__);
 
 	if(phl_is_mp_mode(bb->phl_com))
 		halbb_physts_brk_fail_rpt_en(bb, true, bb->bb_phy_idx);
@@ -2618,10 +2636,48 @@ void halbb_physts_parsing_init(struct bb_info *bb)
 	halbb_physts_ie_bitmap_en(bb, HE_MU, IE13_DL_MU_DEF, true);
 	halbb_physts_ie_bitmap_en(bb, VHT_MU, IE13_DL_MU_DEF, true);
 
+	/*Enable IE24 for supressing DFS False Detection, Enable BRK & Fail RPT*/
+	if (bb->support_ability & BB_DFS) {
+		for (i = 0; i < PHYSTS_BITMAP_NUM; i++) {
+			/* don't enable IE24 at physts_bitmap 4~7 && 9~11 */
+			if ((i >= CCK_BRK && i <= VHT_MU) || (i >= RSVD_9 && i <= CCK_PKT))
+				continue;
+
+			u32_tmp = halbb_physts_ie_bitmap_get(bb, i);
+
+			u32_tmp |= BIT(IE24_DBG_OFDM_TD_PATH_A);
+			halbb_physts_ie_bitmap_set(bb, i, u32_tmp);
+			u32_tmp = halbb_physts_ie_bitmap_get(bb, i);
+
+			physts->bitmap_type[i] = u32_tmp;
+		}
+
+		//halbb_physts_brk_fail_rpt_en(bb, true, bb->bb_phy_idx);
+	}
+
 	physts->show_phy_sts_all_pkt = false;
 	physts->show_phy_sts_max_cnt = 5;
 	physts->show_phy_sts_cnt = 0;
 	physts->rssi_cvrt_2_rpl_en = false;
+
+	physts->init_physts_cr_success = true;
+}
+
+void halbb_physts_parsing_init(struct bb_info *bb)
+{
+	struct bb_physts_info *physts = &bb->bb_physts_i;
+
+#ifdef HALBB_FW_OFLD_SUPPORT
+	BB_DBG(bb, DBG_PHY_STS, "[%s][phy=%d]skip_io_init_en = %d\n",
+	       __func__, bb->bb_phy_idx, bb->bb_cmn_hooker->skip_io_init_en);
+
+	if (bb->bb_cmn_hooker->skip_io_init_en) {
+		physts->init_physts_cr_success = false;
+		return;
+	}
+#endif
+
+	halbb_physts_parsing_init_io_en(bb);
 }
 
 void halbb_physts_dbg(struct bb_info *bb, char input[][16], u32 *_used,

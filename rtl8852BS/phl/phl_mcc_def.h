@@ -81,6 +81,8 @@ void rtw_phl_mcc_deinit(struct phl_info_t *phl);
 bool rtw_phl_mcc_get_dbg_info(struct phl_info_t *phl, u8 band_idx,
 				enum rtw_phl_mcc_dbg_type type, void *info);
 
+bool phl_mcc_set_dbg_info(struct phl_info_t *phl,
+				struct rtw_phl_mcc_dbg_info *mcc_dbg_i);
 #else /* CONFIG_MCC_SUPPORT ==0 */
 #define rtw_phl_mcc_watchdog(_phl, _band_idx)
 #define phl_mcc_client_link_notify_for_ap(_phl, _wrole, _state)

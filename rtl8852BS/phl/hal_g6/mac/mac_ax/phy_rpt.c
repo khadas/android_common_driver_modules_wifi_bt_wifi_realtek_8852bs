@@ -455,6 +455,7 @@ static u32 cfg_dfs(struct mac_ax_adapter *adapter,
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	struct mac_ax_dfs *dfs = &cfg->u.dfs;
 	u32 ret = 0, val;
+	u32 dfs_to = 0, num_th = 0;
 
 	en_bbrpt(adapter);
 
@@ -463,24 +464,39 @@ static u32 cfg_dfs(struct mac_ax_adapter *adapter,
 		goto END;
 	}
 
+	if (dfs->en_timeout) {
+		switch (dfs->dfs_to) {
+		case MAC_AX_DFS_TO_20MS:
+		case MAC_AX_DFS_TO_40MS:
+		case MAC_AX_DFS_TO_80MS:
+			dfs_to = dfs->dfs_to;
+			break;
+		default:
+			PLTFM_MSG_ERR("Wrong DFS report timeout\n");
+			ret = MACFUNCINPUT;
+			goto END;
+		}
+	}
+
 	switch (dfs->num_th) {
 	case MAC_AX_DFS_TH_29:
 	case MAC_AX_DFS_TH_61:
 	case MAC_AX_DFS_TH_93:
 	case MAC_AX_DFS_TH_125:
-		val = B_AX_DFS_RPT_EN |
-		      SET_WORD(B_AX_DFS_BUF_64, B_AX_DFS_BUF) |
-		      SET_WORD(dfs->num_th, B_AX_DFS_NUM_TH) |
-		      SET_WORD(dfs->en_timeout ? 1 : 0, B_AX_DFS_TIME_TH) |
-		      SET_WORD(cfg->dest == MAC_AX_PRPT_DEST_WLCPU ?
-			       MAC_AX_DISP_QID_WLCPU : MAC_AX_DISP_QID_HOST,
-			       B_AX_DFS_QID);
+		num_th = dfs->num_th;
 		break;
 	default:
 		PLTFM_MSG_ERR("Wrong DFS report num threshold\n");
 		ret = MACFUNCINPUT;
 		goto END;
 	}
+
+	val = B_AX_DFS_RPT_EN |
+	      SET_WORD(B_AX_DFS_BUF_64, B_AX_DFS_BUF) |
+	      SET_WORD(num_th, B_AX_DFS_NUM_TH) |
+	      SET_WORD(dfs_to, B_AX_DFS_TIME_TH) |
+	      SET_WORD(cfg->dest == MAC_AX_PRPT_DEST_WLCPU ?
+		       MAC_AX_DISP_QID_WLCPU : MAC_AX_DISP_QID_HOST, B_AX_DFS_QID);
 
 	MAC_REG_W32(R_AX_DFS_CFG0, val);
 END:

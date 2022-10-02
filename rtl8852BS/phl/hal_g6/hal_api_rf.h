@@ -59,7 +59,6 @@ enum rtw_hal_status rtw_hal_rf_set_suppression_tx(struct hal_info_t *hal_info);
 
 enum rtw_hal_status rtw_hal_rf_chl_rfk_trigger(void *hal, u8 phy_idx, u8 force);
 
-
 enum rtw_hal_status rtw_hal_rf_dack_trigger(struct hal_info_t *hal_info,
 			   u8 force);
 
@@ -155,6 +154,10 @@ enum rtw_hal_status
 rtw_hal_rf_set_power(struct hal_info_t *hal_info, enum phl_phy_idx phy,
 				enum phl_pwr_table pwr_table);
 
+enum rtw_hal_status
+rtw_hal_rf_set_power_constraint(struct hal_info_t *hal_info, enum phl_phy_idx phy,
+					u16 mb);
+
 enum rtw_hal_status rtw_hal_rf_set_gain_offset(struct hal_info_t *hal_info, u8 cur_phy_idx,
 						s8 offset, u8 rf_path);
 
@@ -228,5 +231,7 @@ void rtw_hal_rf_notification(struct hal_info_t *hal_info,
 void rtw_hal_rf_cmd_notification(struct hal_info_t *hal_info,
                              void *hal_cmd,
                              enum phl_phy_idx phy_idx);
+
+void rtw_hal_rf_rfe_ant_num_chk(struct rtw_hal_com_t *hal_com);
 
 #endif /*_HAL_API_RF_H_*/

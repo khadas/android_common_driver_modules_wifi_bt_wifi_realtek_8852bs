@@ -348,10 +348,6 @@ typedef struct _RT_CHANNEL_INFO {
 #endif
 } RT_CHANNEL_INFO, *PRT_CHANNEL_INFO;
 
-#define CAC_TIME_MS (60*1000)
-#define CAC_TIME_CE_MS (10*60*1000)
-#define NON_OCP_TIME_MS (30*60*1000)
-
 #if CONFIG_TXPWR_LIMIT
 bool rtw_rfctl_is_current_txpwr_lmt(struct rf_ctl_t *rfctl, const char *name);
 #endif
@@ -364,35 +360,6 @@ bool rtw_rfctl_is_disable_sw_channel_plan(struct dvobj_priv *dvobj);
 void rtw_rfctl_update_op_mode(struct rf_ctl_t *rfctl, u8 ifbmp_mod, u8 if_op);
 
 bool rtw_rfctl_reg_allow_beacon_hint(struct rf_ctl_t *rfctl);
-
-u8 rtw_rfctl_get_dfs_domain(struct rf_ctl_t *rfctl);
-u8 rtw_rfctl_dfs_domain_unknown(struct rf_ctl_t *rfctl);
-
-#ifdef CONFIG_DFS_MASTER
-struct rf_ctl_t;
-#define CH_IS_NON_OCP(rt_ch_info) (rtw_time_after((rt_ch_info)->non_ocp_end_time, rtw_get_current_time()))
-bool rtw_is_cac_reset_needed(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset);
-bool _rtw_rfctl_overlap_radar_detect_ch(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset);
-bool rtw_rfctl_overlap_radar_detect_ch(struct rf_ctl_t *rfctl);
-bool rtw_rfctl_is_tx_blocked_by_ch_waiting(struct rf_ctl_t *rfctl);
-bool rtw_chset_is_chbw_non_ocp(RT_CHANNEL_INFO *ch_set, u8 ch, u8 bw, u8 offset);
-bool rtw_chset_is_ch_non_ocp(RT_CHANNEL_INFO *ch_set, u8 ch);
-bool rtw_chset_update_non_ocp(RT_CHANNEL_INFO *ch_set, u8 ch, u8 bw, u8 offset);
-bool rtw_chset_update_non_ocp_ms(RT_CHANNEL_INFO *ch_set, u8 ch, u8 bw, u8 offset, int ms);
-void rtw_chset_chk_non_ocp_finish(struct rf_ctl_t *rfctl);
-u32 rtw_get_ch_waiting_ms(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset, u32 *r_non_ocp_ms, u32 *r_cac_ms);
-void rtw_reset_cac(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset);
-u32 rtw_force_stop_cac(struct rf_ctl_t *rfctl, u32 timeout_ms);
-#else
-#define CH_IS_NON_OCP(rt_ch_info) 0
-#define rtw_chset_is_chbw_non_ocp(ch_set, ch, bw, offset) _FALSE
-#define rtw_chset_is_ch_non_ocp(ch_set, ch) _FALSE
-#define rtw_rfctl_is_tx_blocked_by_ch_waiting(rfctl) _FALSE
-#endif
-
-bool rtw_choose_shortest_waiting_ch(struct rf_ctl_t *rfctl, u8 sel_ch, u8 max_bw
-	, u8 *dec_ch, u8 *dec_bw, u8 *dec_offset
-	, u8 e_flags, u8 d_flags, u8 cur_ch, bool by_int_info, u8 mesh_only);
 
 struct get_chplan_resp {
 	enum regd_src_t regd_src;
@@ -425,11 +392,15 @@ void dump_cur_country(void *sel, struct rf_ctl_t *rfctl);
 void dump_cur_chset(void *sel, struct rf_ctl_t *rfctl);
 
 int rtw_chset_search_ch(RT_CHANNEL_INFO *ch_set, const u32 ch);
-int rtw_chset_search_ch_by_band(RT_CHANNEL_INFO *ch_set, enum band_type band, const u32 ch);
+int rtw_chset_search_bch(RT_CHANNEL_INFO *ch_set, enum band_type band, const u32 ch);
 u8 rtw_chset_is_chbw_valid(RT_CHANNEL_INFO *ch_set, u8 ch, u8 bw, u8 offset
+	, bool allow_primary_passive, bool allow_passive);
+u8 rtw_chset_is_bchbw_valid(RT_CHANNEL_INFO *ch_set, enum band_type band, u8 ch, u8 bw, u8 offset
 	, bool allow_primary_passive, bool allow_passive);
 void rtw_chset_sync_chbw(RT_CHANNEL_INFO *ch_set, u8 *req_ch, u8 *req_bw, u8 *req_offset
 	, u8 *g_ch, u8 *g_bw, u8 *g_offset, bool allow_primary_passive, bool allow_passive);
+void rtw_chset_sync_bchbw(RT_CHANNEL_INFO *ch_set, enum band_type *req_band, u8 *req_ch, u8 *req_bw, u8 *req_offset
+	, enum band_type *g_band, u8 *g_ch, u8 *g_bw, u8 *g_offset, bool allow_primary_passive, bool allow_passive);
 
 bool rtw_mlme_band_check(_adapter *adapter, const u32 ch);
 
@@ -607,11 +578,23 @@ u8 rtw_get_oper_band(_adapter *adapter);
 u8 rtw_get_oper_ch(_adapter *adapter);
 u8 rtw_get_oper_bw(_adapter *adapter);
 u8 rtw_get_oper_choffset(_adapter *adapter);
+int rtw_get_oper_chdef_by_hwband(struct dvobj_priv *dvobj, enum phl_band_idx band_idx
+	, struct rtw_chan_def *chandef);
+int rtw_get_oper_bchbw_by_hwband(struct dvobj_priv *dvobj, enum phl_band_idx band_idx
+	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset);
 
 systime rtw_get_on_oper_ch_time(_adapter *adapter);
 systime rtw_get_on_cur_ch_time(_adapter *adapter);
 
 void set_channel_bwmode(_adapter *padapter,
+		unsigned char channel,
+		unsigned char channel_offset,
+		unsigned short bwmode,
+		u8 do_rfk);
+
+void set_bch_bwmode(_adapter *padapter,
+		struct _ADAPTER_LINK *padapter_link,
+		enum band_type band,
 		unsigned char channel,
 		unsigned char channel_offset,
 		unsigned short bwmode,
@@ -672,10 +655,15 @@ bool rtw_validate_value(u16 EID, u8 *p, u16 len);
 bool is_hidden_ssid(char *ssid, int len);
 bool hidden_ssid_ap(WLAN_BSSID_EX *snetwork);
 void rtw_absorb_ssid_ifneed(_adapter *padapter, WLAN_BSSID_EX *bssid, u8 *pframe);
-int rtw_get_bcn_keys(_adapter *adapter, u8 *pframe, u32 packet_len,
-		struct beacon_keys *recv_beacon);
+
+int rtw_get_bcn_keys(_adapter *adapter
+	, u8 *whdr, u32 flen, struct beacon_keys *bcn_keys);
+int rtw_get_bcn_keys_from_bss(WLAN_BSSID_EX *bss, struct beacon_keys *bcn_keys);
+int rtw_update_bcn_keys_of_network(struct wlan_network *network);
+
 int validate_beacon_len(u8 *pframe, uint len);
 void rtw_dump_bcn_keys(void *sel, struct beacon_keys *recv_beacon);
+bool rtw_bcn_key_compare(struct beacon_keys *cur, struct beacon_keys *recv);
 int rtw_check_bcn_info(_adapter *adapter, u8 *pframe, u32 packet_len);
 void update_beacon_info(_adapter *padapter, u8 *pframe, uint len, struct sta_info *psta);
 #if CONFIG_DFS
@@ -874,6 +862,7 @@ void mlmeext_sta_add_event_callback(_adapter *padapter, struct sta_info *psta);
 int rtw_get_rx_chk_limit(_adapter *adapter);
 void rtw_set_rx_chk_limit(_adapter *adapter, int limit);
 void linked_status_chk(_adapter *padapter, u8 from_timer);
+void dynamic_update_bcn_check(_adapter *padapter);
 
 #define rtw_get_bcn_cnt(adapter)	(adapter->mlmeextpriv.cur_bcn_cnt)
 #define rtw_get_bcn_dtim_period(adapter)	(adapter->mlmeextpriv.dtim)
@@ -1009,6 +998,12 @@ u8 run_in_thread_hdl(_adapter *padapter, u8 *pbuf);
 
 int rtw_sae_preprocess(_adapter *adapter, const u8 *buf, u32 len, u8 tx);
 
+u32 rtw_desc_rate_to_bitrate(u8 bw, u16 rate_idx, u8 sgi);
+u16 rtw_get_current_tx_rate(_adapter *padapter, struct sta_info *psta);
+u8 rtw_get_current_tx_sgi(_adapter *padapter, struct sta_info *psta);
+void rtw_get_current_rx_info(_adapter *adapter, struct sta_info *psta,
+	u16 *rate, u8 *bw, u8 *gi_ltf);
+bool rtw_chk_phy_can_append_actrl(_adapter *padapter, struct sta_info *psta);
 
 #ifdef CONFIG_RTW_MESH
 extern u8 rtw_mesh_set_plink_state_cmd_hdl(_adapter *adapter, u8 *parmbuf);

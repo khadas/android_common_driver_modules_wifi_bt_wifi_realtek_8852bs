@@ -21,6 +21,9 @@ rtw_hal_download_fw(struct rtw_phl_com_t *phl_com, void *hal);
 enum rtw_hal_status
 rtw_hal_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal);
 
+enum rtw_hal_status
+rtw_hal_pg_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal);
+
 void rtw_hal_fw_dbg_dump(void *hal);
 
 enum rtw_hal_status

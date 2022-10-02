@@ -19,7 +19,7 @@
 #define C2H_MEM_SZ (16*1024)
 
 
-#define MAX_CMDSZ	1024
+#define MAX_CMDSZ	1536
 #define MAX_RSPSZ	512
 #define MAX_EVTSZ	1024
 
@@ -27,6 +27,12 @@
 
 struct cmd_obj {
 	_adapter *padapter;
+	/*
+	* band_idx, could be used when padapter is not up and operated on specific hwband
+	* >= HW_BAND_MAX: not specified (get hwband by adapter/alink)
+	*/
+	u8 band_idx;
+
 	u16	cmdcode;
 	u8	res;
 	u8	*parmbuf;
@@ -38,6 +44,8 @@ struct cmd_obj {
 	/* _sema 	cmd_sem; */
 	_list	list;
 };
+
+#define CMD_OBJ_SET_HWBAND(cmdobj, hwband) do { (cmdobj)->band_idx = hwband; } while (0)
 
 /* cmd flags */
 enum {
@@ -75,6 +83,7 @@ struct back_op_param {
 #define init_h2fwcmd_w_parm_no_rsp(pcmd, pparm, code) \
 	do {\
 		_rtw_init_listhead(&pcmd->list);\
+		CMD_OBJ_SET_HWBAND(pcmd, HW_BAND_MAX);\
 		pcmd->cmdcode = code;\
 		pcmd->parmbuf = (u8 *)(pparm);\
 		pcmd->cmdsz = sizeof (*pparm);\
@@ -85,6 +94,7 @@ struct back_op_param {
 #define init_h2fwcmd_w_parm_no_parm_rsp(pcmd, code) \
 	do {\
 		_rtw_init_listhead(&pcmd->list);\
+		CMD_OBJ_SET_HWBAND(pcmd, HW_BAND_MAX);\
 		pcmd->cmdcode = code;\
 		pcmd->parmbuf = NULL;\
 		pcmd->cmdsz = 0;\
@@ -536,17 +546,11 @@ extern  u8 rtw_antenna_select_cmd(_adapter *padapter, u8 antenna, u8 enqueue);
 extern u8 rtw_ps_cmd(_adapter *padapter);
 #endif
 #if CONFIG_DFS
-void rtw_dfs_ch_switch_hdl(_adapter *adapter);
+void rtw_dfs_ch_switch_hdl_0(_adapter *adapter);
 #endif
 
 #ifdef CONFIG_AP_MODE
 u8 rtw_chk_hi_queue_cmd(_adapter *padapter);
-#ifdef CONFIG_DFS_MASTER
-u8 rtw_dfs_rd_cmd(_adapter *adapter, bool enqueue);
-void rtw_dfs_rd_timer_hdl(void *ctx);
-void rtw_dfs_rd_en_decision(_adapter *adapter, u8 mlme_act, u8 excl_ifbmp);
-u8 rtw_dfs_rd_en_decision_cmd(_adapter *adapter);
-#endif /* CONFIG_DFS_MASTER */
 #endif /* CONFIG_AP_MODE */
 
 #ifdef CONFIG_BTC

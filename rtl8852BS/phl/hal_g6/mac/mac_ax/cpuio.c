@@ -37,6 +37,8 @@ static void set_dmac_macid_drop(struct mac_ax_adapter *adapter, u8 macid);
 static void set_cmac_macid_drop(struct mac_ax_adapter *adapter, u8 macid);
 static void rel_dmac_macid_drop(struct mac_ax_adapter *adapter, u8 macid);
 static void rel_cmac_macid_drop(struct mac_ax_adapter *adapter, u8 macid);
+static u32 hiq_drop_ctrl(struct mac_ax_adapter *adapter,
+			 struct mac_ax_pkt_drop_info *info, u8 drop_en);
 static u32 set_hiq_drop(struct mac_ax_adapter *adapter,
 			struct mac_ax_pkt_drop_info *info);
 static u32 rel_hiq_drop(struct mac_ax_adapter *adapter,
@@ -250,6 +252,10 @@ u32 mac_wde_pkt_drop(struct mac_ax_adapter *adapter,
 		case MAC_AX_PKT_DROP_SEL_MACID_VI_ONCE:
 		case MAC_AX_PKT_DROP_SEL_MACID_VO_ONCE:
 		case MAC_AX_PKT_DROP_SEL_MACID_ALL:
+			if (info->sel == MAC_AX_PKT_DROP_SEL_MACID_ALL) {
+				set_dmac_macid_drop(adapter, info->macid);
+				set_cmac_macid_drop(adapter, info->macid);
+			}
 			role = mac_role_srch(adapter, info->macid);
 			ret = h2c_pkt_drop(adapter, info, role, NULL);
 			if (ret != MACSUCCESS)
@@ -267,8 +273,15 @@ u32 mac_wde_pkt_drop(struct mac_ax_adapter *adapter,
 			break;
 		case MAC_AX_PKT_DROP_SEL_HIQ_ONCE:
 		case MAC_AX_PKT_DROP_SEL_MG0_ONCE:
+			ret = h2c_pkt_drop(adapter, info, NULL, NULL);
+			if (ret != MACSUCCESS)
+				return ret;
+			break;
 		case MAC_AX_PKT_DROP_SEL_HIQ_PORT:
 		case MAC_AX_PKT_DROP_SEL_HIQ_MBSSID:
+			ret = hiq_drop_ctrl(adapter, info, MAC_AX_FUNC_EN);
+			if (ret != MACSUCCESS)
+				return ret;
 			ret = h2c_pkt_drop(adapter, info, NULL, NULL);
 			if (ret != MACSUCCESS)
 				return ret;
@@ -1039,28 +1052,38 @@ static void rel_cmac_macid_drop(struct mac_ax_adapter *adapter, u8 macid)
 	}
 }
 
-static u32 set_hiq_drop(struct mac_ax_adapter *adapter,
-			struct mac_ax_pkt_drop_info *info)
+static u32 hiq_drop_ctrl(struct mac_ax_adapter *adapter,
+			 struct mac_ax_pkt_drop_info *info, u8 drop_en)
 {
+	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	u32 val32;
-	u32 addr;
+	u32 addr, ret;
 	u16 mbssid_sh;
 	u8 port_sh;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+
+	ret = check_mac_en(adapter, info->band, MAC_AX_CMAC_SEL);
+	if (ret != MACSUCCESS)
+		return ret;
 
 	addr = info->band ? R_AX_MBSSID_DROP_0_C1 : R_AX_MBSSID_DROP_0;
-	mbssid_sh = BIT(0) << info->mbssid;
-	port_sh = BIT(0) << info->port;
+	mbssid_sh = 1 << info->mbssid;
+	port_sh = 1 << info->port;
 
 	val32 = MAC_REG_R32(addr);
 	switch (info->sel) {
 	case MAC_AX_PKT_DROP_SEL_HIQ_PORT:
-		val32 |= port_sh << B_AX_PORT_DROP_4_0_SH;
+	case MAC_AX_PKT_DROP_SEL_REL_HIQ_PORT:
+		val32 = drop_en == MAC_AX_FUNC_EN ?
+			(val32 | port_sh << B_AX_PORT_DROP_4_0_SH) :
+			(val32 & ~(port_sh << B_AX_PORT_DROP_4_0_SH));
 		if (info->port == 0)
-			val32 |= BIT(0);
+			val32 = drop_en == MAC_AX_FUNC_EN ?
+				(val32 | BIT(0)) : (val32 & ~BIT(0));
 		break;
 	case MAC_AX_PKT_DROP_SEL_HIQ_MBSSID:
-		val32 |= mbssid_sh;
+	case MAC_AX_PKT_DROP_SEL_REL_HIQ_MBSSID:
+		val32 = drop_en == MAC_AX_FUNC_EN ?
+			(val32 | mbssid_sh) : (val32 & ~mbssid_sh);
 		break;
 	default:
 		return MACNOITEM;
@@ -1070,35 +1093,16 @@ static u32 set_hiq_drop(struct mac_ax_adapter *adapter,
 	return MACSUCCESS;
 }
 
+static u32 set_hiq_drop(struct mac_ax_adapter *adapter,
+			struct mac_ax_pkt_drop_info *info)
+{
+	return hiq_drop_ctrl(adapter, info, MAC_AX_FUNC_EN);
+}
+
 static u32 rel_hiq_drop(struct mac_ax_adapter *adapter,
 			struct mac_ax_pkt_drop_info *info)
 {
-	u32 val32;
-	u32 addr;
-	u16 mbssid_sh;
-	u8 port_sh;
-	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
-
-	addr = info->band ? R_AX_MBSSID_DROP_0_C1 : R_AX_MBSSID_DROP_0;
-	mbssid_sh = BIT(0) << info->mbssid;
-	port_sh = BIT(0) << info->port;
-
-	val32 = MAC_REG_R32(addr);
-	switch (info->sel) {
-	case MAC_AX_PKT_DROP_SEL_REL_HIQ_PORT:
-		val32 &= ~(port_sh << B_AX_PORT_DROP_4_0_SH);
-		if (info->port == 0)
-			val32 &= ~(BIT(0));
-		break;
-	case MAC_AX_PKT_DROP_SEL_REL_HIQ_MBSSID:
-		val32 &= ~mbssid_sh;
-		break;
-	default:
-		return MACNOITEM;
-	}
-	MAC_REG_W32(addr, val32);
-
-	return MACSUCCESS;
+	return hiq_drop_ctrl(adapter, info, MAC_AX_FUNC_DIS);
 }
 
 static void ss_hw_len_udn_clr(struct mac_ax_adapter *adapter)

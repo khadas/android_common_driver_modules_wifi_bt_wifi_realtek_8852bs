@@ -97,7 +97,7 @@ const struct btc_chip chip_8852b = {
 	CHIP_WIFI6_8852B, /* chip id */
 	0x0, /* chip para ver */
 	0x6, /* desired bt_ver */
-	0x06010000, /* desired halbtc ver */
+	0x06030000, /* desired halbtc ver */
 	0x1, /* scoreboard version */
 	0x1, /* mailbox version*/
 	BTC_COEX_RTK_MODE, /* pta_mode */
@@ -152,7 +152,7 @@ void _8852b_wl_tx_power(struct btc_t *btc, u32 level)
 {
 	/*
 	* =========== All-Time WL Tx power control ===========
-    	* (ex: all-time fix WL Tx 10dBm , don¡¦t care GNT _BT and GNT _LTE)
+    	* (ex: all-time fix WL Tx 10dBm , donÂ¡Â¦t care GNT _BT and GNT _LTE)
 	* Turn off per-packet power control
 	* 0xD220[1] = 0, 0xD220[2] = 0;
 	*
@@ -186,6 +186,7 @@ void _8852b_wl_tx_power(struct btc_t *btc, u32 level)
 	      bit31~16 --> Per-Packet (GNT_BT = 1) Tx power control
 	*/
 	u32 pwr_val;
+	bool en = false;
 
 	if (level == BTC_WL_DEF_TX_PWR) { /* back to original */
 		pwr_val = bMASKDW;
@@ -197,9 +198,12 @@ void _8852b_wl_tx_power(struct btc_t *btc, u32 level)
 		if (level & BIT(7)) /* negative value */
 			pwr_val |= BIT(8); /* to fit s(9,2) format */
 		pwr_val |= bMASKHW;
+		en = true;
 	}
 
-	rtw_hal_rf_wl_tx_power_control(btc->hal, pwr_val);
+	/* rtw_hal_rf_wl_tx_power_control(btc->hal, pwr_val); */
+	rtw_hal_rf_wlan_tx_power_control(btc->hal, HW_PHY_0, ALL_TIME_CTRL,
+					 pwr_val, en);
 }
 
 void _8852b_set_wl_lna2(struct btc_t *btc, u8 level)
@@ -208,27 +212,35 @@ void _8852b_set_wl_lna2(struct btc_t *btc, u8 level)
          * level=1 Fix LNA2=5: TIA 1/0= (LNA2,TIAN6) = (5,0)/(5,1) = 18dB/12dB
          * To improve BT ACI in co-rx
          */
-#if 0   /* RDC: disable this function for A-cut RxA TIA gain bug,
+   /* RDC: disable this function for A-cut RxA TIA gain bug,
 	 * it should be enabled for B-cut if nug fixed */
 	switch (level) {
 	case 0: /* default */
 		_write_wl_rf_reg(btc, RF_PATH_B, 0xef, bMASKRF, 0x1000);
-		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x3);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x0);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x15);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x1);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x17);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x2);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x15);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x3);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x17);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0xef, bMASKRF, 0x0);
 		break;
 	case 1: /* Fix LNA2=5  */
 		_write_wl_rf_reg(btc, RF_PATH_B, 0xef, bMASKRF, 0x1000);
-		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x3);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x0);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x15);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x1);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x5);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x2);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x15);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x33, bMASKRF, 0x3);
+		_write_wl_rf_reg(btc, RF_PATH_B, 0x3f, bMASKRF, 0x5);
 		_write_wl_rf_reg(btc, RF_PATH_B, 0xef, bMASKRF, 0x0);
 		break;
 	}
-#endif
+
 }
 
 void _8852b_wl_rx_gain(struct btc_t *btc, u32 level)
@@ -241,15 +253,15 @@ void _8852b_wl_rx_gain(struct btc_t *btc, u32 level)
 	switch (level) {
 	case 0: /* original */
 		rtw_hal_bb_ctrl_btc_preagc(btc->hal, false);
-		/* _8852b_set_wl_lna2(btc, 0); */
+		_8852b_set_wl_lna2(btc, 0);
 		break;
 	case 1: /* for FDD free-run */
 		rtw_hal_bb_ctrl_btc_preagc(btc->hal, true);
-		/* _8852b_set_wl_lna2(btc, 0); */
+		_8852b_set_wl_lna2(btc, 0);
 		break;
 	case 2: /* for BTG Co-Rx*/
 		rtw_hal_bb_ctrl_btc_preagc(btc->hal, false);
-		/* _8852b_set_wl_lna2(btc, 1); */
+		_8852b_set_wl_lna2(btc, 1);
 		break;
 	}
 }
@@ -267,10 +279,20 @@ u8 _8852b_bt_rssi(struct btc_t *btc, u8 val)
 
 void _8852b_set_wl_trx_mask(struct btc_t *btc, u8 path, u8 group, u32 val)
 {
+#ifdef BTC_CONFIG_FW_IO_OFLD_SUPPORT
+	u32 srcpath = 0;
+
+	srcpath = path << 8 | RTW_MAC_RF_CMD_OFLD;
+	_btc_io_ofld(btc, srcpath, 0xef, bMASKRF, 0x20000, false);
+	_btc_io_ofld(btc, srcpath, 0x33, bMASKRF, group, false);
+	_btc_io_ofld(btc, srcpath, 0x3f, bMASKRF, val, false);
+	_btc_io_ofld(btc, srcpath, 0xef, bMASKRF, 0x0, false);
+#else
 	_write_wl_rf_reg(btc, path, 0xef, bMASKRF, 0x20000);
 	_write_wl_rf_reg(btc, path, 0x33, bMASKRF, group);
 	_write_wl_rf_reg(btc, path, 0x3f, bMASKRF, val);
 	_write_wl_rf_reg(btc, path, 0xef, bMASKRF, 0x0);
+#endif
 }
 
 void _8852b_wl_s1_standby(struct btc_t *btc, u32 state)
@@ -330,7 +352,6 @@ void _8852b_init_cfg(struct btc_t *btc)
 {
 	struct rtw_hal_com_t *h = btc->hal;
 	struct btc_module *module = &btc->mdinfo;
-	u32 val = 0;
 
 	PHL_INFO("[BTC], %s !! \n", __FUNCTION__);
 
@@ -343,32 +364,48 @@ void _8852b_init_cfg(struct btc_t *btc)
 	/* set WL Tx beacon = Hi-Pri */
 	btc->chip->ops->wl_pri(btc, BTC_PRI_MASK_BEACON, true);
 
-	/* set rf gnt debug off*/
-	_write_wl_rf_reg(btc, RF_PATH_A, 0x2, bMASKRF, 0x0);
-	_write_wl_rf_reg(btc, RF_PATH_B, 0x2, bMASKRF, 0x0);
-
 	/* set WL Tx thru in TRX mask table if GNT_WL=0 && BT_S1=ss group */
 	if (module->ant.type == BTC_ANT_SHARED) {
 		_8852b_set_wl_trx_mask(btc, RF_PATH_A, BTC_BT_SS_GROUP, 0x5ff);
 		_8852b_set_wl_trx_mask(btc, RF_PATH_B, BTC_BT_SS_GROUP, 0x5ff);
 		/* set path-A(S0) Tx/Rx no-mask if GNT_WL=0 && BT_S1=tx group */
 		_8852b_set_wl_trx_mask(btc, RF_PATH_A, BTC_BT_TX_GROUP, 0x5ff);
+		_8852b_set_wl_trx_mask(btc, RF_PATH_B, BTC_BT_TX_GROUP, 0x55f);
 	} else { /* set WL Tx stb if GNT_WL = 0 && BT_S1 = ss group for 3-ant */
-		_8852b_set_wl_trx_mask(btc, RF_PATH_A, BTC_BT_SS_GROUP, 0x5df);
-		_8852b_set_wl_trx_mask(btc, RF_PATH_B, BTC_BT_SS_GROUP, 0x5df);
+		_8852b_set_wl_trx_mask(btc, RF_PATH_A, BTC_BT_SS_GROUP, 0x5ff);
+		_8852b_set_wl_trx_mask(btc, RF_PATH_B, BTC_BT_SS_GROUP, 0x5ff);
+
+		_8852b_set_wl_trx_mask(btc, RF_PATH_A, BTC_BT_TX_GROUP, 0x5ff);
+		_8852b_set_wl_trx_mask(btc, RF_PATH_B, BTC_BT_TX_GROUP, 0x5ff);
 	}
+
+#ifdef BTC_CONFIG_FW_IO_OFLD_SUPPORT
+	/* set rf gnt debug off*/
+	_btc_io_ofld(btc, 0x1, 0x2, bMASKRF, 0x0, false);
+	_btc_io_ofld(btc, 0x101, 0x2, bMASKRF, 0x0, false);
+
+	/* set PTA break table */
+	_btc_io_ofld(btc, 0x2, R_BTC_BREAK_TABLE, bMASKDW, 0xf0ffffff, false);
+
+	/* enable BT counter 0xda40[16,2] = 2b'11 */
+	_btc_io_ofld(btc, 0x2, R_BTC_CSR_MODE, 0x10004, 0x4001, true);
+#else
+	/* set rf gnt debug off*/
+	_write_wl_rf_reg(btc, RF_PATH_A, 0x2, bMASKRF, 0x0);
+	_write_wl_rf_reg(btc, RF_PATH_B, 0x2, bMASKRF, 0x0);
 
 	/* set PTA break table */
 	_write_cx_reg(btc, R_BTC_BREAK_TABLE, 0xf0ffffff);
 
-	 /* enable BT counter 0xda40[16,2] = 2b'11 */
-        val = _read_cx_reg(btc, R_BTC_CSR_MODE);
-        _write_cx_reg(btc, R_BTC_CSR_MODE, val | BIT16 | BIT2);
+	/* enable BT counter 0xda40[16,2] = 2b'11 */
+	_write_cx_reg(btc, R_BTC_CSR_MODE,
+		      _read_cx_reg(btc, R_BTC_CSR_MODE) | BIT16 | BIT2);
+#endif
 }
 
 void _8852b_wl_pri (struct btc_t *btc, u8 map, bool state)
 {
-	u32 reg = 0, bitmap = 0, val = 0;
+	u32 reg = 0, bitmap = 0;
 
 	switch (map) {
 	case BTC_PRI_MASK_TX_RESP:
@@ -384,14 +421,14 @@ void _8852b_wl_pri (struct btc_t *btc, u8 map, bool state)
 		bitmap = B_BTC_PRI_MASK_RXCCK_V1;
 		break;
 	}
-
-	val = _read_cx_reg(btc, reg);
+#ifdef BTC_CONFIG_FW_IO_OFLD_SUPPORT
+	_btc_io_ofld(btc, RTW_MAC_MAC_CMD_OFLD, reg, bitmap, state, false);
+#else
 	if (state)
-		val = val | bitmap;
+		_write_cx_reg(btc, reg, _read_cx_reg(btc, reg) | bitmap);
 	else
-		val = val & (~bitmap);
-
-	_write_cx_reg(btc, reg, val);
+		_write_cx_reg(btc, reg, _read_cx_reg(btc, reg) & (~bitmap));
+#endif
 }
 
 #endif /* CONFIG_RTL8852B */

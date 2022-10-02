@@ -42,6 +42,7 @@ enum rtw_phl_status
 phl_watchdog_sw_cmd_hdl(struct phl_info_t *phl_info, enum rtw_phl_status psts);
 void rtw_phl_watchdog_stop(void *phl);
 
+
 #ifdef CONFIG_FSM
 void rtw_phl_watchdog_callback(void *phl);
 #endif

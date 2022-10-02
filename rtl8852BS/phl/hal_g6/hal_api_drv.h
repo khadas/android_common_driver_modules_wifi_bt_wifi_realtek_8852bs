@@ -44,10 +44,22 @@ u32 rtw_hal_read_rf_reg(struct rtw_hal_com_t *hal_com,
 bool rtw_hal_write_rf_reg(struct rtw_hal_com_t *hal_com,
 					enum rf_path path, u32 addr, u32 mask, u32 data);
 
+u8 rtw_hal_ex_cn_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_1ss_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_max_report(struct rtw_hal_com_t *hal_com);
+
+u8 rtw_hal_ex_evm_min_report(struct rtw_hal_com_t *hal_com);
+
 u32 rtw_hal_bb_read_cr(struct rtw_hal_com_t *hal_com, u32 addr, u32 mask);
 
 bool rtw_hal_bb_write_cr(struct rtw_hal_com_t *hal_com, u32 addr, u32 mask,
 			 u32 data);
+
+#ifdef CONFIG_PHL_DFS
+u32 rtw_hal_mac_cfg_dfs_rpt(struct rtw_hal_com_t *hal_com, struct hal_mac_dfs_rpt_cfg *conf);
+#endif
 
 u32 rtw_hal_mac_write_msk_pwr_reg(
 	struct rtw_hal_com_t *hal_com, u8 band, u32 offset, u32 mask, u32 val);
@@ -141,6 +153,10 @@ enum rtw_hal_status rtw_hal_rf_read_pwr_table(
 	u8 bandwidth, u8 channel, u8 offset, u8 dcm,
 	u8 beamforming, s16 *get_item);
 
+enum rtw_hal_status rtw_hal_rf_wlan_tx_power_control(
+	struct rtw_hal_com_t *hal_com,
+	enum phl_phy_idx phy, enum phl_pwr_ctrl pwr_ctrl_idx, u32 tx_power_val, bool enable);
+
 enum rtw_hal_status rtw_hal_rf_wl_tx_power_control(
 	struct rtw_hal_com_t *hal_com,
 	u32 tx_power_val);
@@ -211,6 +227,9 @@ rtw_hal_mac_get_buffer_data(struct rtw_hal_com_t *hal_com, u32 strt_addr,
 enum rtw_hal_status
 rtw_hal_fw_log_cfg(void *hal, u8 op, u8 type, u32 value);
 
+enum rtw_hal_status
+rtw_hal_mac_tx_path_map_cfg(struct rtw_hal_com_t *hal_com,
+                            struct hal_txmap_cfg *txmap_cfg);
 
 /* HALBB APIs for HW TX */
 
@@ -374,6 +393,12 @@ rtw_hal_cmd_notify(struct rtw_phl_com_t *phl_com,
                    u8 hw_idx);
 #ifdef CONFIG_FW_IO_OFLD_SUPPORT
 enum rtw_hal_status rtw_hal_mac_add_cmd_ofld(struct rtw_hal_com_t *hal_com, struct rtw_mac_cmd *cmd);
+
+void
+rtw_hal_bb_fwofld_cfgcr_start(struct rtw_hal_com_t *hal_com);
+void
+rtw_hal_bb_fwofld_cfgcr_end(struct rtw_hal_com_t *hal_com);
+
 #endif
 
 void rtw_hal_bb_env_rpt(struct rtw_hal_com_t *hal_com, struct rtw_env_report *env_rpt,

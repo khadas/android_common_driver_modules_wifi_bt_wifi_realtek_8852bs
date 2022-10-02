@@ -621,6 +621,7 @@ _adapter *rtw_sdio_primary_adapter_init(struct dvobj_priv *dvobj)
 	padapter->adapter_type = PRIMARY_ADAPTER;
 
 	padapter->hw_port = HW_PORT0;
+	padapter->adapter_link.adapter = padapter;
 
 	/* 3 7. init driver common data */
 	if (rtw_init_drv_sw(padapter) == _FAIL) {

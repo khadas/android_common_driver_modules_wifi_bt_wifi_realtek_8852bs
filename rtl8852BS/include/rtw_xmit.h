@@ -63,7 +63,9 @@
 
 
 #ifdef RTW_PHL_TX
+#ifndef RTW_MAX_FRAG_NUM
 #define RTW_MAX_FRAG_NUM 10 //max scatter number of a packet to xmit
+#endif /*RTW_MAX_FRAG_NUM*/
 #define RTW_MAX_WL_HEAD	100
 #define RTW_MAX_WL_TAIL 100
 #define RTW_SZ_LLC	(SNAP_SIZE + sizeof(u16))
@@ -1102,7 +1104,7 @@ void rtw_update_tx_rate_bmp(struct dvobj_priv *dvobj);
 u8 rtw_get_tx_bw_bmp_of_ht_rate(struct dvobj_priv *dvobj, u8 rate, u8 max_bw);
 u8 rtw_get_tx_bw_bmp_of_vht_rate(struct dvobj_priv *dvobj, u8 rate, u8 max_bw);
 s16 rtw_rfctl_get_oper_txpwr_max_mbm(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset, u8 ifbmp_mod, u8 if_op, bool eirp);
-s16 rtw_rfctl_get_reg_max_txpwr_mbm(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset, bool eirp);
+s16 rtw_rfctl_get_reg_max_txpwr_mbm(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, bool eirp);
 
 u8 query_ra_short_GI(struct sta_info *psta, u8 bw);
 

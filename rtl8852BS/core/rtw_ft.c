@@ -663,6 +663,7 @@ void rtw_ft_report_reassoc_evt(_adapter *padapter, u8 *pMacAddr)
 
 	_rtw_init_listhead(&pcmd_obj->list);
 	pcmd_obj->padapter = padapter;
+	pcmd_obj->band_idx = HW_BAND_MAX;
 	pcmd_obj->cmdcode = CMD_SET_MLME_EVT;
 	pcmd_obj->cmdsz = cmdsz;
 	pcmd_obj->parmbuf = pevtcmd;

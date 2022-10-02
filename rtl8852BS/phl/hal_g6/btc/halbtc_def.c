@@ -60,6 +60,10 @@
 	case RTW_DATA_RATE_##src: return #src
 #define case_polut(src) \
 	case BTC_PLT_##src: return #src
+#define case_band(src) \
+	case BAND_ON_##src: return #src
+#define case_cxstate(src) \
+	case BTC_##src: return #src
 
 const char *id_to_str(u8 type, u32 id)
 {
@@ -341,6 +345,8 @@ const char *id_to_str(u8 type, u32 id)
 		case_cxp(FIX_TD2080);
 		case_cxp(FIX_TDW1B1);
 		case_cxp(FIX_TD4010ISO);
+		case_cxp(FIX_TD4010ISO_DL);
+		case_cxp(FIX_TD4010ISO_UL);
 		case_cxp(PFIX_TD3030);
 		case_cxp(PFIX_TD5050);
 		case_cxp(PFIX_TD2030);
@@ -512,6 +518,24 @@ const char *id_to_str(u8 type, u32 id)
 		case_rate(HE_NSS4_MCS10);
 		case_rate(HE_NSS4_MCS11);
 		case_rate(MAX);
+		}
+		break;
+	case BTC_STR_BAND:
+		switch(id) {
+		case_band(24G);
+		case_band(5G);
+		case_band(6G);
+		}
+		break;
+	case BTC_STR_CXSTATE:
+		switch(id) {
+		case_cxstate(WIDLE);
+		case_cxstate(WBUSY_BNOSCAN);
+		case_cxstate(WBUSY_BSCAN);
+		case_cxstate(WSCAN_BNOSCAN);
+		case_cxstate(WSCAN_BSCAN);
+		case_cxstate(WLINKING);
+		case_cxstate(WIDLE_BSCAN);
 		}
 		break;
 	}

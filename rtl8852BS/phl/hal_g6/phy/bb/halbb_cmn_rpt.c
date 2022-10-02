@@ -507,7 +507,7 @@ void halbb_show_phy_hitogram_su(struct bb_info *bb)
 			       HALBB_SNPRINT_SIZE);
 	BB_DBG(bb, DBG_CMN, "  %-8s %-9s  %s\n", "[TH]", "(Avg)", bb->dbg_buf);
 	/*val*/
-	avg->cn_avg = (u8)HALBB_DIV(acc->cn_avg_acc, valid_cnt);
+	avg->cn_avg = (u8)HALBB_DIV(acc->cn_avg_acc, pkt_cnt->pkt_cnt_2ss);
 	halbb_print_hist_2_buf(bb, hist->cn_avg_hist, BB_HIST_SIZE, bb->dbg_buf,
 			       HALBB_SNPRINT_SIZE);
 	BB_DBG(bb, DBG_CMN, "%-9s (%02d.%03d)  %s\n", "[CN_avg]",
@@ -970,10 +970,11 @@ void halbb_rx_pkt_su_phy_hist(struct bb_info *bb)
 	hist->snr_avg_hist[intvl]++;
 
 	/*CN_avg Histogram*/
-	acc->cn_avg_acc += psts_1->cn_avg;
+	if (rate_i->ss == 2)
+		acc->cn_avg_acc += psts_1->cn_avg;
 	intvl = halbb_find_intrvl(bb, (psts_1->cn_avg >> 1), hist_th->cn_hist_th, BB_HIST_TH_SIZE);
 	hist->cn_avg_hist[intvl]++;
-	
+
 	/*CFO_avg Histogram*/
 	if (bb_cfo_trk->cfo_src == CFO_SRC_FD)
 		cfo = psts_1->cfo_avg;

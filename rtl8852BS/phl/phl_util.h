@@ -31,6 +31,10 @@
 #define DIFF(_x_, _y_) ((_x_ >= _y_) ? (_x_ - _y_) : (_y_ - _x_))
 #endif
 
+#ifndef RANGE_OVERLAP
+#define RANGE_OVERLAP(hi_a, lo_a, hi_b, lo_b) (((hi_a) > (lo_b)) && ((lo_a) < (hi_b)))
+#endif
+
 #define SET_STATUS_FLAG(_status,_flags)	\
 	((_status) |= (_flags))
 #define TEST_STATUS_FLAG(_status,_flags)\
@@ -111,5 +115,13 @@ u8 pq_insert(void *d, struct phl_queue *q, enum lock_type type, void *priv, _os_
 u32 phl_get_passing_time_us(u32 start);
 u32 phl_get_passing_time_ms(u32 start);
 
+#define rtw_phl_is_ap_category(_type) (_type == PHL_RTYPE_AP ||\
+				       _type == PHL_RTYPE_P2P_GO ||\
+				       _type == PHL_RTYPE_VAP)
+#define rtw_phl_is_client_category(_type) (_type == PHL_RTYPE_STATION ||\
+					   _type == PHL_RTYPE_P2P_GC ||\
+					   _type == PHL_RTYPE_TDLS)
+#define rtw_phl_role_is_ap_category(_wrole) (rtw_phl_is_ap_category(_wrole->type))
+#define rtw_phl_role_is_client_category(_wrole) (rtw_phl_is_client_category(_wrole->type))
 #endif /*_PHL_UTIL_H_*/
 

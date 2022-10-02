@@ -86,6 +86,16 @@ static REGULATION_TXPWR_LMT phl_tpo_to_txpwr_lmt(enum TP_OVERWRITE tpo)
 #define RTW_DOMAIN_MAP_M_VER	"h"
 #define RTW_COUNTRY_MAP_VER		"31"
 
+#define rtw_is_5g_band1(ch) ((ch) >= 36 && (ch) <= 48)
+#define rtw_is_5g_band2(ch) ((ch) >= 52 && (ch) <= 64)
+#define rtw_is_5g_band3(ch) ((ch) >= 100 && (ch) <= 144)
+#define rtw_is_5g_band4(ch) ((ch) >= 149 && (ch) <= 177)
+
+#define rtw_is_6g_band1(ch) ((ch) >= 1 && (ch) <= 93)
+#define rtw_is_6g_band2(ch) ((ch) >= 97 && (ch) <= 117)
+#define rtw_is_6g_band3(ch) ((ch) >= 121 && (ch) <= 189)
+#define rtw_is_6g_band4(ch) ((ch) >= 193 && (ch) <= 237)
+
 struct ch_list_t {
 	u8 *len_ch_attr;
 };
@@ -672,7 +682,7 @@ static bool rtw_chplan_6g_get_ch(u8 id, const u32 ch, u8 *flags)
  *
  * return valid (1) or not (0)
  */
-u8 rtw_chplan_is_chbw_valid(u8 id, u8 id_6g, enum band_type band, u8 ch, u8 bw, u8 offset
+u8 rtw_chplan_is_bchbw_valid(u8 id, u8 id_6g, enum band_type band, u8 ch, u8 bw, u8 offset
 	, bool allow_primary_passive, bool allow_passive, struct registry_priv *regsty)
 {
 	u8 cch;
@@ -684,14 +694,9 @@ u8 rtw_chplan_is_chbw_valid(u8 id, u8 id_6g, enum band_type band, u8 ch, u8 bw, 
 	int ch_idx;
 	u8 flags;
 
-#if CONFIG_IEEE80211_BAND_6GHZ
-	if (band == BAND_ON_6G)
-		goto exit;
-#endif
+	cch = rtw_get_center_ch_by_band(band, ch, bw, offset);
 
-	cch = rtw_get_center_ch(ch, bw, offset); /* TODO: 6G */
-
-	if (!rtw_get_op_chs_by_cch_bw(cch, bw, &op_chs, &op_ch_num)) /* TODO: 6G  */
+	if (!rtw_get_op_chs_by_bcch_bw(band, cch, bw, &op_chs, &op_ch_num))
 		goto exit;
 
 	for (i = 0; i < op_ch_num; i++) {
@@ -1014,6 +1019,7 @@ u8 init_channel_set(_adapter *adapter)
 
 bool rtw_chset_is_dfs_range(struct _RT_CHANNEL_INFO *chset, u32 hi, u32 lo)
 {
+	enum band_type band = rtw_freq2band(hi);
 	u8 hi_ch = rtw_freq2ch(hi);
 	u8 lo_ch = rtw_freq2ch(lo);
 	int i;
@@ -1021,14 +1027,14 @@ bool rtw_chset_is_dfs_range(struct _RT_CHANNEL_INFO *chset, u32 hi, u32 lo)
 	for (i = 0; i < MAX_CHANNEL_NUM && chset[i].ChannelNum != 0; i++){
 		if (!(chset[i].flags & RTW_CHF_DFS))
 			continue;
-		if (hi_ch > chset[i].ChannelNum && lo_ch < chset[i].ChannelNum)
+		if (band == chset[i].band && hi_ch > chset[i].ChannelNum && lo_ch < chset[i].ChannelNum)
 			return 1;
 	}
 
 	return 0;
 }
 
-bool rtw_chset_is_dfs_ch(struct _RT_CHANNEL_INFO *chset, u8 ch)
+bool rtw_chset_is_dfs_ch(struct _RT_CHANNEL_INFO *chset, u8 ch) RTW_FUNC_2G_5G_ONLY
 {
 	int i;
 
@@ -1040,11 +1046,33 @@ bool rtw_chset_is_dfs_ch(struct _RT_CHANNEL_INFO *chset, u8 ch)
 	return 0;
 }
 
-bool rtw_chset_is_dfs_chbw(struct _RT_CHANNEL_INFO *chset, u8 ch, u8 bw, u8 offset)
+bool rtw_chset_is_dfs_bch(struct _RT_CHANNEL_INFO *chset, enum band_type band, u8 ch)
+{
+	int i;
+
+	for (i = 0; i < MAX_CHANNEL_NUM && chset[i].ChannelNum != 0; i++){
+		if (chset[i].band == band && chset[i].ChannelNum == ch)
+			return chset[i].flags & RTW_CHF_DFS ? 1 : 0;
+	}
+
+	return 0;
+}
+
+bool rtw_chset_is_dfs_chbw(struct _RT_CHANNEL_INFO *chset, u8 ch, u8 bw, u8 offset) RTW_FUNC_2G_5G_ONLY
 {
 	u32 hi, lo;
 
 	if (!rtw_chbw_to_freq_range(ch, bw, offset, &hi, &lo))
+		return 0;
+
+	return rtw_chset_is_dfs_range(chset, hi, lo);
+}
+
+bool rtw_chset_is_dfs_bchbw(struct _RT_CHANNEL_INFO *chset, enum band_type band, u8 ch, u8 bw, u8 offset)
+{
+	u32 hi, lo;
+
+	if (!rtw_bchbw_to_freq_range(band, ch, bw, offset, &hi, &lo))
 		return 0;
 
 	return rtw_chset_is_dfs_range(chset, hi, lo);
@@ -1125,6 +1153,7 @@ const char *const _rtw_dfs_regd_str[] = {
 	[RTW_DFS_REGD_FCC]	= "FCC",
 	[RTW_DFS_REGD_MKK]	= "MKK",
 	[RTW_DFS_REGD_ETSI]	= "ETSI",
+	[RTW_DFS_REGD_KCC]	= "KCC",
 };
 
 const char *const _txpwr_lmt_str[] = {
@@ -1305,6 +1334,8 @@ void rtw_edcca_mode_update(struct dvobj_priv *dvobj)
 			);
 		}
 	}
+
+	rtw_edcca_hal_update(dvobj);
 }
 
 u8 rtw_get_edcca_mode(struct dvobj_priv *dvobj, enum band_type band)
@@ -3257,14 +3288,15 @@ bool rtw_chplan_ids_is_world_wide(u8 chplan, u8 chplan_6g)
 
 /*
  * Check if the @param ch, bw, offset is valid for the given @param ent
- * @ch_set: the given channel set
+ * @ent: the given country chplan ent
+ * @band: the given band
  * @ch: the given channel number
  * @bw: the given bandwidth
  * @offset: the given channel offset
  *
  * return valid (1) or not (0)
  */
-u8 rtw_country_chplan_is_chbw_valid(struct country_chplan *ent, enum band_type band, u8 ch, u8 bw, u8 offset
+u8 rtw_country_chplan_is_bchbw_valid(struct country_chplan *ent, enum band_type band, u8 ch, u8 bw, u8 offset
 	, bool allow_primary_passive, bool allow_passive, struct registry_priv *regsty)
 {
 	u8 chplan_6g = RTW_CHPLAN_6G_NULL;
@@ -3277,7 +3309,7 @@ u8 rtw_country_chplan_is_chbw_valid(struct country_chplan *ent, enum band_type b
 	chplan_6g = ent->chplan_6g;
 	#endif
 
-	valid = rtw_chplan_is_chbw_valid(ent->chplan, chplan_6g, band, ch, bw, offset
+	valid = rtw_chplan_is_bchbw_valid(ent->chplan, chplan_6g, band, ch, bw, offset
 		, allow_primary_passive, allow_passive, regsty);
 
 exit:
@@ -3378,7 +3410,7 @@ enum country_ie_slave_status rtw_get_chplan_from_recv_country_ie(_adapter *adapt
 	chplan_6g = ent->chplan_6g;
 	#endif
 
-	if (!rtw_chplan_is_chbw_valid(ent->chplan, chplan_6g, band, opch
+	if (!rtw_chplan_is_bchbw_valid(ent->chplan, chplan_6g, band, opch
 			, CHANNEL_WIDTH_20, CHAN_OFFSET_NO_EXT, 1, 1, regsty)
 	) {
 		u8 edcca_modes[BAND_MAX];
@@ -3501,7 +3533,7 @@ void dump_country_chplan_map(void *sel, bool regd_info)
 
 	for (code[0] = 'A'; code[0] <= 'Z'; code[0]++) {
 		for (code[1] = 'A'; code[1] <= 'Z'; code[1]++) {
-			if (rtw_get_chplan_from_country(code, &ent) == _FALSE)
+			if (!rtw_get_chplan_from_country(code, &ent))
 				continue;
 
 			dump_country_chplan(sel, &ent, regd_info);
@@ -3519,7 +3551,6 @@ void dump_country_list(void *sel)
 		for (code[1] = 'A'; code[1] <= 'Z'; code[1]++) {
 			if (!rtw_get_chplan_from_country(code, NULL))
 				continue;
-
 			_RTW_PRINT_SEL(sel, "%c%c ", code[0], code[1]);
 		}
 	}

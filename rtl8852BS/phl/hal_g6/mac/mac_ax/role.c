@@ -592,13 +592,17 @@ u32 mac_add_role(struct mac_ax_adapter *adapter, struct mac_ax_role_info *info)
 		goto role_add_fail;
 	}
 
-	ret = mac_fw_role_maintain(adapter, info);
-	if (ret != MACSUCCESS) {
-		if (ret == MACFWNONRDY) {
-			PLTFM_MSG_WARN("skip fw role maintain\n");
-		} else {
-			PLTFM_MSG_ERR("mac_fw_role_maintain failed:%d\n", ret);
-			goto role_add_fail;
+	// Do not call mac_fw_role_maintain if is_mulitcast_entry = 1.
+	// mac_fw_role_maintain will trigger FW to create FW Role.
+	if (!info->is_mul_ent) {
+		ret = mac_fw_role_maintain(adapter, info);
+		if (ret != MACSUCCESS) {
+			if (ret == MACFWNONRDY) {
+				PLTFM_MSG_WARN("skip fw role maintain\n");
+			} else {
+				PLTFM_MSG_ERR("mac_fw_role_maintain failed:%d\n", ret);
+				goto role_add_fail;
+			}
 		}
 	}
 
@@ -702,14 +706,17 @@ u32 mac_change_role(struct mac_ax_adapter *adapter,
 	if (info->upd_mode == MAC_AX_ROLE_TYPE_CHANGE ||
 	    info->upd_mode == MAC_AX_ROLE_REMOVE ||
 	    info->upd_mode == MAC_AX_ROLE_FW_RESTORE) {
-		ret = mac_fw_role_maintain(adapter, info);
-		if (ret != MACSUCCESS) {
-			if (ret == MACFWNONRDY) {
-				PLTFM_MSG_WARN("skip fw role maintain\n");
-			} else {
-				PLTFM_MSG_ERR("mac_fw_role_maintain :%d\n",
-					      ret);
-				return ret;
+		// Do not call mac_fw_role_maintain if is_mulitcast_entry = 1.
+		if (!info->is_mul_ent) {
+			ret = mac_fw_role_maintain(adapter, info);
+			if (ret != MACSUCCESS) {
+				if (ret == MACFWNONRDY) {
+					PLTFM_MSG_WARN("skip fw role maintain\n");
+				} else {
+					PLTFM_MSG_ERR("mac_fw_role_maintain :%d\n",
+						      ret);
+					return ret;
+				}
 			}
 		}
 		if ((info->upd_mode == MAC_AX_ROLE_TYPE_CHANGE ||

@@ -277,6 +277,19 @@ _phl_cmd_general_post_phase_msg_hdlr(struct phl_info_t *phl_info, void *dispr,
 	break;
 #endif
 
+	case MSG_EVT_GET_TX_PWR_DBM:
+	{
+		if (IS_MSG_CANNOT_IO(msg->msg_id))
+			psts = RTW_PHL_STATUS_CANNOT_IO;
+		else if (IS_MSG_FAIL(msg->msg_id))
+			psts = RTW_PHL_STATUS_FAILURE;
+		else if (IS_MSG_CANCEL(msg->msg_id))
+			psts = RTW_PHL_STATUS_FAILURE;
+		else
+			psts = rtw_phl_get_txinfo_pwr((void*)phl_info, (s16*)(phl_cmd->buf));
+	}
+	break;
+
 	case MSG_EVT_NOTIFY_HAL:
 		psts = phl_notify_cmd_hdl(phl_info, phl_cmd->buf);
 	break;
@@ -325,6 +338,16 @@ _phl_cmd_general_post_phase_msg_hdlr(struct phl_info_t *phl_info, void *dispr,
 	case MSG_EVT_STA_CHG_STAINFO:
 		psts = phl_cmd_change_stainfo_hdl(phl_info, phl_cmd->buf);
 	break;
+
+#ifdef CONFIG_PHL_DFS
+	case MSG_EVT_DFS_RD_SETUP:
+		psts = phl_cmd_dfs_rd_ctl_hdl(phl_info, phl_cmd->buf);
+	break;
+#endif
+
+	case MSG_EVT_TXPWR_SETUP:
+		psts = phl_cmd_txpwr_ctl_hdl(phl_info, phl_cmd->buf);
+		break;
 
 	default:
 		psts = RTW_PHL_STATUS_SUCCESS;

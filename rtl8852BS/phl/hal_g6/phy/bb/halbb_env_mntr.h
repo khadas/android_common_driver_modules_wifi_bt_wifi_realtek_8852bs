@@ -82,6 +82,8 @@ struct bb_env_mntr_cr_info {
 	u32 ccx_trig_m;
 	u32 ccx_edcca_opt;
 	u32 ccx_edcca_opt_m;
+	u32 ccx_source_sel;
+	u32 ccx_source_sel_m;
 	u32 clm_unit_idx;
 	u32 clm_unit_idx_m;
 	u32 clm_opt;
@@ -420,6 +422,7 @@ void halbb_fahm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 void halbb_edcca_clm_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			 char *output, u32 *_out_len);
 #endif
+u32 halbb_ccx_idx_cnt_2_us(struct bb_info *bb, u16 idx_cnt);
 void halbb_env_mntr_log(struct bb_info *bb, u32 dbg_comp);
 void halbb_idle_time_pwr_physts(struct bb_info *bb, struct physts_rxd *desc, bool is_cck_rate);
 void halbb_env_mntr(struct bb_info *bb);

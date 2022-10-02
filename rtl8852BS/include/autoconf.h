@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2019 - 2022 Realtek Corporation.
+ * Copyright(c) 2019 - 2020 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -67,6 +67,10 @@
 #define CONFIG_RX_PSTS_PER_PKT
 #define CONFIG_SIGNAL_STAT_PROCESS
 /*#define DBG_RX_SIGNAL_DISPLAY_PROCESSING*/
+#endif
+
+#ifdef CONFIG_BTC
+#define RTK_WKARD_CORE_BTC_STBC_CAP
 #endif
 
 /*
@@ -170,6 +174,8 @@
 
 #define CONFIG_HW_RTS
 
+#define CONFIG_NARROWBAND_SUPPORTING
+
 /*
  * Hareware/Firmware Related Config
  */
@@ -197,16 +203,16 @@
  */
 #define CONFIG_TX_AGGREGATION
 #define CONFIG_XMIT_THREAD_MODE	/* necessary for SDIO */
+/*#define CONFIG_SDIO_TX_ENABLE_AVAL_INT => Related MAC reg must setting => HAL-MAC ?? */
+
 /*#define RTW_XMIT_THREAD_HIGH_PRIORITY*/
 /*#define RTW_XMIT_THREAD_CB_HIGH_PRIORITY*/
-/*#define CONFIG_SDIO_TX_ENABLE_AVAL_INT => Related MAC reg must setting => HAL-MAC ?? */
+/*#define RTW_RECV_THREAD_HIGH_PRIORITY*/
+
 #define CONFIG_SDIO_RX_COPY
 
 #define CONFIG_SDIO_RX_NETBUF_ALLOC_IN_PHL
 #define CONFIG_SDIO_READ_RXFF_IN_INT
-
-/*#define RTW_RECV_THREAD_HIGH_PRIORITY*/
-
 
 #ifdef CONFIG_RTW_NAPI
 #define CONFIG_RTW_NAPI_DYNAMIC
@@ -216,13 +222,18 @@
 #endif
 #endif
 
+#define CONFIG_QUOTA_TURBO_ENABLE
+
 #define CONFIG_REDUCE_TX_CPU_LOADING
 
-#define MAX_XMITBUF_SZ	26*1024	/* 26 KB */
-#define MAX_RECVBUF_SZ	68608	/* 67*1024 KB*/
+#define MAX_XMITBUF_SZ	26624	/* 26 KB */
+#define MAX_RECVBUF_SZ	68608	/* 68 KB*/
 #define MAX_PHL_TX_RING_ENTRY_NUM 512
 #define MAX_PHL_RX_RING_ENTRY_NUM 536
 #define CONFIG_RTW_REDUCE_MEM
+#define NR_XMITFRAME	MAX_PHL_TX_RING_ENTRY_NUM
+#define MAX_TX_RING_NUM		MAX_PHL_TX_RING_ENTRY_NUM
+#define RTW_MAX_FRAG_NUM 1
 #define CONFIG_SCAN_BACKOP_STA
 /*
  * Others
@@ -304,7 +315,9 @@
 #ifdef CONFIG_POWER_SAVE
 	/* #define CONFIG_RTW_IPS */
 	/* #define CONFIG_RTW_LPS */
-
+	#ifdef CONFIG_RTW_IPS
+		#define CONFIG_FWIPS
+	#endif
 	#if defined(CONFIG_RTW_IPS) || defined(CONFIG_RTW_LPS)
 		#define CONFIG_PS_FW_DBG
 	#endif
@@ -333,6 +346,15 @@
 
 #define CONFIG_MSG_NUM 100
 #define SCAN_PER_CH_EX_TIME 350
+#define CONFIG_RTW_DISABLE_PHL_LOG
 
+#define CONFIG_XMIT_ACK
+#ifdef CONFIG_XMIT_ACK
+/*#define DBG_XMIT_ACK*/
+#define RTW_WKARD_CCX_RPT_LIMIT_CTRL
+#define CONFIG_PHL_DEFAULT_MGNT_Q_RPT_EN
+#define CONFIG_ACTIVE_KEEP_ALIVE_CHECK
+#define RTW_MAX_MGMT_TX_MS_GAS 2000
+#endif /*CONFIG_XMIT_ACK*/
 #endif /* _AUTOCONF_H_ */
 

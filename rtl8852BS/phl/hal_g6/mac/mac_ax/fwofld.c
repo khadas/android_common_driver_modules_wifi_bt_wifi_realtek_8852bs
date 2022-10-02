@@ -724,6 +724,7 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 	u8 *buf;
 	u16 alloc_id;
 	u32 ret;
+	u32 sizeof_pkt_ofld_hdr = sizeof(struct mac_ax_pkt_ofld_hdr);
 	#if MAC_AX_PHL_H2C
 	struct rtw_h2c_pkt *h2cb;
 	#else
@@ -731,6 +732,7 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 	#endif
 	struct fwcmd_packet_ofld *write_ptr;
 	struct mac_ax_pkt_ofld_info *ofld_info = &adapter->pkt_ofld_info;
+	enum h2c_buf_class h2cb_type;
 
 	if (adapter->sm.fwdl != MAC_AX_FWDL_INIT_RDY)
 		return MACNOFW;
@@ -753,7 +755,20 @@ u32 mac_add_pkt_ofld(struct mac_ax_adapter *adapter, u8 *pkt, u16 len, u8 *id)
 			alloc_id, ofld_info->free_id_count,
 			ofld_info->used_id_count);
 
-	h2cb = h2cb_alloc(adapter, H2CB_CLASS_DATA);
+	if (len + sizeof_pkt_ofld_hdr <= (H2C_CMD_LEN - FWCMD_HDR_LEN)) {
+		h2cb_type = H2CB_CLASS_CMD;
+		PLTFM_MSG_TRACE("pkt ofld size %d, using CMD Q\n", len);
+	} else if (len + sizeof_pkt_ofld_hdr <= (H2C_DATA_LEN - FWCMD_HDR_LEN)) {
+		h2cb_type = H2CB_CLASS_DATA;
+		PLTFM_MSG_TRACE("pkt ofld size %d, using DATA Q\n", len);
+	} else if (len + sizeof_pkt_ofld_hdr <= (H2C_LONG_DATA_LEN - FWCMD_HDR_LEN)) {
+		h2cb_type = H2CB_CLASS_LONG_DATA;
+		PLTFM_MSG_TRACE("pkt ofld size %d, using LDATA Q\n", len);
+	} else {
+		PLTFM_MSG_ERR("pkt ofld size %d, exceed LDATA Q size, abort\n", len);
+		return MACBUFSZ;
+	}
+	h2cb = h2cb_alloc(adapter, h2cb_type);
 	if (!h2cb)
 		return MACNPTR;
 
@@ -1210,6 +1225,7 @@ static u32 add_cmd(struct mac_ax_adapter *adapter, struct rtw_mac_cmd *cmd)
 	struct mac_ax_cmd_ofld_info *ofld_info = &adapter->cmd_ofld_info;
 	u16 total_len = CMD_OFLD_SIZE;
 	struct fwcmd_cmd_ofld *write_ptr;
+	enum rtw_mac_src_cmd_ofld src = cmd->src;
 
 	if (!ofld_info->buf) {
 		ofld_info->buf = (u8 *)PLTFM_MALLOC(CMD_OFLD_MAX_LEN);
@@ -1226,16 +1242,23 @@ static u32 add_cmd(struct mac_ax_adapter *adapter, struct rtw_mac_cmd *cmd)
 
 	write_ptr = (struct fwcmd_cmd_ofld *)ofld_info->buf_wptr;
 
+	src = cmd->src == RTW_MAC_RF_DDIE_CMD_OFLD ? RTW_MAC_RF_CMD_OFLD : cmd->src;
+
 	write_ptr->dword0 =
-	cpu_to_le32(SET_WORD(cmd->src, FWCMD_H2C_CMD_OFLD_SRC) |
+	cpu_to_le32(SET_WORD(src, FWCMD_H2C_CMD_OFLD_SRC) |
 		    SET_WORD(cmd->type, FWCMD_H2C_CMD_OFLD_TYPE) |
 		    (cmd->lc ? FWCMD_H2C_CMD_OFLD_LC : 0) |
 		    SET_WORD(cmd->rf_path, FWCMD_H2C_CMD_OFLD_PATH) |
 		    SET_WORD(cmd->offset, FWCMD_H2C_CMD_OFLD_OFFSET) |
 		    SET_WORD(ofld_info->cmd_num, FWCMD_H2C_CMD_OFLD_CMD_NUM)
 	);
+	/* TODO: change FWCMD_H2C_CMD_OFLD_OFFSET to FWCMD_H2C_CMD_OFLD_BASE_OFFSET */
 	write_ptr->dword1 =
-	cpu_to_le32(SET_WORD(cmd->id, FWCMD_H2C_CMD_OFLD_ID));
+	cpu_to_le32(SET_WORD(cmd->id, FWCMD_H2C_CMD_OFLD_ID) |
+		    SET_WORD(cmd->src == RTW_MAC_RF_DDIE_CMD_OFLD ? 1 : 0,
+			     FWCMD_H2C_CMD_OFLD_OFFSET)
+	);
+
 	write_ptr->dword2 =
 	cpu_to_le32(SET_WORD(cmd->value, FWCMD_H2C_CMD_OFLD_VALUE));
 	write_ptr->dword3 =
@@ -1413,6 +1436,30 @@ fail:
 	return ret;
 }
 
+u32 mac_cmd_ofld(struct mac_ax_adapter *adapter)
+{
+	struct mac_ax_cmd_ofld_info *ofld_info = &adapter->cmd_ofld_info;
+	struct mac_ax_state_mach *sm = &adapter->sm;
+	u32 ret = MACSUCCESS;
+
+	PLTFM_MUTEX_LOCK(&ofld_info->cmd_ofld_lock);
+	if (sm->cmd_state != MAC_AX_CMD_OFLD_IDLE) {
+		PLTFM_MSG_ERR("%s: IO offload is busy\n", __func__);
+		PLTFM_MUTEX_UNLOCK(&ofld_info->cmd_ofld_lock);
+		return MACPROCERR;
+	}
+	sm->cmd_state = MAC_AX_CMD_OFLD_PROC;
+	PLTFM_MUTEX_UNLOCK(&ofld_info->cmd_ofld_lock);
+
+	ret = cmd_ofld(adapter);
+
+	PLTFM_MUTEX_LOCK(&ofld_info->cmd_ofld_lock);
+	sm->cmd_state = MAC_AX_CMD_OFLD_IDLE;
+	PLTFM_MUTEX_UNLOCK(&ofld_info->cmd_ofld_lock);
+
+	return ret;
+}
+
 u32 mac_add_cmd_ofld(struct mac_ax_adapter *adapter, struct rtw_mac_cmd *cmd)
 {
 	struct mac_ax_cmd_ofld_info *ofld_info = &adapter->cmd_ofld_info;
@@ -1420,7 +1467,8 @@ u32 mac_add_cmd_ofld(struct mac_ax_adapter *adapter, struct rtw_mac_cmd *cmd)
 	u32 ret = MACSUCCESS;
 
 	if (cmd->type !=  RTW_MAC_DELAY_OFLD &&
-	    cmd->src != RTW_MAC_RF_CMD_OFLD && cmd->offset & (4 - 1))
+	    (cmd->src != RTW_MAC_RF_CMD_OFLD && cmd->src != RTW_MAC_RF_DDIE_CMD_OFLD) &&
+	    cmd->offset & (4 - 1))
 		return MACBADDR;
 
 	if (adapter->sm.fwdl != MAC_AX_FWDL_INIT_RDY)
@@ -1551,6 +1599,48 @@ u32 get_ccxrpt_event(struct mac_ax_adapter *adapter,
 	return MACSUCCESS;
 }
 
+u32 get_ftmrpt_event(struct mac_ax_adapter *adapter,
+		     struct rtw_c2h_info *c2h,
+		     enum phl_msg_evt_id *id, u8 *c2h_info)
+{
+	struct mac_ax_ftmrpt *info;
+	u32 val_d0, val_d4, val_d5;
+	u32 dword0 = *((u32 *)c2h->content);
+	u32 dword4 = *((u32 *)(c2h->content + 16));
+	u32 dword5 = *((u32 *)(c2h->content + 20));
+
+	info = (struct mac_ax_ftmrpt *)c2h_info;
+	val_d0 = le32_to_cpu(dword0);
+	val_d4 = le32_to_cpu(dword4);
+	val_d5 = le32_to_cpu(dword5);
+	info->macid = GET_FIELD(val_d0, TXCCXRPT_MACID);
+	info->FTM_error_status = GET_FIELD(val_d4, FTMACKRPT_FTM_ERROR_STATUS);
+	info->t2r_t14 = val_d5;
+
+	return MACSUCCESS;
+}
+
+u32 get_ftmackrpt_event(struct mac_ax_adapter *adapter,
+			struct rtw_c2h_info *c2h,
+			enum phl_msg_evt_id *id, u8 *c2h_info)
+{
+	struct mac_ax_ftmackrpt *info;
+	u32 val_d0, val_d4, val_d5;
+	u32 dword0 = *((u32 *)c2h->content);
+	u32 dword4 = *((u32 *)(c2h->content + 16));
+	u32 dword5 = *((u32 *)(c2h->content + 20));
+
+	info = (struct mac_ax_ftmackrpt *)c2h_info;
+	val_d0 = le32_to_cpu(dword0);
+	val_d4 = le32_to_cpu(dword4);
+	val_d5 = le32_to_cpu(dword5);
+	info->macid = GET_FIELD(val_d0, TXCCXRPT_MACID);
+	info->FTM_error_status = GET_FIELD(val_d4, FTMACKRPT_FTM_ERROR_STATUS);
+	info->r2t_t23 = val_d5;
+
+	return MACSUCCESS;
+}
+
 static inline u8 scanofld_ch_list_len(struct scan_chinfo_list *list)
 {
 	return list->size;
@@ -1606,50 +1696,55 @@ static inline u32 scanofld_ch_list_insert_tail(struct mac_ax_adapter *adapter,
 static inline void scanofld_ch_node_print(struct mac_ax_adapter *adapter,
 					  struct scanofld_chinfo_node *curr_node, u8 i)
 {
-	PLTFM_MSG_TRACE("[CH %d] - DWORD 0:%x\n", i, *((u32 *)(curr_node->chinfo)));
-	PLTFM_MSG_TRACE("[CH %d] -- period = %d\n", i, curr_node->chinfo->period);
-	PLTFM_MSG_TRACE("[CH %d] -- dwell_time = %d\n", i, curr_node->chinfo->dwell_time);
-	PLTFM_MSG_TRACE("[CH %d] -- central_ch = %d\n", i, curr_node->chinfo->central_ch);
-	PLTFM_MSG_TRACE("[CH %d] -- pri_ch = %d\n", i, curr_node->chinfo->pri_ch);
-	PLTFM_MSG_TRACE("[CH %d] - DWORD 1:%x\n", i, *((u32 *)(curr_node->chinfo) + 1));
-	PLTFM_MSG_TRACE("[CH %d] -- bw = %d\n", i, curr_node->chinfo->bw);
-	PLTFM_MSG_TRACE("[CH %d] -- noti_dwell = %d\n", i, curr_node->chinfo->c2h_notify_dwell);
-	PLTFM_MSG_TRACE("[CH %d] -- noti_preTX = %d\n", i, curr_node->chinfo->c2h_notify_preTX);
-	PLTFM_MSG_TRACE("[CH %d] -- noti_postTX = %d\n", i, curr_node->chinfo->c2h_notify_postTX);
-	PLTFM_MSG_TRACE("[CH %d] -- noti_leaveCh = %d\n", i, curr_node->chinfo->c2h_notify_leaveCH);
-	PLTFM_MSG_TRACE("[CH %d] -- noti_enterCh = %d\n", i, curr_node->chinfo->c2h_notify_enterCH);
-	PLTFM_MSG_TRACE("[CH %d] -- numAddtionPkt = %d\n", i, curr_node->chinfo->num_addition_pkt);
-	PLTFM_MSG_TRACE("[CH %d] -- tx_pkt = %d\n", i, curr_node->chinfo->tx_pkt);
-	PLTFM_MSG_TRACE("[CH %d] -- pause_tx_data = %d\n", i, curr_node->chinfo->pause_tx_data);
-	PLTFM_MSG_TRACE("[CH %d] -- rsvd0 = %d\n", i, curr_node->chinfo->rsvd0);
-	PLTFM_MSG_TRACE("[CH %d] -- rsvd1 = %d\n", i, curr_node->chinfo->rsvd1);
-	PLTFM_MSG_TRACE("[CH %d] - DWORD 2:%x\n", i, *((u32 *)(curr_node->chinfo) + 2));
-	PLTFM_MSG_TRACE("[CH %d] -- id 0 = %d\n", i, curr_node->chinfo->additional_pkt_id[0]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 1 = %d\n", i, curr_node->chinfo->additional_pkt_id[1]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 2 = %d\n", i, curr_node->chinfo->additional_pkt_id[2]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 3 = %d\n", i, curr_node->chinfo->additional_pkt_id[3]);
-	PLTFM_MSG_TRACE("[CH %d] - DWORD 3:%x\n", i, *((u32 *)(curr_node->chinfo) + 3));
-	PLTFM_MSG_TRACE("[CH %d] -- id 4 = %d\n", i, curr_node->chinfo->additional_pkt_id[4]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 5 = %d\n", i, curr_node->chinfo->additional_pkt_id[5]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 6 = %d\n", i, curr_node->chinfo->additional_pkt_id[6]);
-	PLTFM_MSG_TRACE("[CH %d] -- id 7 = %d\n", i, curr_node->chinfo->additional_pkt_id[7]);
+	struct mac_ax_scanofld_chinfo *chinfo = curr_node->chinfo;
+
+	PLTFM_MSG_TRACE("[scnofld][CH %d] - DWORD 0:%x\n", i, *((u32 *)(chinfo)));
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- period (%d) dwell (%d)\n", i,
+			chinfo->period, chinfo->dwell_time);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- cent (%d) pri (%d)\n", i,
+			chinfo->central_ch, chinfo->pri_ch);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] - DWORD 1:%x\n", i, *((u32 *)(chinfo) + 1));
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- bw (%d) notiDwell (%d)\n", i,
+			chinfo->bw, chinfo->c2h_notify_dwell);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- noti preT (%d) postT (%d) enter (%d) leave (%d)\n",
+			i, chinfo->c2h_notify_preTX, chinfo->c2h_notify_postTX,
+			chinfo->c2h_notify_leaveCH, chinfo->c2h_notify_enterCH);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- numAddtionPkt = %d\n", i, chinfo->num_addition_pkt);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- tx (%d) pause (%d) band (%d) probeID (%d) dfs (%d)\n",
+			i, chinfo->tx_pkt, chinfo->pause_tx_data,
+			chinfo->ch_band, chinfo->probe_req_pkt_id, chinfo->dfs_ch);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- null (%d) randSeq (%d) cfgPwr (%d) txProbe (%d)\n", i,
+			chinfo->tx_null, chinfo->rand_seq_num, chinfo->cfg_tx_pwr,
+			chinfo->tx_probe_req);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] - DWORD 2:%x\n", i, *((u32 *)(chinfo) + 2));
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- (%d)(%d)(%d)(%d)\n", i,
+			chinfo->additional_pkt_id[0], chinfo->additional_pkt_id[1],
+			chinfo->additional_pkt_id[2], chinfo->additional_pkt_id[3]);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] - DWORD 3:%x\n", i, *((u32 *)(chinfo) + 3));
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- (%d)(%d)(%d)(%d)\n", i,
+			chinfo->additional_pkt_id[4], chinfo->additional_pkt_id[5],
+			chinfo->additional_pkt_id[6], chinfo->additional_pkt_id[7]);
+	PLTFM_MSG_TRACE("[scnofld][CH %d] - DWORD 4:%x\n", i, *((u32 *)(chinfo) + 4));
+	PLTFM_MSG_TRACE("[scnofld][CH %d] -- pwrIdx (%d), chkpt (%d), additional_acking (%x)\n", i,
+			chinfo->tx_pwr_idx, chinfo->chkpt_timer, chinfo->additional_pkt_acking);
 }
 
 static inline void scanofld_ch_list_print(struct mac_ax_adapter *adapter,
-					  struct scan_chinfo_list *list)
+					  struct scan_chinfo_list *list, u8 verbose)
 {
 	struct scanofld_chinfo_node *curr_node = list->head;
 	u8 i = 0;
 
-	PLTFM_MSG_TRACE("------------------------------------------\n");
-	PLTFM_MSG_TRACE("[CH List] len = %d\n", list->size);
-	while (curr_node) {
+	PLTFM_MSG_TRACE("[scnofld]------------------------------------------\n");
+	PLTFM_MSG_TRACE("[scnofld][CH List] len = %d\n", list->size);
+
+	while (verbose && curr_node) {
 		scanofld_ch_node_print(adapter, curr_node, i);
 		PLTFM_MSG_TRACE("\n");
 		curr_node = curr_node->next;
 		i++;
 	}
-	PLTFM_MSG_TRACE("------------------------------------------\n\n");
+	PLTFM_MSG_TRACE("[scnofld]------------------------------------------\n\n");
 }
 
 void mac_scanofld_ch_list_clear(struct mac_ax_adapter *adapter,
@@ -1667,7 +1762,7 @@ void mac_scanofld_ch_list_clear(struct mac_ax_adapter *adapter,
 	}
 	list->head = NULL;
 	list->tail = NULL;
-	scanofld_ch_list_print(adapter, list);
+	scanofld_ch_list_print(adapter, list, 0);
 }
 
 void mac_scanofld_reset_state(struct mac_ax_adapter *adapter)
@@ -1708,11 +1803,11 @@ u32 mac_add_scanofld_ch(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_c
 	#endif
 
 	scanofld_info = &adapter->scanofld_info;
-	PLTFM_MSG_TRACE("[scan] drv_chlist_busy=%d, fw_chlist_busy=%d",
+	PLTFM_MSG_TRACE("[scnofld][add] drv_chlist_busy=%d, fw_chlist_busy=%d\n",
 			scanofld_info->drv_chlist_busy, scanofld_info->fw_chlist_busy);
 	PLTFM_MUTEX_LOCK(&scanofld_info->drv_chlist_state_lock);
 	if (scanofld_info->drv_chlist_busy) {
-		PLTFM_MSG_ERR("[scan][add] Halmac scan list busy, abort adding.\n");
+		PLTFM_MSG_TRACE("[scnofld][add] Halmac scan list busy, abort adding.\n");
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->drv_chlist_state_lock);
 		return MACPROCBUSY;
 	}
@@ -1720,6 +1815,10 @@ u32 mac_add_scanofld_ch(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_c
 	PLTFM_MUTEX_UNLOCK(&scanofld_info->drv_chlist_state_lock);
 
 	ret = MACSUCCESS;
+	if (chinfo->dfs_ch && chinfo->period < MAC_AX_BCN_INTERVAL_DEFAULT) {
+		PLTFM_MSG_WARN("[scnofld][add] Period (%d) might be too short for a DFS ch\n",
+			       chinfo->period);
+	}
 
 	if (!scanofld_info->list) {
 		list = (struct scan_chinfo_list *)PLTFM_MALLOC(sizeof(struct scan_chinfo_list));
@@ -1737,7 +1836,7 @@ u32 mac_add_scanofld_ch(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_c
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->drv_chlist_state_lock);
 		return ret;
 	}
-	scanofld_ch_list_print(adapter, list);
+	scanofld_ch_list_print(adapter, list, send_h2c);
 
 	if (!send_h2c) {
 		PLTFM_MUTEX_LOCK(&scanofld_info->drv_chlist_state_lock);
@@ -1748,7 +1847,7 @@ u32 mac_add_scanofld_ch(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_c
 
 	PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
 	if (scanofld_info->fw_chlist_busy) {
-		PLTFM_MSG_ERR("[scan][add] FW scan list busy, abort sending.\n");
+		PLTFM_MSG_TRACE("[scnofld][add] FW scan list busy, abort sending.\n");
 		PLTFM_MUTEX_LOCK(&scanofld_info->drv_chlist_state_lock);
 		scanofld_info->drv_chlist_busy = 0;
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->drv_chlist_state_lock);
@@ -1841,7 +1940,7 @@ u32 mac_add_scanofld_ch(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_c
 	if (ret)
 		return ret;
 	h2c_end_flow(adapter);
-	PLTFM_MSG_TRACE("[scan] drv_chlist_busy=%d, fw_chlist_busy=%d",
+	PLTFM_MSG_TRACE("[scnofld][add] drv_chlist_busy=%d, fw_chlist_busy=%d\n",
 			scanofld_info->drv_chlist_busy, scanofld_info->fw_chlist_busy);
 	scanofld_info->clear_drv_ch_list = clear_after_send;
 	return ret;
@@ -1861,55 +1960,74 @@ u32 mac_scanofld(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_param *s
 
 	scanofld_info = &adapter->scanofld_info;
 	ret = MACSUCCESS;
-	PLTFM_MSG_TRACE("[scan] op=%d (%d), fw_scan_busy=%d, fw_chlist_busy=%d",
+	PLTFM_MSG_TRACE("[scnofld] op=%d (%d), fw_scan_busy=%d, fw_chlist_busy=%d\n",
 			scanParam->operation, !!(scanParam->operation),
 			scanofld_info->fw_scan_busy, scanofld_info->fw_chlist_busy);
-	if (!!(scanParam->operation) && scanofld_info->fw_scan_busy) {
-		PLTFM_MSG_ERR("[scan] Cant start scanning while scanning\n");
-		return MACPROCBUSY;
-	}
+
 	PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
-	if (!!(scanParam->operation) && scanofld_info->fw_chlist_busy) {
-		PLTFM_MSG_ERR("[scan] Cant start scanning when fw chlist busy\n");
+	scanofld_info->last_fw_chlist_busy = scanofld_info->fw_chlist_busy;
+	PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
+	scanofld_info->last_fw_scan_busy = scanofld_info->fw_scan_busy;
+
+	if (scanParam->operation != MAC_AX_SCAN_OP_GETRPT) {
+		if (!!(scanParam->operation) && scanofld_info->fw_scan_busy) {
+			PLTFM_MSG_TRACE("[scnofld] Cant start scanning while scanning\n");
+			return MACPROCBUSY;
+		}
+		PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
+		if (!!(scanParam->operation) && scanofld_info->fw_chlist_busy) {
+			PLTFM_MSG_TRACE("[scnofld] Cant start scanning when fw chlist busy\n");
+			PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
+			return MACPROCBUSY;
+		}
+
+		scanofld_info->fw_chlist_busy = (u8)!!(scanParam->operation);
+		scanofld_info->fw_scan_busy = (u8)!!(scanParam->operation);
+
+		PLTFM_MSG_TRACE("[scnofld] fw_chlist_busy = %d, fw_scan_busy=%d",
+				scanofld_info->fw_chlist_busy, scanofld_info->fw_scan_busy);
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-		return MACPROCBUSY;
+	} else if (!scanofld_info->fw_scan_busy) {
+		PLTFM_MSG_TRACE("[scnofld] Cant get rpt when fw is not scanning\n");
+		return MACPROCERR;
 	}
 
-	scanofld_info->fw_chlist_busy = (u8)!!(scanParam->operation);
-	scanofld_info->fw_scan_busy = (u8)!!(scanParam->operation);
-	PLTFM_MSG_TRACE("[scan] fw_chlist_busy = %d, fw_scan_busy=%d",
-			scanofld_info->fw_chlist_busy, scanofld_info->fw_scan_busy);
-	PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-	PLTFM_MSG_TRACE("[scan] macid=%d\n", scanParam->macid);
-	PLTFM_MSG_TRACE("[scan] port_id=%d\n", scanParam->port_id);
-	PLTFM_MSG_TRACE("[scan] band=%d\n", scanParam->band);
-	PLTFM_MSG_TRACE("[scan] operation=%d\n", scanParam->operation);
-	PLTFM_MSG_TRACE("[scan] target_ch_mode=%d\n", scanParam->target_ch_mode);
-	PLTFM_MSG_TRACE("[scan] start_mode=%d\n", scanParam->start_mode);
-	PLTFM_MSG_TRACE("[scan] scan_type=%d\n", scanParam->scan_type);
-	PLTFM_MSG_TRACE("[scan] target_ch_bw=%d\n", scanParam->target_ch_bw);
-	PLTFM_MSG_TRACE("[scan] target_pri_ch=%d\n", scanParam->target_pri_ch);
-	PLTFM_MSG_TRACE("[scan] target_central_ch=%d\n", scanParam->target_central_ch);
-	PLTFM_MSG_TRACE("[scan] probe_req_pkt_id=%d\n", scanParam->probe_req_pkt_id);
-	PLTFM_MSG_TRACE("[scan] norm_pd=%d\n", scanParam->norm_pd);
-	PLTFM_MSG_TRACE("[scan] norm_cy=%d\n", scanParam->norm_cy);
-	PLTFM_MSG_TRACE("[scan] slow_pd=%d\n", scanParam->slow_pd);
+	PLTFM_MSG_TRACE("[scnofld] macid=%d\n", scanParam->macid);
+	PLTFM_MSG_TRACE("[scnofld] port_id=%d\n", scanParam->port_id);
+	PLTFM_MSG_TRACE("[scnofld] band=%d\n", scanParam->band);
+	PLTFM_MSG_TRACE("[scnofld] operation=%d\n", scanParam->operation);
+	PLTFM_MSG_TRACE("[scnofld] target_ch_mode=%d\n", scanParam->target_ch_mode);
+	PLTFM_MSG_TRACE("[scnofld] start_mode=%d\n", scanParam->start_mode);
+	PLTFM_MSG_TRACE("[scnofld] scan_type=%d\n", scanParam->scan_type);
+	PLTFM_MSG_TRACE("[scnofld] target_ch_bw=%d\n", scanParam->target_ch_bw);
+	PLTFM_MSG_TRACE("[scnofld] target_pri_ch=%d\n", scanParam->target_pri_ch);
+	PLTFM_MSG_TRACE("[scnofld] target_central_ch=%d\n", scanParam->target_central_ch);
+	PLTFM_MSG_TRACE("[scnofld] target_ch_band=%d\n", scanParam->target_ch_ch_band);
+	PLTFM_MSG_TRACE("[scnofld] target #pkts=%d (%d, %d, %d, %d)\n", scanParam->target_num_pkts,
+			scanParam->target_ch_pkt[0], scanParam->target_ch_pkt[1],
+			scanParam->target_ch_pkt[2], scanParam->target_ch_pkt[3]);
+	PLTFM_MSG_TRACE("[scnofld] norm_pd=%d\n", scanParam->norm_pd);
+	PLTFM_MSG_TRACE("[scnofld] norm_cy=%d\n", scanParam->norm_cy);
+	PLTFM_MSG_TRACE("[scnofld] slow_pd=%d\n", scanParam->slow_pd);
 
 	h2cbuf = h2cb_alloc(adapter, H2CB_CLASS_DATA);
 	if (!h2cbuf) {
 		PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_chlist_busy = 0;
+		scanofld_info->fw_chlist_busy = scanofld_info->last_fw_chlist_busy;
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_scan_busy = 0;
+		scanofld_info->fw_scan_busy = scanofld_info->last_fw_scan_busy;
+
 		return MACNPTR;
 	}
 
 	buf = h2cb_put(h2cbuf, sizeof(struct fwcmd_scanofld));
 	if (!buf) {
 		PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_chlist_busy = 0;
+		scanofld_info->fw_chlist_busy = scanofld_info->last_fw_chlist_busy;
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_scan_busy = 0;
+		scanofld_info->fw_scan_busy = scanofld_info->last_fw_scan_busy;
+
+		h2cb_free(adapter, h2cbuf);
 		return MACNOBUF;
 	}
 
@@ -1918,7 +2036,9 @@ u32 mac_scanofld(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_param *s
 				  SET_WORD(scanParam->norm_cy, FWCMD_H2C_SCANOFLD_NORM_CY) |
 				  SET_WORD(scanParam->port_id, FWCMD_H2C_SCANOFLD_PORT_ID) |
 				  (scanParam->band ? FWCMD_H2C_SCANOFLD_BAND : 0) |
-				  SET_WORD(scanParam->operation, FWCMD_H2C_SCANOFLD_OPERATION));
+				  SET_WORD(scanParam->operation, FWCMD_H2C_SCANOFLD_OPERATION) |
+				  SET_WORD(scanParam->target_ch_ch_band,
+					   FWCMD_H2C_SCANOFLD_TARGET_CH_CH_BAND));
 	pkt->dword1 = cpu_to_le32((scanParam->c2h_end ? FWCMD_H2C_SCANOFLD_C2H_NOTIFY_END : 0) |
 				  (scanParam->target_ch_mode ?
 				   FWCMD_H2C_SCANOFLD_TARGET_CH_MODE : 0) |
@@ -1931,28 +2051,41 @@ u32 mac_scanofld(struct mac_ax_adapter *adapter, struct mac_ax_scanofld_param *s
 					   FWCMD_H2C_SCANOFLD_TARGET_PRI_CH) |
 				  SET_WORD(scanParam->target_central_ch,
 					   FWCMD_H2C_SCANOFLD_TARGET_CENTRAL_CH) |
-				  SET_WORD(scanParam->probe_req_pkt_id,
-					   FWCMD_H2C_SCANOFLD_PROBE_REQ_PKT_ID));
+				  SET_WORD(scanParam->target_num_pkts,
+					   FWCMD_H2C_SCANOFLD_TARGET_NUM_PKTS));
 	pkt->dword2 = cpu_to_le32(SET_WORD(scanParam->norm_pd, FWCMD_H2C_SCANOFLD_NORM_PD) |
 				  SET_WORD(scanParam->slow_pd, FWCMD_H2C_SCANOFLD_SLOW_PD));
 	pkt->dword3 = cpu_to_le32(scanParam->tsf_high);
 	pkt->dword4 = cpu_to_le32(scanParam->tsf_low);
+	pkt->dword5 = cpu_to_le32(SET_WORD(scanParam->target_ch_pkt[0],
+					   FWCMD_H2C_SCANOFLD_TARGET_CH_PKT0) |
+				  SET_WORD(scanParam->target_ch_pkt[1],
+					   FWCMD_H2C_SCANOFLD_TARGET_CH_PKT1) |
+				  SET_WORD(scanParam->target_ch_pkt[2],
+					   FWCMD_H2C_SCANOFLD_TARGET_CH_PKT2) |
+				  SET_WORD(scanParam->target_ch_pkt[3],
+					   FWCMD_H2C_SCANOFLD_TARGET_CH_PKT3));
 
 	ret = h2c_pkt_set_hdr(adapter, h2cbuf, FWCMD_TYPE_H2C, FWCMD_H2C_CAT_MAC,
-			      FWCMD_H2C_CL_FW_OFLD, FWCMD_H2C_FUNC_SCANOFLD, 1, 1);
+			      FWCMD_H2C_CL_FW_OFLD, FWCMD_H2C_FUNC_SCANOFLD, 1,
+			      scanParam->operation != MAC_AX_SCAN_OP_GETRPT);
 	if (ret) {
 		PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_chlist_busy = !scanofld_info->fw_chlist_busy;
+		scanofld_info->fw_chlist_busy = scanofld_info->last_fw_chlist_busy;
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_scan_busy = !scanofld_info->fw_scan_busy;
+		scanofld_info->fw_scan_busy = scanofld_info->last_fw_scan_busy;
+
+		h2cb_free(adapter, h2cbuf);
 		return ret;
 	}
 	ret = h2c_pkt_build_txd(adapter, h2cbuf);
 	if (ret) {
 		PLTFM_MUTEX_LOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_chlist_busy = !scanofld_info->fw_chlist_busy;
+		scanofld_info->fw_chlist_busy = scanofld_info->last_fw_chlist_busy;
 		PLTFM_MUTEX_UNLOCK(&scanofld_info->fw_chlist_state_lock);
-		scanofld_info->fw_scan_busy = !scanofld_info->fw_scan_busy;
+		scanofld_info->fw_scan_busy = scanofld_info->last_fw_scan_busy;
+
+		h2cb_free(adapter, h2cbuf);
 		return ret;
 	}
 
@@ -1982,6 +2115,60 @@ u32 mac_scanofld_chlist_busy(struct mac_ax_adapter *adapter)
 		return MACPROCBUSY;
 	else
 		return MACSUCCESS;
+}
+
+u32 mac_scanofld_hst_ctrl(struct mac_ax_adapter *adapter, u8 pri_ch, u8 ch_band,
+			  enum mac_ax_scanofld_ctrl op)
+{
+	u8 *buf;
+	u32 ret;
+	struct fwcmd_scanofld_drv_ctrl *pkt;
+	#if MAC_AX_PHL_H2C
+	struct rtw_h2c_pkt *h2cbuf;
+	#else
+	struct h2c_buf *h2cbuf;
+	#endif
+
+	ret = MACSUCCESS;
+
+	h2cbuf = h2cb_alloc(adapter, H2CB_CLASS_CMD);
+	if (!h2cbuf)
+		return MACNPTR;
+
+	buf = h2cb_put(h2cbuf, sizeof(struct fwcmd_scanofld_drv_ctrl));
+	if (!buf) {
+		h2cb_free(adapter, h2cbuf);
+		return MACNOBUF;
+	}
+
+	pkt = (struct fwcmd_scanofld_drv_ctrl *)buf;
+	pkt->dword0 = cpu_to_le32(SET_WORD(pri_ch, FWCMD_H2C_SCANOFLD_DRV_CTRL_PRI_CH) |
+				  SET_WORD(ch_band, FWCMD_H2C_SCANOFLD_DRV_CTRL_CH_BAND) |
+				  SET_WORD(op, FWCMD_H2C_SCANOFLD_DRV_CTRL_CMD));
+
+	ret = h2c_pkt_set_hdr(adapter, h2cbuf, FWCMD_TYPE_H2C, FWCMD_H2C_CAT_MAC,
+			      FWCMD_H2C_CL_FW_OFLD, FWCMD_H2C_FUNC_SCANOFLD_DRV_CTRL, 0, 0);
+	if (ret) {
+		h2cb_free(adapter, h2cbuf);
+		return ret;
+	}
+
+	ret = h2c_pkt_build_txd(adapter, h2cbuf);
+	if (ret) {
+		h2cb_free(adapter, h2cbuf);
+		return ret;
+	}
+
+	#if MAC_AX_PHL_H2C
+	ret = PLTFM_TX(h2cbuf);
+	#else
+	ret = PLTFM_TX(h2cbuf->data, h2cbuf->len);
+	#endif
+	h2cb_free(adapter, h2cbuf);
+	if (ret)
+		return ret;
+	h2c_end_flow(adapter);
+	return ret;
 }
 
 u32 mac_ch_switch_ofld(struct mac_ax_adapter *adapter, struct mac_ax_ch_switch_parm parm)
@@ -2147,7 +2334,8 @@ u32 mac_bcn_filter_rssi(struct mac_ax_adapter *adapter, u8 macid, u8 size, u8 *r
 
 	rssi_32 = (u32 *)rssi;
 	buffer_32 = ((u32 *)buffer) + 1;
-	for (sh = 0; sh < (append_size >> 2) ; sh++)
+	append_size = (u8)(append_size >> 2);
+	for (sh = 0; sh < append_size ; sh++)
 		*(buffer_32 + sh) = cpu_to_le32(*(rssi_32 + sh));
 
 	ret = h2c_pkt_set_hdr(adapter, h2cb, FWCMD_TYPE_H2C, FWCMD_H2C_CAT_MAC,

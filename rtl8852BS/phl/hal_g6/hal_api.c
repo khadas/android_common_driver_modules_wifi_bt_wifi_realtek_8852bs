@@ -108,3 +108,10 @@ u32 rtw_hal_get_phy_stat_info(void *hal, enum phl_band_idx hw_band,
 		return 0;
 	}
 }
+
+enum rtw_chip_id rtw_hal_get_chip_id(void *hal)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+
+	return hal_get_chip_id(hal_info->hal_com);
+}

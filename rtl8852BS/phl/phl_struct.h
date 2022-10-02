@@ -55,6 +55,14 @@ struct hci_info_t {
 
 };
 
+#if defined(CONFIG_PCI_HCI)
+enum rx_channel_type {
+	RX_CH = 0,
+	RP_CH = 1,
+	RX_CH_TYPE_MAX = 0xFF
+};
+#endif
+
 
 #define MAX_PHL_RING_STATUS_NUMBER 64
 #define RX_REORDER_RING_NUMBER PHL_MACID_MAX_NUM
@@ -125,6 +133,7 @@ struct phl_hci_trx_ops {
 #ifdef CONFIG_PCI_HCI
 	enum rtw_phl_status (*recycle_busy_wd)(struct phl_info_t *phl);
 	enum rtw_phl_status (*recycle_busy_h2c)(struct phl_info_t *phl);
+	void (*read_hw_rx)(struct phl_info_t *phl, enum rx_channel_type rx_ch);
 #endif
 
 #ifdef CONFIG_USB_HCI
@@ -201,21 +210,6 @@ struct phl_h2c_pkt_pool {
 	_os_lock recycle_lock;
 };
 
-#ifdef CONFIG_RTW_ACS
-
-#ifndef MAX_CHANNEL_NUM
-#define	MAX_CHANNEL_NUM		42
-#endif
-
-struct auto_chan_sel {
-	u8 clm_ratio[MAX_CHANNEL_NUM];
-	u8 nhm_pwr[MAX_CHANNEL_NUM];
-	u8 curr_idx;
-	u16 chset[MAX_CHANNEL_NUM];
-};
-#endif
-
-
 enum phl_tx_status {
 	PHL_TX_STATUS_IDLE = 0,
 	PHL_TX_STATUS_RUNNING = 1,
@@ -261,6 +255,8 @@ struct phl_ps_info {
 
 #define PHL_CTRL_TX BIT0
 #define PHL_CTRL_RX BIT1
+#define PHL_CTRL_IN_PIPE BIT2
+#define PHL_CTRL_OUT_PIPE BIT3
 #define POLL_SW_TX_PAUSE_CNT 100
 #define POLL_SW_TX_PAUSE_MS 5
 #define POLL_SW_RX_PAUSE_CNT 100
@@ -343,7 +339,7 @@ struct phl_info_t {
 #endif
 
 #ifdef CONFIG_RTW_ACS
-	struct auto_chan_sel acs;
+	void *acs_info;
 #endif
 
 #ifdef CONFIG_PHL_TEST_SUITE

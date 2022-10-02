@@ -582,17 +582,11 @@ static enum rtw_phl_status _phl_tx_sdio(struct phl_info_t *phl_info)
 }
 #endif /* !SDIO_TX_THREAD */
 
-static enum rtw_phl_status phl_tx_check_status_sdio(struct phl_info_t *phl_info)
+static void phl_tx_stop_sdio(struct phl_info_t *phl)
 {
-	void *drv = phl_to_drvpriv(phl_info);
-	enum rtw_phl_status pstatus = RTW_PHL_STATUS_SUCCESS;
+	void *drv = phl_to_drvpriv(phl);
 
-	if (PHL_TX_STATUS_STOP_INPROGRESS ==
-		_os_atomic_read(phl_to_drvpriv(phl_info), &phl_info->phl_sw_tx_sts)){
-			_os_atomic_set(drv, &phl_info->phl_sw_tx_sts, PHL_TX_STATUS_SW_PAUSE);
-			pstatus = RTW_PHL_STATUS_FAILURE;
-	}
-	return pstatus;
+	_os_atomic_set(drv, &phl->phl_sw_tx_sts, PHL_TX_STATUS_SW_PAUSE);
 }
 
 static void _phl_tx_callback_sdio(void *context)
@@ -615,10 +609,6 @@ static void _phl_tx_callback_sdio(void *context)
 
 	INIT_LIST_HEAD(&sta_list);
 
-	pstatus = phl_tx_check_status_sdio(phl_info);
-	if (pstatus == RTW_PHL_STATUS_FAILURE)
-		goto end;
-
 	/* check datapath sw state */
 	tx_pause = phl_datapath_chk_trx_pause(phl_info, PHL_CTRL_TX);
 	if (true == tx_pause)
@@ -628,7 +618,7 @@ static void _phl_tx_callback_sdio(void *context)
 	/* check ps state when tx is not paused */
 	if (false == phl_ps_is_datapath_allowed(phl_info)) {
 		PHL_WARN("%s(): datapath is not allowed now... may in low power.\n", __func__);
-		goto end;
+		goto chk_stop;
 	}
 #endif
 	do {
@@ -672,12 +662,6 @@ static void _phl_tx_callback_sdio(void *context)
 #endif /* !SDIO_TX_THREAD */
 		}
 
-		pstatus = phl_tx_check_status_sdio(phl_info);
-		if (pstatus == RTW_PHL_STATUS_FAILURE)
-			break;
-
-		phl_free_deferred_tx_ring(phl_info);
-
 #ifdef SDIO_TX_THREAD
 		/*
 		 * Break loop when no txbuf for tx data and this function would
@@ -696,6 +680,13 @@ static void _phl_tx_callback_sdio(void *context)
 		}
 #endif /* SDIO_TX_THREAD */
 	} while (1);
+
+#ifdef CONFIG_POWER_SAVE
+chk_stop:
+#endif
+	if (PHL_TX_STATUS_STOP_INPROGRESS ==
+	    _os_atomic_read(phl_to_drvpriv(phl_info), &phl_info->phl_sw_tx_sts))
+		phl_tx_stop_sdio(phl_info);
 
 end:
 	phl_free_deferred_tx_ring(phl_info);
@@ -730,7 +721,7 @@ static void phl_tx_callback_sdio(void *context)
 		  phl_handler->cb_name);
 
 	while (1) {
-		_os_sema_down(d, &(phl_handler->os_handler.os_sema));
+		_os_sema_down(d, &phl_handler->os_handler.hdlr_sema);
 
 		if (_os_thread_check_stop(d, (_os_thread*)context))
 			break;
@@ -739,7 +730,7 @@ static void phl_tx_callback_sdio(void *context)
 	}
 
 	_os_thread_wait_stop(d, (_os_thread*)context);
-	_os_sema_free(d, &(phl_handler->os_handler.os_sema));
+	_os_sema_free(d, &(phl_handler->os_handler.hdlr_sema));
 
 	PHL_TRACE(COMP_PHL_XMIT, _PHL_INFO_, "SDIO: %s down\n",
 		  phl_handler->cb_name);
@@ -1098,7 +1089,7 @@ static void phl_rx_callback_sdio(void *context)
 	d = phl_to_drvpriv(phl_info);
 
 	while (1) {
-		_os_sema_down(d, &(phl_handler->os_handler.os_sema));
+		_os_sema_down(d, &(phl_handler->os_handler.hdlr_sema));
 
 		if (_os_thread_check_stop(d, (_os_thread*)context))
 			break;
@@ -1107,19 +1098,18 @@ static void phl_rx_callback_sdio(void *context)
 	}
 
 	_os_thread_wait_stop(d, (_os_thread*)context);
-	_os_sema_free(d, &(phl_handler->os_handler.os_sema));
+	_os_sema_free(d, &(phl_handler->os_handler.hdlr_sema));
 	return;
 #else
 	_phl_rx_callback_sdio(context);
 #endif
- }
+}
 
 static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)
 {
 	struct rtw_phl_handler *tx_handler = &phl->phl_tx_handler;
 	struct rtw_phl_handler *rx_handler = &phl->phl_rx_handler;
 	void *drv = phl_to_drvpriv(phl);
-	enum rtw_phl_status pstatus;
 #ifdef CONFIG_PHL_SDIO_TX_CB_THREAD
 	const char *tx_hdl_cb_name = "RTW_TX_CB_THREAD";
 #endif
@@ -1128,11 +1118,14 @@ static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)
 	const char *rx_hdl_cb_name = "RTW_RX_CB_THREAD";
 #endif
 
+	enum rtw_phl_status pstatus;
+
+
 #ifdef CONFIG_PHL_SDIO_TX_CB_THREAD
 	tx_handler->type = RTW_PHL_HANDLER_PRIO_NORMAL;
 	_os_strncpy(tx_handler->cb_name, tx_hdl_cb_name,
-		(strlen(tx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
-		RTW_PHL_HANDLER_CB_NAME_LEN : strlen(tx_hdl_cb_name));
+		    (_os_strlen((u8*)tx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
+			RTW_PHL_HANDLER_CB_NAME_LEN : _os_strlen((u8*)tx_hdl_cb_name));
 #else
 	tx_handler->type = RTW_PHL_HANDLER_PRIO_LOW;
 #endif
@@ -1146,8 +1139,8 @@ static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)
 #ifdef CONFIG_PHL_SDIO_RX_CB_THREAD
 	rx_handler->type = RTW_PHL_HANDLER_PRIO_NORMAL;
 	_os_strncpy(rx_handler->cb_name, rx_hdl_cb_name,
-		(strlen(rx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
-		RTW_PHL_HANDLER_CB_NAME_LEN : strlen(rx_hdl_cb_name));
+		   (_os_strlen((u8*)rx_hdl_cb_name) > RTW_PHL_HANDLER_CB_NAME_LEN) ?
+			RTW_PHL_HANDLER_CB_NAME_LEN : _os_strlen((u8*)rx_hdl_cb_name));
 #else
 	rx_handler->type = RTW_PHL_HANDLER_PRIO_LOW;
 #endif

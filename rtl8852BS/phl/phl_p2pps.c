@@ -143,8 +143,8 @@ _phl_p2pps_query_mcc_inprog_wkard(struct phl_info_t *phl_info,
 {
 	u8 ret = false;
 #ifdef CONFIG_MCC_SUPPORT
-	//ret = phl_mr_query_mcc_inprogress(phl_info, w_role,
-	//					RTW_PHL_MCC_CHK_INPROGRESS);
+	ret = phl_mr_query_mcc_inprogress(phl_info, w_role,
+						RTW_PHL_MCC_CHK_INPROGRESS);
 #endif
 	return ret;
 }
@@ -341,14 +341,11 @@ _phl_p2pps_noa_should_activate(struct rtw_phl_p2pps_info *psinfo,
 			ret = false;
 		}
 	} else {
-		/* open when mr ready*/
-		/*
 		if (phl_mr_noa_dur_lim_change(psinfo->phl_info,
 						in_desc->w_role, in_desc)) {
 			PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]_phl_p2pps_noa_should_activate():mrc take over this req!\n");
 			ret = false;
 		}
-		*/
 	}
 #endif
 exit:
@@ -666,8 +663,7 @@ void phl_p2pps_noa_disable_all(struct phl_info_t *phl_info,
 	/*for notify MR for limitation disabled*/
 	dis_desc.enable = false;
 	dis_desc.w_role = w_role;
-	/*open when mr ready*/
-	//phl_mr_noa_dur_lim_change(phl_info, w_role, &dis_desc);
+	phl_mr_noa_dur_lim_change(phl_info, w_role, &dis_desc);
 #endif
 	PHL_TRACE(COMP_PHL_P2PPS, _PHL_INFO_, "[NOA]phl_p2pps_noa_disable_all():====>\n");
 	_phl_p2pps_noa_disable_all(phl_info, w_role);

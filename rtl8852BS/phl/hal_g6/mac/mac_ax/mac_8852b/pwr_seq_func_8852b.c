@@ -249,23 +249,30 @@ u32 mac_pwr_on_sdio_8852b(void *vadapter)
 		return ret;
 	}
 
-	#if defined(CONFIG_RTL8852B)
+	/* XTAL_SI 0xA1[1] = 0 */
+	ret = mac_write_xtal_si(adapter, XTAL_SI_SRAM_CTRL, 0, 0x02);
+	if (ret) {
+		PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
+		return ret;
+	}
+
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852B) {
 		/* XTAL_SI 0x24[6:4] = 3'b000 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
-	#if defined(CONFIG_RTL8852BP)
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852BP) {
 		/* XTAL_SI 0x24[6:4] = 3'b001 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0x10, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
 	/* XTAL_SI 0x26[3:0] = 4'b0000 */
 	ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_4, 0, 0x0F);
@@ -309,6 +316,50 @@ u32 mac_pwr_on_sdio_8852b(void *vadapter)
 		val32 = SET_CLR_WORD(val32, 0xA, B_AX_VREFPFM_L);
 		MAC_REG_W32(R_AX_SPS_DIG_ON_CTRL0, val32);
 	}
+
+#if 1
+	adapter->sm.pwr = MAC_AX_PWR_ON;
+	adapter->sm.plat = MAC_AX_PLAT_ON;
+	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
+
+	/*enable dmac , 0x8400*/
+	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_DMAC_FUNC_EN,
+		    val32 | B_AX_MAC_FUNC_EN |
+			B_AX_DMAC_FUNC_EN |
+			B_AX_MPDU_PROC_EN |
+			B_AX_WD_RLS_EN |
+			B_AX_DLE_WDE_EN |
+			B_AX_TXPKT_CTRL_EN |
+			B_AX_STA_SCH_EN |
+			B_AX_DLE_PLE_EN |
+			B_AX_PKT_BUF_EN |
+			B_AX_DMAC_TBL_EN |
+			B_AX_PKT_IN_EN |
+			B_AX_DLE_CPUIO_EN |
+			B_AX_DISPATCHER_EN |
+			B_AX_BBRPT_EN |
+			B_AX_MAC_SEC_EN |
+			BIT(15));
+
+	adapter->sm.dmac_func = MAC_AX_FUNC_ON;
+
+	/*enable cmac , 0xC000*/
+	val32 = MAC_REG_R32(R_AX_CMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_CMAC_FUNC_EN,
+		    val32 | B_AX_CMAC_EN |
+			B_AX_CMAC_TXEN |
+			B_AX_CMAC_RXEN |
+			B_AX_FORCE_CMACREG_GCKEN |
+			B_AX_PHYINTF_EN |
+			B_AX_CMAC_DMA_EN |
+			B_AX_PTCLTOP_EN |
+			B_AX_SCHEDULER_EN |
+			B_AX_TMAC_EN |
+			B_AX_RMAC_EN);
+
+	adapter->sm.cmac0_func = MAC_AX_FUNC_ON;
+#endif
 
 	return MACSUCCESS;
 }
@@ -530,23 +581,30 @@ u32 mac_pwr_on_usb_8852b(void *vadapter)
 		return ret;
 	}
 
-	#if defined(CONFIG_RTL8852B)
+	/* XTAL_SI 0xA1[1] = 0 */
+	ret = mac_write_xtal_si(adapter, XTAL_SI_SRAM_CTRL, 0, 0x02);
+	if (ret) {
+		PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
+		return ret;
+	}
+
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852B) {
 		/* XTAL_SI 0x24[6:4] = 3'b000 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
-	#if defined(CONFIG_RTL8852BP)
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852BP) {
 		/* XTAL_SI 0x24[6:4] = 3'b001 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0x10, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
 	/* XTAL_SI 0x26[3:0] = 4'b0000 */
 	ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_4, 0, 0x0F);
@@ -590,6 +648,50 @@ u32 mac_pwr_on_usb_8852b(void *vadapter)
 		val32 = SET_CLR_WORD(val32, 0xA, B_AX_VREFPFM_L);
 		MAC_REG_W32(R_AX_SPS_DIG_ON_CTRL0, val32);
 	}
+
+#if 1
+	adapter->sm.pwr = MAC_AX_PWR_ON;
+	adapter->sm.plat = MAC_AX_PLAT_ON;
+	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
+
+	/*enable dmac , 0x8400*/
+	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_DMAC_FUNC_EN,
+		    val32 | B_AX_MAC_FUNC_EN |
+			B_AX_DMAC_FUNC_EN |
+			B_AX_MPDU_PROC_EN |
+			B_AX_WD_RLS_EN |
+			B_AX_DLE_WDE_EN |
+			B_AX_TXPKT_CTRL_EN |
+			B_AX_STA_SCH_EN |
+			B_AX_DLE_PLE_EN |
+			B_AX_PKT_BUF_EN |
+			B_AX_DMAC_TBL_EN |
+			B_AX_PKT_IN_EN |
+			B_AX_DLE_CPUIO_EN |
+			B_AX_DISPATCHER_EN |
+			B_AX_BBRPT_EN |
+			B_AX_MAC_SEC_EN |
+			BIT(15));
+
+	adapter->sm.dmac_func = MAC_AX_FUNC_ON;
+
+	/*enable cmac , 0xC000*/
+	val32 = MAC_REG_R32(R_AX_CMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_CMAC_FUNC_EN,
+		    val32 | B_AX_CMAC_EN |
+			B_AX_CMAC_TXEN |
+			B_AX_CMAC_RXEN |
+			B_AX_FORCE_CMACREG_GCKEN |
+			B_AX_PHYINTF_EN |
+			B_AX_CMAC_DMA_EN |
+			B_AX_PTCLTOP_EN |
+			B_AX_SCHEDULER_EN |
+			B_AX_TMAC_EN |
+			B_AX_RMAC_EN);
+
+	adapter->sm.cmac0_func = MAC_AX_FUNC_ON;
+#endif
 
 	return MACSUCCESS;
 }
@@ -816,23 +918,30 @@ u32 mac_pwr_on_pcie_8852b(void *vadapter)
 		return ret;
 	}
 
-	#if defined(CONFIG_RTL8852B)
+	/* XTAL_SI 0xA1[1] = 0 */
+	ret = mac_write_xtal_si(adapter, XTAL_SI_SRAM_CTRL, 0, 0x02);
+	if (ret) {
+		PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
+		return ret;
+	}
+
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852B) {
 		/* XTAL_SI 0x24[6:4] = 3'b000 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
-	#if defined(CONFIG_RTL8852BP)
+	if (adapter->hw_info->adie_chip_id == MAC_AX_ADIE_CHIP_ID_8852BP) {
 		/* XTAL_SI 0x24[6:4] = 3'b001 */
 		ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_2, 0x10, 0x70);
 		if (ret) {
 			PLTFM_MSG_ERR("Write XTAL_SI fail!\n");
 			return ret;
 		}
-	#endif
+	}
 
 	/* XTAL_SI 0x26[3:0] = 4'b0000 */
 	ret = mac_write_xtal_si(adapter, XTAL_SI_XTAL_XMD_4, 0, 0x0F);
@@ -891,6 +1000,50 @@ u32 mac_pwr_on_pcie_8852b(void *vadapter)
 					~B_AX_SYSON_DIS_PMCR_AX_WRMSK);
 		}
 	}
+
+#if 1
+	adapter->sm.pwr = MAC_AX_PWR_ON;
+	adapter->sm.plat = MAC_AX_PLAT_ON;
+	adapter->sm.io_st = MAC_AX_IO_ST_NORM;
+
+	/*enable dmac , 0x8400*/
+	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_DMAC_FUNC_EN,
+		    val32 | B_AX_MAC_FUNC_EN |
+			B_AX_DMAC_FUNC_EN |
+			B_AX_MPDU_PROC_EN |
+			B_AX_WD_RLS_EN |
+			B_AX_DLE_WDE_EN |
+			B_AX_TXPKT_CTRL_EN |
+			B_AX_STA_SCH_EN |
+			B_AX_DLE_PLE_EN |
+			B_AX_PKT_BUF_EN |
+			B_AX_DMAC_TBL_EN |
+			B_AX_PKT_IN_EN |
+			B_AX_DLE_CPUIO_EN |
+			B_AX_DISPATCHER_EN |
+			B_AX_BBRPT_EN |
+			B_AX_MAC_SEC_EN |
+			BIT(15));
+
+	adapter->sm.dmac_func = MAC_AX_FUNC_ON;
+
+	/*enable cmac , 0xC000*/
+	val32 = MAC_REG_R32(R_AX_CMAC_FUNC_EN);
+	MAC_REG_W32(R_AX_CMAC_FUNC_EN,
+		    val32 | B_AX_CMAC_EN |
+			B_AX_CMAC_TXEN |
+			B_AX_CMAC_RXEN |
+			B_AX_FORCE_CMACREG_GCKEN |
+			B_AX_PHYINTF_EN |
+			B_AX_CMAC_DMA_EN |
+			B_AX_PTCLTOP_EN |
+			B_AX_SCHEDULER_EN |
+			B_AX_TMAC_EN |
+			B_AX_RMAC_EN);
+
+	adapter->sm.cmac0_func = MAC_AX_FUNC_ON;
+#endif
 
 	return MACSUCCESS;
 }

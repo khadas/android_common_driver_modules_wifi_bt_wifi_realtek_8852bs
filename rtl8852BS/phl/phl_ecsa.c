@@ -49,7 +49,7 @@ _phl_ecsa_tx_pause(
 	rtw_phl_tx_req_notify(phl_info);
 
 	/* Disable hw tx all  */
-	if (rtw_hal_dfs_pause_tx(phl_info->hal, wifi_role->hw_band, true) ==
+	if (rtw_hal_dfs_pause_tx(phl_info->hal, wifi_role->hw_band, true, PAUSE_RSON_DFS) ==
 	    RTW_HAL_STATUS_SUCCESS) {
 		status = RTW_PHL_STATUS_SUCCESS;
 		PHL_TRACE(COMP_PHL_ECSA, _PHL_INFO_, "[ECSA] hw tx pause OK\n");
@@ -72,7 +72,7 @@ _phl_ecsa_tx_resume(
 	struct rtw_wifi_role_t *wifi_role = ecsa_ctrl->role;
 
 	/* Enable hw tx all  */
-	if (rtw_hal_dfs_pause_tx(phl_info->hal, wifi_role->hw_band, false) ==
+	if (rtw_hal_dfs_pause_tx(phl_info->hal, wifi_role->hw_band, false, PAUSE_RSON_DFS) ==
 	    RTW_HAL_STATUS_SUCCESS) {
 		status = RTW_PHL_STATUS_SUCCESS;
 		PHL_TRACE(COMP_PHL_ECSA, _PHL_INFO_, "[ECSA] hw tx unpause OK\n");
@@ -802,13 +802,17 @@ rtw_phl_ecsa_cancel(
 	struct phl_ecsa_ctrl_t *ecsa_ctrl =
 		(struct phl_ecsa_ctrl_t *)phl_info->ecsa_ctrl;
 
+	PHL_INFO("%s >> \n", __func__);
+
 	if(ecsa_ctrl == NULL){
 		status = RTW_PHL_STATUS_FAILURE;
 		goto exit;
 	}
 
-	if(ecsa_ctrl->state == ECSA_STATE_NONE)
+	if(ecsa_ctrl->state == ECSA_STATE_NONE) {
+		PHL_INFO("%s, skip (already ECSA_STATE_NONE)\n", __func__);
 		goto exit;
+	}
 
 	_os_cancel_timer(d, &ecsa_ctrl->timer);
 
@@ -830,6 +834,7 @@ rtw_phl_ecsa_cancel(
 	_os_spinunlock(d, &(ecsa_ctrl->lock), _bh, NULL);
 
 exit:
+	PHL_INFO("%s << (%d)\n", __func__, status);
 	return status;
 }
 

@@ -84,11 +84,12 @@ u8 rtw_mi_stayin_union_band_chk(_adapter *adapter)
 }
 
 /* Find union about ch, bw, ch_offset of all linked/linking interfaces */
-int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 *ch, u8 *bw, u8 *offset)
+static int _rtw_mi_get_ch_setting_union(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp, enum band_type *band, u8 *ch, u8 *bw, u8 *offset)
 {
 	_adapter *iface;
 	struct mlme_ext_priv *mlmeext;
 	int i;
+	enum band_type band_ret = BAND_MAX;
 	u8 ch_ret = 0;
 	u8 bw_ret = CHANNEL_WIDTH_20;
 	u8 offset_ret = CHAN_OFFSET_NO_EXT;
@@ -106,6 +107,11 @@ int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 
 		if (!iface || !(ifbmp & BIT(iface->iface_id)))
 			continue;
 
+		if (band_idx < HW_BAND_MAX) {
+			if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+				continue;
+		}
+
 		mlmeext = &iface->mlmeextpriv;
 
 		if (!check_fwstate(&iface->mlmepriv, WIFI_ASOC_STATE | WIFI_UNDER_LINKING))
@@ -115,6 +121,7 @@ int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 
 			continue;
 
 		if (num == 0) {
+			band_ret = rtw_is_2g_ch(mlmeext->chandef.chan) ? BAND_ON_24G : BAND_ON_5G;
 			ch_ret = mlmeext->chandef.chan;
 			bw_ret = mlmeext->chandef.bw;
 			offset_ret = mlmeext->chandef.offset;
@@ -122,7 +129,7 @@ int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 
 			continue;
 		}
 
-		if (ch_ret != mlmeext->chandef.chan) {
+		if (band_ret != (rtw_is_2g_ch(mlmeext->chandef.chan) ? BAND_ON_24G : BAND_ON_5G) || ch_ret != mlmeext->chandef.chan) {
 			num = 0;
 			break;
 		}
@@ -139,6 +146,8 @@ int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 
 	}
 
 	if (num) {
+		if (band)
+			*band = band_ret;
 		if (ch)
 			*ch = ch_ret;
 		if (bw)
@@ -148,6 +157,11 @@ int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 
 	}
 
 	return num;
+}
+
+int rtw_mi_get_ch_setting_union_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, u8 *ch, u8 *bw, u8 *offset)
+{
+	return _rtw_mi_get_ch_setting_union(dvobj, HW_BAND_MAX, ifbmp, NULL, ch, bw, offset);
 }
 
 inline int rtw_mi_get_ch_setting_union(_adapter *adapter, u8 *ch, u8 *bw, u8 *offset)
@@ -160,8 +174,20 @@ inline int rtw_mi_get_ch_setting_union_no_self(_adapter *adapter, u8 *ch, u8 *bw
 	return rtw_mi_get_ch_setting_union_by_ifbmp(adapter_to_dvobj(adapter), 0xFF & ~BIT(adapter->iface_id), ch, bw, offset);
 }
 
+int rtw_mi_get_bch_setting_union_by_hwband(struct dvobj_priv *dvobj, u8 band_idx
+	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset)
+{
+	return _rtw_mi_get_ch_setting_union(dvobj, band_idx, 0xFF, band, ch, bw, offset);
+}
+
+int rtw_mi_get_bch_setting_union_by_hwband_ifbmp(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp
+	, enum band_type *band, u8 *ch, u8 *bw, u8 *offset)
+{
+	return _rtw_mi_get_ch_setting_union(dvobj, band_idx, ifbmp, band, ch, bw, offset);
+}
+
 /* For now, not return union_ch/bw/offset */
-void rtw_mi_status_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, struct mi_state *mstate)
+static void _rtw_mi_status(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp, struct mi_state *mstate)
 {
 	_adapter *iface;
 	int i;
@@ -172,6 +198,11 @@ void rtw_mi_status_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, struct mi_state 
 		iface = dvobj->padapters[i];
 		if (!iface || !(ifbmp & BIT(iface->iface_id)))
 			continue;
+
+		if (band_idx < HW_BAND_MAX) {
+			if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+				continue;
+		}
 
 		if (MLME_IS_STA(iface)) {
 			MSTATE_STA_NUM(mstate)++;
@@ -248,19 +279,34 @@ void rtw_mi_status_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, struct mi_state 
 	}
 }
 
+void rtw_mi_status_by_ifbmp(struct dvobj_priv *dvobj, u8 ifbmp, struct mi_state *mstate)
+{
+	_rtw_mi_status(dvobj, HW_BAND_MAX, ifbmp, mstate);
+}
+
 inline void rtw_mi_status(_adapter *adapter, struct mi_state *mstate)
 {
-	return rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), 0xFF, mstate);
+	rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), 0xFF, mstate);
 }
 
 inline void rtw_mi_status_no_self(_adapter *adapter, struct mi_state *mstate)
 {
-	return rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), 0xFF & ~BIT(adapter->iface_id), mstate);
+	rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), 0xFF & ~BIT(adapter->iface_id), mstate);
 }
 
 inline void rtw_mi_status_no_others(_adapter *adapter, struct mi_state *mstate)
 {
-	return rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), BIT(adapter->iface_id), mstate);
+	rtw_mi_status_by_ifbmp(adapter_to_dvobj(adapter), BIT(adapter->iface_id), mstate);
+}
+
+void rtw_mi_status_by_hwband(struct dvobj_priv *dvobj, u8 band_idx, struct mi_state *mstate)
+{
+	_rtw_mi_status(dvobj, band_idx, 0xFF, mstate);
+}
+
+void rtw_mi_status_by_hwband_ifbmp(struct dvobj_priv *dvobj, u8 band_idx, u8 ifbmp, struct mi_state *mstate)
+{
+	_rtw_mi_status(dvobj, band_idx, ifbmp, mstate);
 }
 
 /* For now, not handle union_ch/bw/offset */
@@ -472,6 +518,31 @@ static u8 _rtw_mi_process(_adapter *padapter, bool exclude_self,
 	}
 	return ret;
 }
+
+static u8 _rtw_mi_process_by_hwband_ifbmp(struct dvobj_priv *dvobj
+	, u8 band_idx, u8 ifbmp
+	, void *data, u8(*ops_func)(_adapter *adapter, void *data))
+{
+	int i;
+	_adapter *iface;
+	u8 ret = 0;
+
+	for (i = 0; i < dvobj->iface_nums; i++) {
+		iface = dvobj->padapters[i];
+		if (!iface || !rtw_is_adapter_up(iface) || !(ifbmp & BIT(iface->iface_id))) {
+			if (band_idx < HW_BAND_MAX) {
+				if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+					continue;
+			}
+
+			if (ops_func)
+				if (_TRUE == ops_func(iface, data))
+					ret++;
+		}
+	}
+	return ret;
+}
+
 static u8 _rtw_mi_process_without_schk(_adapter *padapter, bool exclude_self,
 		  void *data, u8(*ops_func)(_adapter *padapter, void *data))
 {
@@ -936,17 +1007,26 @@ static u8 _rtw_mi_check_fwstate(_adapter *padapter, void *data)
 #endif
 	return ret;
 }
+
 u8 rtw_mi_check_fwstate(_adapter *padapter, sint state)
 {
 	sint in_data = state;
 
 	return _rtw_mi_process(padapter, _FALSE, &in_data, _rtw_mi_check_fwstate);
 }
+
 u8 rtw_mi_buddy_check_fwstate(_adapter *padapter, sint state)
 {
 	sint in_data = state;
 
 	return _rtw_mi_process(padapter, _TRUE, &in_data, _rtw_mi_check_fwstate);
+}
+
+u8 rtw_mi_check_fwstate_by_hwband(struct dvobj_priv *dvobj, u8 band_idx, sint state)
+{
+	sint in_data = state;
+
+	return _rtw_mi_process_by_hwband_ifbmp(dvobj, band_idx, 0xFF, &in_data, _rtw_mi_check_fwstate);
 }
 
 static u8 _rtw_mi_traffic_statistics(_adapter *padapter , void *data)
@@ -1436,17 +1516,53 @@ _adapter *rtw_mi_get_ap_adapter(_adapter *padapter)
 }
 #endif
 
-u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
+u8 rtw_mi_get_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
 {
-	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
 	int i;
-	_adapter *iface = NULL;
+	_adapter *iface;
 	u8 ifbmp = 0;
 
 	for (i = 0; i < dvobj->iface_nums; i++) {
 		iface = dvobj->padapters[i];
 		if (!iface)
 			continue;
+		if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+			continue;
+		ifbmp |= BIT(i);
+	}
+
+	return ifbmp;
+}
+
+_adapter *rtw_mi_get_iface_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	u8 ifbmp = rtw_mi_get_ifbmp_by_hwband(dvobj, band_idx);
+
+	if (ifbmp) {
+		int i;
+
+		for (i = 0; i < dvobj->iface_nums; i++) {
+			if ((ifbmp & BIT(i)) && dvobj->padapters[i])
+				return dvobj->padapters[i];
+		}
+	}
+	return NULL;
+}
+
+static u8 _rtw_mi_get_ld_sta_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	int i;
+	_adapter *iface;
+	u8 ifbmp = 0;
+
+	for (i = 0; i < dvobj->iface_nums; i++) {
+		iface = dvobj->padapters[i];
+		if (!iface)
+			continue;
+		if (band_idx < HW_BAND_MAX) {
+			if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+				continue;
+		}
 
 		if (MLME_IS_STA(iface) && MLME_IS_ASOC(iface))
 			ifbmp |= BIT(i);
@@ -1455,17 +1571,30 @@ u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
 	return ifbmp;
 }
 
-u8 rtw_mi_get_ap_mesh_ifbmp(_adapter *adapter)
+u8 rtw_mi_get_ld_sta_ifbmp(_adapter *adapter)
 {
-	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
+	return _rtw_mi_get_ld_sta_ifbmp_by_hwband(adapter_to_dvobj(adapter), HW_BAND_MAX);
+}
+
+u8 rtw_mi_get_ld_sta_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	return _rtw_mi_get_ld_sta_ifbmp_by_hwband(dvobj, band_idx);
+}
+
+static u8 _rtw_mi_get_ap_mesh_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
 	int i;
-	_adapter *iface = NULL;
+	_adapter *iface;
 	u8 ifbmp = 0;
 
 	for (i = 0; i < dvobj->iface_nums; i++) {
 		iface = dvobj->padapters[i];
 		if (!iface)
 			continue;
+		if (band_idx < HW_BAND_MAX) {
+			if (!rtw_iface_is_operate_at_hwband(iface, band_idx))
+				continue;
+		}
 
 		if (CHK_MLME_STATE(iface, WIFI_AP_STATE | WIFI_MESH_STATE)
 			&& MLME_IS_ASOC(iface))
@@ -1473,6 +1602,36 @@ u8 rtw_mi_get_ap_mesh_ifbmp(_adapter *adapter)
 	}
 
 	return ifbmp;
+}
+
+u8 rtw_mi_get_ap_mesh_ifbmp(_adapter *adapter)
+{
+	return _rtw_mi_get_ap_mesh_ifbmp_by_hwband(adapter_to_dvobj(adapter), HW_BAND_MAX);
+}
+
+u8 rtw_mi_get_ap_mesh_ifbmp_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	return _rtw_mi_get_ap_mesh_ifbmp_by_hwband(dvobj, band_idx);
+}
+
+_adapter *rtw_mi_get_ap_mesh_iface_by_hwband(struct dvobj_priv *dvobj, u8 band_idx)
+{
+	u8 ifbmp = rtw_mi_get_ap_mesh_ifbmp_by_hwband(dvobj, band_idx);
+
+	if (ifbmp) {
+		int i;
+
+		for (i = 0; i < dvobj->iface_nums; i++) {
+			if ((ifbmp & BIT(i)) && dvobj->padapters[i])
+				return dvobj->padapters[i];
+		}
+	}
+	return NULL;
+}
+
+bool rtw_iface_is_operate_at_hwband(_adapter *adapter, u8 band_idx)
+{
+	return rtw_is_adapter_up(adapter) && adapter->phl_role->hw_band == band_idx;
 }
 
 u8 rtw_mi_get_assoc_if_num(_adapter *adapter)

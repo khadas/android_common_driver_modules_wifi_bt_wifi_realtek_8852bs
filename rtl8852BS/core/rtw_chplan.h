@@ -36,7 +36,7 @@ bool rtw_is_channel_plan_6g_valid(u8 id);
 bool rtw_regsty_is_excl_chs_6g(struct registry_priv *regsty, u8 ch);
 #endif
 
-u8 rtw_chplan_is_chbw_valid(u8 id, u8 id_6g, enum band_type band, u8 ch, u8 bw, u8 offset
+u8 rtw_chplan_is_bchbw_valid(u8 id, u8 id_6g, enum band_type band, u8 ch, u8 bw, u8 offset
 	, bool allow_primary_passive, bool allow_passive, struct registry_priv *regsty);
 
 enum regd_src_t {
@@ -54,7 +54,10 @@ struct _RT_CHANNEL_INFO;
 u8 init_channel_set(_adapter *adapter);
 bool rtw_chset_is_dfs_range(struct _RT_CHANNEL_INFO *chset, u32 hi, u32 lo);
 bool rtw_chset_is_dfs_ch(struct _RT_CHANNEL_INFO *chset, u8 ch);
+bool rtw_chset_is_dfs_bch(struct _RT_CHANNEL_INFO *chset, enum band_type band, u8 ch);
 bool rtw_chset_is_dfs_chbw(struct _RT_CHANNEL_INFO *chset, u8 ch, u8 bw, u8 offset);
+bool rtw_chset_is_dfs_bchbw(struct _RT_CHANNEL_INFO *chset, enum band_type band, u8 ch, u8 bw, u8 offset);
+
 bool rtw_chinfo_allow_beacon_hint(struct _RT_CHANNEL_INFO *chinfo);
 u8 rtw_process_beacon_hint(_adapter *adapter, WLAN_BSSID_EX *bss);
 
@@ -114,9 +117,9 @@ extern const char *const _regd_str[];
 #define regd_str(regd) (((regd) >= RTW_REGD_NUM) ? _regd_str[RTW_REGD_NA] : _regd_str[(regd)])
 
 enum rtw_edcca_mode_t {
-	RTW_EDCCA_NORM		= 0, /* normal */
-	RTW_EDCCA_ADAPT		= 1, /* adaptivity */
-	RTW_EDCCA_CS		= 2, /* carrier sense */
+	RTW_EDCCA_NORM	= 0, /* normal */
+	RTW_EDCCA_ADAPT	= 1, /* adaptivity */
+	RTW_EDCCA_CS	= 2, /* carrier sense */
 
 	RTW_EDCCA_MODE_NUM,
 	RTW_EDCCA_DEF		= RTW_EDCCA_MODE_NUM, /* default (ref to domain code), used at country chplan map's override field */
@@ -130,9 +133,12 @@ enum rtw_dfs_regd {
 	RTW_DFS_REGD_FCC	= 1,
 	RTW_DFS_REGD_MKK	= 2,
 	RTW_DFS_REGD_ETSI	= 3,
+	RTW_DFS_REGD_KCC	= 4,
 	RTW_DFS_REGD_NUM,
 	RTW_DFS_REGD_AUTO	= 0xFF, /* follow channel plan */
 };
+
+#define RTW_DFS_REGD_IS_UNKNOWN(regd) ((regd) == RTW_DFS_REGD_NONE || (regd) >= RTW_DFS_REGD_NUM)
 
 extern const char *const _rtw_dfs_regd_str[];
 #define rtw_dfs_regd_str(region) (((region) >= RTW_DFS_REGD_NUM) ? _rtw_dfs_regd_str[RTW_DFS_REGD_NONE] : _rtw_dfs_regd_str[(region)])
@@ -220,7 +226,7 @@ bool rtw_get_chplan_from_country(const char *country_code, struct country_chplan
 void rtw_chplan_ioctl_input_mapping(u16 *chplan, u16 *chplan_6g);
 bool rtw_chplan_ids_is_world_wide(u8 chplan, u8 chplan_6g);
 
-u8 rtw_country_chplan_is_chbw_valid(struct country_chplan *ent, enum band_type band, u8 ch, u8 bw, u8 offset
+u8 rtw_country_chplan_is_bchbw_valid(struct country_chplan *ent, enum band_type band, u8 ch, u8 bw, u8 offset
 	, bool allow_primary_passive, bool allow_passive, struct registry_priv *regsty);
 
 enum country_ie_slave_status {

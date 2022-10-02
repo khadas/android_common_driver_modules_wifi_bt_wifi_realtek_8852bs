@@ -92,5 +92,13 @@ rtw_phl_cmd_notify(struct rtw_phl_com_t *phl_com,
 
 enum rtw_phl_status phl_ps_hal_pwr_req(struct rtw_phl_com_t *phl_com, u8 src, bool pwr_req);
 
+void rtw_phl_enable_interrupt_sync(struct rtw_phl_com_t* phl_com);
+void rtw_phl_disable_interrupt_sync(struct rtw_phl_com_t* phl_com);
+
+#ifdef CONFIG_PHL_FW_DUMP_EFUSE
+void rtw_phl_fw_dump_efuse_precfg(struct rtw_phl_com_t* phl_com);
+void rtw_phl_fw_dump_efuse_postcfg(struct rtw_phl_com_t* phl_com);
+#endif /* CONFIG_PHL_FW_DUMP_EFUSE */
+
 #endif /* _PHL_API_DRV_H_ */
 

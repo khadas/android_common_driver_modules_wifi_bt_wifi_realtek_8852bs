@@ -737,8 +737,9 @@ u32 mac_cfg_ps_advance_parm(struct mac_ax_adapter *adapter,
 	if (!parm)
 		return MACBADDR;
 
-	PLTFM_MSG_ALWAYS("%s: MACID(%d), TRXTimeOutTimeSet(%d), TRXTimeOutTimeVal(%d)!\n"
-		, __func__, parm->macid, parm->trxtimeouttimeset, parm->trxtimeouttimeval);
+	PLTFM_MSG_ALWAYS("%s: MACID(%d), TRXTimeOutTimeSet(%d), TRXTimeOutTimeVal(%d)!\n",
+			 __func__, parm->macid, parm->trxtimeouttimeset, parm->trxtimeouttimeval);
+	PLTFM_MSG_ALWAYS("%s: EnSmartPsDtimRx(%d)!\n", __func__, parm->ensmartpsdtimrx);
 
 	h2cb = h2cb_alloc(adapter, H2CB_CLASS_CMD);
 	if (!h2cb)
@@ -753,7 +754,8 @@ u32 mac_cfg_ps_advance_parm(struct mac_ax_adapter *adapter,
 	fwcmd_parm = (struct fwcmd_ps_advance_parm *)buf;
 	fwcmd_parm->dword0 =
 	cpu_to_le32(SET_WORD(parm->macid, FWCMD_H2C_PS_ADVANCE_PARM_MACID) |
-		SET_WORD(parm->trxtimeouttimeset, FWCMD_H2C_PS_ADVANCE_PARM_TRXTIMEOUTTIMESET));
+		    SET_WORD(parm->trxtimeouttimeset, FWCMD_H2C_PS_ADVANCE_PARM_TRXTIMEOUTTIMESET) |
+		    (parm->ensmartpsdtimrx ? FWCMD_H2C_PS_ADVANCE_PARM_ENSMARTPSDTIMRX : 0));
 	fwcmd_parm->dword1 =
 	cpu_to_le32(SET_WORD(parm->trxtimeouttimeval, FWCMD_H2C_PS_ADVANCE_PARM_TRXTIMEOUTTIMEVAL));
 

@@ -50,13 +50,13 @@ enum rtw_hal_status rtw_hal_scan_pause_tx_fifo(void *hinfo,
 }
 
 enum rtw_hal_status rtw_hal_dfs_pause_tx(void *hinfo,
-					 u8 band_idx, bool off_ch)
+	u8 band_idx, bool off_ch, enum tx_pause_rson reason)
 {
 	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
 	struct hal_info_t *hal_info = (struct hal_info_t *)hinfo;
 
 	hal_status = rtw_hal_tx_pause(hal_info->hal_com, band_idx,
-				      off_ch, PAUSE_RSON_DFS);
+				      off_ch, reason);
 
 	return hal_status;
 }
@@ -231,6 +231,9 @@ rtw_hal_reset(struct rtw_hal_com_t *hal_com, enum phl_phy_idx phy_idx, u8 band_i
 			return status;
 		}
 
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+		rtw_hal_bb_fwofld_cfgcr_start(hal_com);
+#endif
 		/*disable DFS/TSSI*/
 		rtw_hal_bb_dfs_en(hal_info, false);
 		if (!hal_com->dbcc_en) {
@@ -245,9 +248,16 @@ rtw_hal_reset(struct rtw_hal_com_t *hal_com, enum phl_phy_idx phy_idx, u8 band_i
 		/*disable ADC*/
 		rtw_hal_bb_adc_en(hal_info, false);
 		/* wait 40us*/
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+		rtw_hal_bb_fw_delay(hal_info, 40);
+#else
 		_os_delay_us(hal_com->drv_priv, 40);
+#endif
 		/* reset BB*/
 		rtw_hal_bb_reset_en(hal_info, false, phy_idx);
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+		rtw_hal_bb_fwofld_cfgcr_end(hal_com);
+#endif
 	}else{
 		/*enable ppdu_sts*/
 		status = rtw_hal_mac_ppdu_stat_cfg(
@@ -259,6 +269,10 @@ rtw_hal_reset(struct rtw_hal_com_t *hal_com, enum phl_phy_idx phy_idx, u8 band_i
 			PHL_ERR("%s rtw_hal_mac_ppdu_stat_cfg - failed\n", __func__);
 			return status;
 		}
+
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+		rtw_hal_bb_fwofld_cfgcr_start(hal_com);
+#endif
 		/*enable ADC*/
 		rtw_hal_bb_adc_en(hal_info, true);
 		/*enable DFS/TSSI*/
@@ -274,7 +288,9 @@ rtw_hal_reset(struct rtw_hal_com_t *hal_com, enum phl_phy_idx phy_idx, u8 band_i
 		}
 		/*BB reset set to 1*/
 		rtw_hal_bb_reset_en(hal_info, true, phy_idx);
-
+#ifdef CONFIG_FW_IO_OFLD_SUPPORT
+		rtw_hal_bb_fwofld_cfgcr_end(hal_com);
+#endif
 		status = rtw_hal_tx_pause(hal_com, band_idx, false, PAUSE_RSON_RESET);
 		if(status != RTW_HAL_STATUS_SUCCESS){
 			PHL_ERR("%s rtw_hal_tx_pause - failed\n", __func__);
@@ -327,8 +343,20 @@ void rtw_hal_env_rpt(struct rtw_hal_com_t *hal_com, struct rtw_env_report *env_r
 {
 	enum phl_phy_idx p_idx = HW_PHY_0;
 
-	p_idx = rtw_hal_bb_band_to_phy_idx(hal_com, wrole->hw_band);
+	p_idx = rtw_hal_hw_band_to_phy_idx(wrole->hw_band);
 	rtw_hal_bb_env_rpt(hal_com, env_rpt, p_idx);
 }
 
+enum phl_phy_idx rtw_hal_hw_band_to_phy_idx(enum phl_band_idx band_idx)
+{
+	enum phl_phy_idx p_idx = HW_PHY_MAX;
+
+	if (band_idx == HW_BAND_0)
+		p_idx = HW_PHY_0;
+	else if (band_idx == HW_BAND_1)
+		p_idx = HW_PHY_1;
+	else
+		PHL_ERR("%s: error band_idx(%d)\n", __func__, band_idx);
+	return p_idx;
+}
 #endif /* _HAL_COM_I_C_ */

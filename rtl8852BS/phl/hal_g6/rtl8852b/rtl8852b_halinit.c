@@ -36,8 +36,12 @@ void init_hal_spec_8852b(struct rtw_phl_com_t *phl_com,
 	hal_com->rfpath_tx_num = 2;
 	hal_com->phy_hw_cap[0].rx_num = 2;
 	hal_com->phy_hw_cap[0].tx_num = 2;
+	hal_com->phy_hw_cap[0].rx_path_num = 2;
+	hal_com->phy_hw_cap[0].tx_path_num = 2;
 	hal_com->phy_hw_cap[1].rx_num = 2;
 	hal_com->phy_hw_cap[1].tx_num = 2;
+	hal_com->phy_hw_cap[1].rx_path_num = 2;
+	hal_com->phy_hw_cap[1].tx_path_num = 2;
 	hal_com->phy_hw_cap[0].hw_rts_time_th = 0;
 	hal_com->phy_hw_cap[1].hw_rts_time_th = 0;
 	hal_com->phy_hw_cap[0].hw_rts_len_th = 0;
@@ -465,6 +469,8 @@ enum rtw_hal_status hal_start_8852b(struct rtw_phl_com_t *phl_com,
 	rtw_hal_mac_set_hw_rts_th(hal, HW_BAND_0,
 				  phy_cap[HW_BAND_0].hw_rts_time_th,
 				  phy_cap[HW_BAND_0].hw_rts_len_th);
+	/*update phy cap of tx agg info */
+	rtw_hal_mac_init_txagg_num(hal);
 	if (hal->hal_com->dbcc_en == true) {
 		rtw_hal_set_rxfltr_by_mode(hal, HW_BAND_1, RX_FLTR_MODE_STA_NORMAL);
 		rtw_hal_mac_set_rxfltr_mpdu_size(hal->hal_com, HW_BAND_1, 0x2c00);
@@ -484,6 +490,7 @@ enum rtw_hal_status hal_start_8852b(struct rtw_phl_com_t *phl_com,
 
 	/* EFUSE config */
 	rtw_hal_efuse_process(hal, init_info->ic_name);
+	/*update final cap of txagg info*/
 	rtw_hal_final_cap_decision(phl_com, hal);
 
 	/*[Pre-config BB/RF] BBRST / RFC reset */
@@ -514,7 +521,7 @@ enum rtw_hal_status hal_start_8852b(struct rtw_phl_com_t *phl_com,
 	if (hal_status != RTW_HAL_STATUS_SUCCESS)
 		goto hal_init_fail;
 	else
-		phl_com->append_fcs = val;
+		phl_com->accept_icv_err = val;
 
 #ifdef RTW_WKARD_HW_MGNT_GCMP_256_DISABLE
 	rtw_hal_mac_config_hw_mgnt_sec(hal, false);

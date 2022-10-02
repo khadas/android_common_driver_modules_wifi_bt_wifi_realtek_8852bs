@@ -498,7 +498,7 @@ static void HE_phy_caps_handler(_adapter *padapter, struct rtw_phl_stainfo_t *ph
 		if (GET_HE_PHY_CAP_SUPPORT_CHAN_WIDTH_SET(ele_start) & BIT(3))
 			*supp_mcs_len += 4;
 	}
-	phl_sta->asoc_cap.he_ldpc = GET_HE_PHY_CAP_LDPC_IN_PAYLOAD(ele_start);
+	phl_sta->asoc_cap.he_ldpc = (GET_HE_PHY_CAP_LDPC_IN_PAYLOAD(ele_start) & role_cap->he_ldpc);
 	if (phl_sta->asoc_cap.er_su) {
 		phl_sta->asoc_cap.ltf_gi = (BIT(RTW_GILTF_2XHE16) |
 			BIT(RTW_GILTF_2XHE08) | BIT(RTW_GILTF_1XHE16) |
@@ -1552,7 +1552,53 @@ void rtw_process_he_triggerframe(_adapter *padapter,
 	case TRIGGER_FRAME_T_RSVD:
 		break;
 	}
+}
 
+void rtw_update_he_ies(_adapter *padapter, WLAN_BSSID_EX *pnetwork)
+{
+	u8 he_cap_ie_len;
+	u8 he_cap_ie[255];
+	u8 he_cap_eid_ext = WLAN_EID_EXTENSION_HE_CAPABILITY;
+	u8 he_op_ie_len;
+	u8 he_op_ie[255];
+	u8 he_op_eid_ext = WLAN_EID_EXTENSION_HE_OPERATION;
+
+	RTW_INFO("Don't setting HE capability/operation IE from hostap, builded by driver temporarily\n");
+	rtw_he_use_default_setting(padapter);
+
+	rtw_remove_bcn_ie_ex(padapter, pnetwork, WLAN_EID_EXTENSION, &he_cap_eid_ext, 1);
+	he_cap_ie_len = rtw_build_he_cap_ie(padapter, he_cap_ie);
+	rtw_add_bcn_ie_ex(padapter, pnetwork, he_cap_eid_ext, he_cap_ie + 2, he_cap_ie_len - 2);
+
+	rtw_remove_bcn_ie_ex(padapter, pnetwork, WLAN_EID_EXTENSION, &he_op_eid_ext, 1);
+	he_op_ie_len = rtw_build_he_operation_ie(padapter, he_op_ie);
+	rtw_add_bcn_ie_ex(padapter, pnetwork, he_op_eid_ext, he_op_ie + 2, he_op_ie_len - 2);
+}
+
+void rtw_update_probe_rsp_he_cap_and_op(struct _ADAPTER *a, u8 *ies, sint *ies_len)
+{
+	u8 cur_he_cap_ie[255], cur_he_op_ie[255];
+	uint cur_he_cap_ie_len, cur_he_op_ie_len;
+	u8 *he_cap_ie, *he_op_ie;
+	uint ie_len;
+	u8 he_cap_eid_ext = WLAN_EID_EXTENSION_HE_CAPABILITY;
+	u8 he_op_eid_ext = WLAN_EID_EXTENSION_HE_OPERATION;
+
+	he_cap_ie = rtw_get_ie_ex(ies, *ies_len, WLAN_EID_EXTENSION,
+							&he_cap_eid_ext, 1, NULL, &ie_len);
+	if (he_cap_ie) {
+		cur_he_cap_ie_len = rtw_build_he_cap_ie(a, cur_he_cap_ie);
+		rtw_ies_update_ie_ex(ies, ies_len, 0, WLAN_EID_EXTENSION_HE_CAPABILITY,
+						cur_he_cap_ie, cur_he_cap_ie_len);
+	}
+
+	he_op_ie = rtw_get_ie_ex(ies, *ies_len, WLAN_EID_EXTENSION,
+							&he_op_eid_ext, 1, NULL, &ie_len);
+	if (he_op_ie) {
+		cur_he_op_ie_len = rtw_build_he_operation_ie(a, cur_he_op_ie);
+		rtw_ies_update_ie_ex(ies, ies_len, 0, WLAN_EID_EXTENSION_HE_OPERATION,
+						cur_he_op_ie, cur_he_op_ie_len);
+	}
 }
 #endif /* CONFIG_80211AX_HE */
 

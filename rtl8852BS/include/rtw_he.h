@@ -1003,6 +1003,7 @@ void rtw_he_fill_htc(_adapter *padapter, struct pkt_attrib *pattrib, u32 *phtc_b
 void rtw_he_set_om_info(_adapter *padapter, u8 om_mask, struct rtw_he_actrl_om *om_info);
 void rtw_he_init_om_info(_adapter *padapter);
 void rtw_process_he_triggerframe(_adapter *padapter,union recv_frame *precv_frame);
-
+void rtw_update_he_ies(_adapter *padapter, WLAN_BSSID_EX *pnetwork);
+void rtw_update_probe_rsp_he_cap_and_op(struct _ADAPTER *a, u8 *ies, sint *ies_len);
 #endif /* _RTW_HE_H_ */
 

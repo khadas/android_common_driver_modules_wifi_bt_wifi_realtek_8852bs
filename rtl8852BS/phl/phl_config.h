@@ -80,6 +80,8 @@
 	#define RTW_WKARD_BFEE_SET_AID
 	#define CONFIG_PHL_THERMAL_PROTECT
 	#define CONFIG_PHL_TX_DBG
+	#define CONFIG_PHL_RELEASE_RPT_ENABLE
+	#define CONFIG_PHL_FW_DUMP_EFUSE
 #endif /* PHL_FEATURE_NONE */
 
 #ifdef PHL_PLATFORM_WINDOWS
@@ -88,7 +90,9 @@
 	#endif
 	#ifndef CONFIG_CMD_DISP
 		#define CONFIG_CMD_DISP
+		#define CONFIG_MSG_NUM 48
 	#endif
+	#define DRV_BB_CNSL_CMN_INFO
 #endif
 
 #ifdef PHL_PLATFORM_LINUX
@@ -103,7 +107,6 @@
 #endif
 
 /******************* Feature flags **************************/
-
 #ifdef CONFIG_PHL_TEST_SUITE
 #define CONFIG_PHL_TEST_MP
 #define CONFIG_PHL_TEST_VERIFY
@@ -209,14 +212,17 @@
 #define CONFIG_PHL_USB_RX_AGGREGATION
 #endif
 
+#if CONFIG_DFS
 #ifdef CONFIG_DFS_MASTER
 #define CONFIG_PHL_DFS
+#endif
 #endif
 
 #ifdef CONFIG_PHL_DFS
 /*#define CONFIG_PHL_DFS_REGD_FCC*/
 /*#define CONFIG_PHL_DFS_REGD_JAP*/
 #define CONFIG_PHL_DFS_REGD_ETSI
+/*#define CONFIG_PHL_DFS_REGD_KCC*/
 #endif
 
 #ifdef CONFIG_WPP
@@ -255,8 +261,8 @@
 #define CONFIG_PHL_RA_TXSTS_DBG
 #endif
 
-#ifdef CONFIG_USB_RELEASE_RPT
-#define CONFIG_PHL_USB_RELEASE_RPT_ENABLE
+#ifdef CONFIG_RELEASE_RPT
+#define CONFIG_PHL_RELEASE_RPT_ENABLE
 #endif
 
 #ifdef CONFIG_PS_FW_DBG
@@ -329,6 +335,22 @@
 #define DBG_PHL_MAC_REG_RW
 #endif
 
+#ifdef CONFIG_ACS
+#define CONFIG_RTW_ACS
+#endif
+
+#ifdef CONFIG_NARROWBAND_SUPPORTING
+#define CONFIG_PHL_NARROW_BW
+#endif /*CONFIG_NARROWBAND_SUPPORTING*/
+
+#ifdef CONFIG_FW_DUMP_EFUSE
+#define CONFIG_PHL_FW_DUMP_EFUSE
+#endif
+
+#ifdef CONFIG_PATH_DIV
+#define CONFIG_PHL_PATH_DIV
+#endif
+
 /******************* WKARD flags **************************/
 #define RTW_WKARD_P2PPS_REFINE
 #define RTW_WKARD_P2PPS_SINGLE_NOA
@@ -344,21 +366,18 @@
 #define RTW_WKARD_MP_MODE_CHANGE
 #define RTW_WKARD_WIN_TRX_BALANCE
 #define RTW_WKARD_DYNAMIC_LTR
+#define RTW_WKARD_GET_PROCESSOR_ID
 #endif
 
 #define RTW_WKARD_PHY_CAP
+
+#define RTW_WKARD_BTC_STBC_CAP
 
 #define RTW_WKARD_LAMODE
 
 #define RTW_WKARD_TXSC
 
 #define RTW_WKARD_BB_C2H
-
-/*
- * One workaround of EFUSE operation
- *  1. Dump EFUSE with FW fail
- */
-#define RTW_WKARD_EFUSE_OPERATION
 
 #define RTW_WKARD_STA_BCN_INTERVAL
 
@@ -383,12 +402,6 @@
  * - This workaround will be removed once fw handles this cfg
  */
 /*#define RTW_WKARD_DEF_CMACTBL_CFG*/
-
-/* Workaround for efuse read hidden report
- * - Default is disabled until halmac is ready
- */
-
-#define RTW_WKARD_PRELOAD_TRX_RESET
 
 /* Workaround for cmac table config
  * - This workaround will be removed once fw handles this cfg
@@ -461,12 +474,10 @@
 
 #define RTW_WKARD_AP_CLIENT_ADD_DEL_NTY
 
-#ifdef CONFIG_SDIO_HCI
-#define RTW_WKARD_TX_TP	/* Improve TX throughput by busy loop */
-#endif /* CONFIG_SDIO_HCI */
-
 #ifdef RTW_WKARD_DISABLE_2G40M_ULOFDMA
 #define RTW_WKARD_BB_DISABLE_STA_2G40M_ULOFDMA
 #endif
+
+#define RTW_WKARD_CHECK_STAINFO_DOUBLE_DEL
 
 #endif /*_PHL_CONFIG_H_*/

@@ -1,6 +1,6 @@
 /******************************************************************************
  *
- * Copyright(c) 2007 - 2021 Realtek Corporation.
+ * Copyright(c) 2007 - 2022 Realtek Corporation.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of version 2 of the GNU General Public License as
@@ -964,8 +964,10 @@ u8 rtw_init_default_value(_adapter *padapter)
 #endif
 		padapter->dis_turboedca = 1;
 	}
-
-	padapter->driver_tx_max_agg_num = 0xFF;
+#ifdef CONFIG_NARROWBAND_SUPPORTING
+	if (pregistrypriv->rtw_nb_config != RTW_NB_CONFIG_NONE)
+		padapter->dis_turboedca = 1;
+#endif
 #ifdef DBG_RX_COUNTER_DUMP
 	padapter->dump_rx_cnt_mode = 0;
 	padapter->drv_rx_cnt_ok = 0;
@@ -1269,7 +1271,6 @@ u8 devobj_data_init(struct dvobj_priv *dvobj)
 		goto exit;
 
 	rtw_edcca_mode_update(dvobj);
-	rtw_update_phl_edcca_mode(dvobj_get_primary_adapter(dvobj));
 	rtw_rfctl_chplan_init(dvobj);
 	rtw_hw_cap_init(dvobj);
 
@@ -1679,6 +1680,7 @@ static _adapter *rtw_drv_add_vir_if(struct dvobj_priv *dvobj)
 	padapter->adapter_type = VIRTUAL_ADAPTER;
 
 	padapter->hw_port = HW_PORT1;
+	padapter->adapter_link.adapter = padapter;
 
 	/****** hook vir if into dvobj ******/
 	padapter->iface_id = dvobj->iface_nums;
@@ -2495,11 +2497,6 @@ static int netdev_close(struct net_device *pnetdev)
 			pmlmeinfo->disconnect_code = DISCONNECTION_BY_SYSTEM_DUE_TO_NET_DEVICE_DOWN;
 			pmlmeinfo->wifi_reason_code = WLAN_REASON_DEAUTH_LEAVING;
 		}
-
-#ifdef CONFIG_STA_CMD_DISPR
-		rtw_connect_abort_wait(padapter);
-		rtw_disconnect_abort_wait(padapter);
-#endif /* CONFIG_STA_CMD_DISPR */
 	}
 
 #ifdef CONFIG_BR_EXT
@@ -2977,7 +2974,6 @@ int rtw_suspend_wow(_adapter *padapter)
 		rtw_sdio_free_irq(dvobj);
 		#endif
 		#endif/*CONFIG_SDIO_HCI*/
-
 #ifdef CONFIG_CONCURRENT_MODE
 		rtw_mi_buddy_suspend_free_assoc_resource(padapter);
 #endif

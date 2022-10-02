@@ -88,8 +88,7 @@
 	#endif
 	#endif
 	#ifndef CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
-	/*todo fixed phl rx filter flow while enable random mac*/
-	/*#define CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI*/
+	//#define CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
 	#endif
 	#ifndef CONFIG_RTW_CFGVENDOR_RSSIMONITOR
 	#define CONFIG_RTW_CFGVENDOR_RSSIMONITOR
@@ -316,7 +315,7 @@
 	#define CONFIG_DFS_SLAVE_WITH_RADAR_DETECT 0
 	#endif
 	#if !defined(CONFIG_DFS_MASTER) || CONFIG_DFS_SLAVE_WITH_RADAR_DETECT
-	/*#define CONFIG_DFS_MASTER*/
+	#define CONFIG_DFS_MASTER
 	#endif
 	#if defined(CONFIG_DFS_MASTER) && !defined(CONFIG_RTW_DFS_REGION_DOMAIN)
 	#define CONFIG_RTW_DFS_REGION_DOMAIN 0
@@ -618,7 +617,7 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 #define CONFIG_BCN_ICF
 #endif 
 
-#ifndef CONFIG_PCI_MSI
+#if !defined (CONFIG_PCI_MSI) || defined (CONFIG_RTW_FORCE_PCI_MSI_DISABLE)
 #define CONFIG_RTW_PCI_MSI_DISABLE
 #endif
 
@@ -670,7 +669,7 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 #endif
 
 #ifdef ROKU_PRIVATE
-	#define CONFIG_USB_RELEASE_RPT
+	#define CONFIG_RELEASE_RPT
 	#define CONFIG_RA_TXSTS_DBG
 #endif
 
@@ -678,6 +677,9 @@ power down etc.) in last time, we can unmark this flag to avoid some unpredictab
 	#define CONFIG_STA_MULTIPLE_BSSID
 #endif
 
+#ifdef CONFIG_NARROWBAND_SUPPORTING
+	#define CONFIG_NB_VALUE		RTW_NB_CONFIG_NONE/*RTW_NB_CONFIG_WIDTH_10 or RTW_NB_CONFIG_WIDTH_5*/
+#endif
 /*
  * Work around Config
  */

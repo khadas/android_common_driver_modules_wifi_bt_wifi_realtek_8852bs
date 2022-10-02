@@ -700,8 +700,10 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_VHT_CAPABILITY 191
 #define WLAN_EID_VHT_OPERATION 192
 #define WLAN_EID_WIDE_BANDWIDTH_CHANNEL_SWITCH 194
+#define WLAN_EID_VHT_TX_POWER_ENVELOPE 195
 #define WLAN_EID_CHANNEL_SWITCH_WRAPPER 196
 #define WLAN_EID_VHT_OP_MODE_NOTIFY 199
+#define WLAN_EID_RSNX 244
 #define WLAN_EID_EXTENSION 255
 #define WLAN_EID_EXT_OWE_DH_PARAM 32
 
@@ -709,6 +711,7 @@ struct ieee80211_snap_hdr {
 #define WLAN_EID_EXTENSION_HE_CAPABILITY	35
 #define WLAN_EID_EXTENSION_HE_OPERATION	36
 #define WLAN_EID_EXTENSION_HE_MU_EDCA	38
+#define WLAN_EID_EXT_HE_6G_CAP 59
 
 #define WLAN_EID_EXT_CAP_MAX_LEN 10
 
@@ -1311,6 +1314,7 @@ struct ieee80211_txb {
 #define MAX_OWE_IE_LEN (128)
 #define MAX_P2P_IE_LEN (256)
 #define MAX_WFD_IE_LEN (128)
+#define MAX_RSNX_IE_LEN (16)
 
 #define NETWORK_EMPTY_ESSID (1<<0)
 #define NETWORK_HAS_OFDM    (1<<1)
@@ -1816,6 +1820,7 @@ u8 rtw_update_rate_bymode(WLAN_BSSID_EX *pbss_network, u32 mode);
 
 u8 *rtw_get_ie_ex(const u8 *in_ie, uint in_len, u8 eid, const u8 *oui, u8 oui_len, u8 *ie, uint *ielen);
 u8 rtw_ies_update_ie(u8 *ies, uint *ies_len, uint ies_offset, u8 eid, const u8 *content, u8 content_len);
+u8 rtw_ies_update_ie_ex(u8 *ies, uint *ies_len, uint ies_offset, u8 eid_ex, const u8 *content, u8 content_len);
 int rtw_ies_remove_ie(u8 *ies, uint *ies_len, uint offset, u8 eid, u8 *oui, u8 oui_len);
 
 void rtw_set_supported_rate(u8 *SupportedRates, uint mode, u8 ch) ;
@@ -1902,11 +1907,6 @@ void dump_wps_ie(void *sel, const u8 *ie, u32 ie_len);
 void rtw_ies_get_chbw(u8 *ies, int ies_len, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
 
 void rtw_bss_get_chbw(WLAN_BSSID_EX *bss, u8 *ch, u8 *bw, u8 *offset, u8 ht, u8 vht);
-
-bool rtw_is_chbw_grouped(u8 ch_a, u8 bw_a, u8 offset_a
-	, u8 ch_b, u8 bw_b, u8 offset_b);
-void rtw_sync_chbw(u8 *req_ch, u8 *req_bw, u8 *req_offset
-	, u8 *g_ch, u8 *g_bw, u8 *g_offset);
 
 u32 rtw_get_p2p_merged_ies_len(u8 *in_ie, u32 in_len);
 int rtw_p2p_merge_ies(u8 *in_ie, u32 in_len, u8 *merge_ie);

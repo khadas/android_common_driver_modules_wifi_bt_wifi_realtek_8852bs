@@ -29,6 +29,10 @@
 #define HALRF_CONFIG_FW_IO_OFLD_SUPPORT
 #endif
 
+#ifdef CONFIG_HAL_THERMAL_PROTECT
+#define HALRF_THERMAL_PROTECT_SUPPORT
+#endif
+
 #define CF_PHL_BB_CTRL_RX_CCA
 
 /*@--------------------------[Define] ---------------------------------------*/
@@ -41,9 +45,9 @@
 #define halrf_w32(rf, addr, val) hal_write32((rf)->hal_com, (addr | RF_OFST), val)
 #define halrf_w16(rf, addr, val) hal_write16((rf)->hal_com, (addr | RF_OFST), val)
 #define halrf_w8(rf, addr, val) hal_write8((rf)->hal_com, (addr | RF_OFST), val)
-#define halrf_rrf(rf, path, addr, mask) rtw_hal_read_rf_reg((rf)->hal_com, path, addr, mask)
+/*#define halrf_rrf(rf, path, addr, mask) rtw_hal_read_rf_reg((rf)->hal_com, path, addr, mask)*/
 /*#define halrf_wrf(rf, path, addr, mask, val) rtw_hal_write_rf_reg((rf)->hal_com, path, addr, mask, val)*/
-#define halrf_wmac32(rf, addr, val) hal_write32((rf)->hal_com, addr, val)
+/*#define halrf_wmac32(rf, addr, val) hal_write32((rf)->hal_com, addr, val)*/
 #define halrf_rmac32(rf, addr) hal_read32((rf)->hal_com, addr)
 
 #define halrf_read_mem(rf, addr, cnt, pmem) hal_read_mem((rf)->hal_com, addr, cnt, pmem)
@@ -63,7 +67,7 @@
 
 /*[Delay]*/
 #define halrf_delay_ms(rf, ms) _os_delay_ms(rf->hal_com->drv_priv, ms)
-#define halrf_delay_us(rf, us) _os_delay_us(rf->hal_com->drv_priv, us)
+#define halrf_os_delay_us(rf, us) _os_delay_us(rf->hal_com->drv_priv, us)
 
 /*[Memory Access]*/
 #define halrf_mem_alloc(rf, buf_sz) _os_mem_alloc(rf->hal_com->drv_priv, buf_sz)
@@ -123,13 +127,21 @@ u32 halrf_cal_bit_shift(u32 bit_mask);
 
 u32 halrf_get_sys_time(struct rf_info *rf);
 
+void halrf_wmac32(struct rf_info *rf, u32 addr, u32 val);
+
 void halrf_wreg(struct rf_info *rf, u32 addr, u32 bit_mask, u32 val);
+
+bool halrf_polling_bb(struct rf_info *rf, u32 addr, u32 mask, u32 val, u32 count);
+
+bool halrf_polling_rf(struct rf_info *rf, u32 path, u32 addr, u32 mask, u32 val, u32 count);
 
 u32 halrf_rreg(struct rf_info *rf, u32 addr, u32 bit_mask);
 
 void halrf_wrf(struct rf_info *rf, enum rf_path path, u32 addr, u32 mask, u32 val);
 
+u32 halrf_rrf(struct rf_info *rf, enum rf_path path, u32 addr, u32 mask);
+
 void halrf_fill_h2c_cmd(struct rf_info *rf, u16 cmdlen, u8 cmdid,
 			u8 classid, u32 cmdtype, u32 *pval);
-void halrf_delay_10us(struct rf_info *rf, u32 count);
+void halrf_delay_us(struct rf_info *rf, u32 count);
 #endif

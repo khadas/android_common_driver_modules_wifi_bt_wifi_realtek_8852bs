@@ -54,7 +54,8 @@ _PHL_FILES := $(phl_path)phl_init.o \
 			$(phl_path)phl_sound_cmd.o \
 			$(phl_path)phl_p2pps.o \
 			$(phl_path)phl_thermal.o \
-			$(phl_path)phl_txpwr.o
+			$(phl_path)phl_txpwr.o \
+			$(phl_path)phl_dfs.o
 
 ifeq ($(CONFIG_POWER_SAVE), y)
 _PHL_FILES += $(phl_path)phl_ps.o \
@@ -94,9 +95,6 @@ endif
 
 ifeq ($(CONFIG_PHL_CUSTOM_FEATURE), y)
 _PHL_FILES += $(phl_path)custom/phl_custom.o
-ifeq ($(CONFIG_PHL_CUSTOM_FEATURE_FB), y)
-_PHL_FILES += $(phl_path)custom/phl_custom_fb.o
-endif
 endif
 
 ifeq ($(CONFIG_PHL_TEST_SUITE), y)

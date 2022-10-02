@@ -103,6 +103,9 @@ enum rtw_hal_status
 rtw_hal_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal);
 void rtw_hal_fw_dbg_dump(void *hal);
 
+enum rtw_hal_status
+rtw_hal_pg_redownload_fw(struct rtw_phl_com_t *phl_com, void *hal);
+
 enum rtw_fw_status rtw_hal_get_fw_status(void *h);
 
 enum rtw_hal_status rtw_hal_preload(struct rtw_phl_com_t *phl_com, void *hal);
@@ -335,13 +338,16 @@ enum rtw_hal_status
 rtw_hal_query_info(void* hal, u8 info_id, void *value);
 
 #ifdef CONFIG_PHL_DFS
-bool rtw_hal_in_radar_domain(void *hal, u8 ch, enum channel_width bw);
+bool rtw_hal_in_radar_domain(void *hal, enum band_type band, u8 ch
+	, enum channel_width bw, enum chan_offset offset);
+void rtw_hal_bb_dfs_change_domain(void *hal, enum band_type band, u8 ch
+	, enum channel_width bw, enum chan_offset offset);
 enum rtw_hal_status rtw_hal_radar_detect_cfg(void *hal, bool dfs_enable);
 #endif /*CONFIG_PHL_DFS*/
 
 enum rtw_hal_status
 rtw_hal_set_ch_bw(void *hal, u8 band_idx,
-		struct rtw_chan_def *chdef, bool do_rfk);
+		struct rtw_chan_def *chdef, bool do_rfk, bool rd_enabled);
 u8 rtw_hal_get_cur_ch(void *hal, u8 band_idx);
 void rtw_hal_get_cur_chdef(void *hal, u8 band_idx,
 				struct rtw_chan_def *cur_chandef);
@@ -355,12 +361,13 @@ enum rtw_hal_status rtw_hal_chk_allq_empty(void *hal, u8 *empty);
 s8 rtw_hal_rf_get_power_limit(void *hal, enum phl_phy_idx phy,
 	u16 rate, u8 bandwidth, u8 beamforming, u8 tx_num, u8 channel);
 enum rtw_hal_status rtw_hal_set_power_lmt(void *hal, u8 band_idx);
+void rtw_hal_set_ext_pwr_lmt_en(void *hal, bool enable);
 void rtw_hal_enable_ext_pwr_lmt(void *hal, u8 hw_band,
 		struct rtw_tpu_ext_pwr_lmt_info *ext_pwr_lmt_info);
 
 #ifdef CONFIG_RTW_ACS
-void rtw_hal_acs_mntr_trigger(void *hal, u16 monitor_time);
-enum rtw_hal_status rtw_hal_acs_mntr_result(void *hal, void *rpt);
+void rtw_hal_acs_mntr_trigger(void *hal, struct acs_mntr_parm *parm);
+enum rtw_hal_status rtw_hal_acs_mntr_result(void *hal, struct acs_mntr_rpt *rpt);
 #endif /* CONFIG_RTW_ACS */
 
 /*watchdog update env result*/
@@ -423,12 +430,14 @@ enum rtw_hal_status rtw_hal_notify_rxdone(void* hal, void *rxbd, u8 ch,
  * @sw_retry: output, the packet mentioned in this report needs sw retry if sw_retry == 1
  * @dma_ch: output, the tx dma channel of this packet mentioned in this report
  * @wp_seq: output, the wp_seq of this packet mentioned in this report
+ * @macid: output, the mac_id of this packet mentioned in this report
+ * @ac_queue: output, the tid of this packet mentioned in this report
  * @txsts: output, the tx status of this packet mentioned in this report
  *
  * returns the length of report buffer which has been parsed in this function
  */
 u16 rtw_hal_handle_wp_rpt(void *hal, u8 *rp, u16 len, u8 *sw_retry, u8 *dma_ch,
-			  u16 *wp_seq, u8 *txsts);
+			  u16 *wp_seq, u8 *macid, u8 *ac_queue, u8 *txsts);
 
 u8 rtw_hal_check_rxrdy(struct rtw_phl_com_t *phl_com, void* hal, u8 *rxbuf, u8 dma_ch);
 u8 rtw_hal_handle_rxbd_info(void* hal, u8 *rxbuf, u16 *buf_size);
@@ -634,7 +643,8 @@ enum rtw_hal_status rtw_hal_scan_pause_tx_fifo(void *hinfo,
 	u8 band_idx, bool off_ch);
 
 enum rtw_hal_status rtw_hal_dfs_pause_tx(void *hinfo,
-	u8 band_idx, bool off_ch);
+	u8 band_idx, bool off_ch, enum tx_pause_rson rson);
+
 /*****************************************************************************/
 
 void rtw_hal_com_scan_set_tx_lifetime(void *hal, u8 band);
@@ -758,10 +768,11 @@ rtw_hal_get_stbc_proto_cap(struct rtw_phl_com_t *phl_com, void *hal,
 
 enum rtw_hal_status rtw_hal_rf_chl_rfk_trigger(void *hal, u8 phy_idx, u8 force);
 
-enum rtw_hal_status rtw_hal_watchdog(void *hal);
+enum rtw_hal_status rtw_hal_watchdog(void *hal, struct rtw_phl_com_t *phl_com);
 enum rtw_hal_status rtw_hal_simple_watchdog(void *hal, u8 io_en);
 void rtw_hal_ps_chk_hw_rf_state(struct rtw_phl_com_t *phl_com, void *hal);
 void rtw_hal_ps_notify_wake(void *hal);
+void rtw_hal_lps_pvb_wait_rx(void *hal, u16 macid, bool pvb_wait_rx);
 
 /******************************************************************************
  *
@@ -857,7 +868,7 @@ enum rtw_hal_status rtw_hal_hw_tx_resume(void *hal);
 enum rtw_hal_status rtw_hal_poll_hw_rx_done(void *hal);
 enum rtw_hal_status rtw_hal_hw_rx_resume(void *hal);
 
-void rtw_hal_tx_dbg_status_dump(void *hal);
+void rtw_hal_tx_dbg_status_dump(void *hal, enum phl_band_idx hwband);
 
 #ifdef RTW_WKARD_DYNAMIC_BFEE_CAP
 enum rtw_hal_status rtw_hal_bf_bfee_ctrl(void *hal, u8 band, bool ctrl);
@@ -916,7 +927,8 @@ enum rtw_hal_status rtw_hal_mcc_disable(void *hal, u8 group, u16 macid,
 
 enum rtw_hal_status rtw_hal_mcc_enable(void *hal, struct rtw_phl_mcc_en_info *info,
 					struct rtw_phl_mcc_bt_info *bt_info,
-					enum rtw_phl_tdmra_wmode wmode);
+					enum rtw_phl_tdmra_wmode wmode,
+					struct rtw_phl_mcc_dbg_info *dbg_i);
 #endif /* CONFIG_MCC_SUPPORT */
 
 #ifdef CONFIG_PHL_P2PPS
@@ -979,10 +991,18 @@ const char *rtw_hal_get_pw_lmt_regu_type_str(void *hal, enum band_type band);
 
 bool rtw_hal_get_pwr_lmt_en(void *hal, u8 band_idx);
 
+u16 rtw_hal_get_pwr_constraint(void *hal, u8 band_idx);
+enum rtw_hal_status rtw_hal_set_pwr_constraint(void *hal, u8 band_idx, u16 mb);
+
 enum rtw_hal_status rtw_hal_set_tx_power(void *hal, u8 band_idx,
 					enum phl_pwr_table pwr_table);
+
+enum rtw_hal_status rtw_hal_get_txinfo_power(
+	void *hal, s16 *txinfo_power_dbm);
 /*****************************************************************************/
 
 u32 rtw_hal_get_phy_stat_info(void *hal, enum phl_band_idx hw_band,
 			      enum phl_stat_info_query phy_stat);
+
+enum rtw_chip_id rtw_hal_get_chip_id(void *hal);
 #endif /*_HAL_API_H_*/

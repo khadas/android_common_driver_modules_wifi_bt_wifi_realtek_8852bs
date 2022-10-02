@@ -29,15 +29,68 @@ bool rtw_hal_get_pwr_lmt_en(void *hal, u8 band_idx)
 	return rtw_hal_mac_get_pwr_lmt_en_val(hal_info->hal_com, band_idx);
 }
 
+u16 rtw_hal_get_pwr_constraint(void *hal, u8 band_idx)
+{
+	struct hal_info_t *hal_info = hal;
+	struct rtw_tpu_info *tpu;
+
+	if (band_idx >= MAX_BAND_NUM) {
+		_os_warn_on(1);
+		return 0;
+	}
+
+	tpu = &hal_info->hal_com->band[band_idx].rtw_tpu_i;
+	return tpu->pwr_constraint_mb;
+}
+
+enum rtw_hal_status rtw_hal_set_pwr_constraint(void *hal, u8 band_idx, u16 mb)
+{
+	struct hal_info_t *hal_info = hal;
+	struct rtw_tpu_info *tpu;
+
+	if (band_idx >= MAX_BAND_NUM)
+		return RTW_HAL_STATUS_FAILURE;
+
+	tpu = &hal_info->hal_com->band[band_idx].rtw_tpu_i;
+
+	if (tpu->pwr_constraint_mb != mb) {
+		enum phl_phy_idx phy_idx = rtw_hal_hw_band_to_phy_idx(band_idx);
+
+		/* software configuration only, no need to check for hwband ready */
+		if (rtw_hal_rf_set_power_constraint(hal_info, phy_idx, mb) ==  RTW_HAL_STATUS_SUCCESS) {
+			tpu->pwr_constraint_mb = mb;
+			return RTW_HAL_STATUS_SUCCESS;
+		}
+		return RTW_HAL_STATUS_FAILURE;
+	}
+
+	return RTW_HAL_STATUS_SUCCESS;
+}
+
 enum rtw_hal_status rtw_hal_set_tx_power(void *hal, u8 band_idx,
 					enum phl_pwr_table pwr_table)
 {
 	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
-	enum phl_phy_idx phy_idx = HW_PHY_0;
 
-	if (band_idx == 1)
-		phy_idx = HW_PHY_1;
+	if (hal_info->hal_com->dbcc_en || band_idx == HW_BAND_0) {
+		enum phl_phy_idx phy_idx = rtw_hal_hw_band_to_phy_idx(band_idx);
 
-	return rtw_hal_rf_set_power(hal_info, phy_idx, pwr_table);
+		return rtw_hal_rf_set_power(hal_info, phy_idx, pwr_table);
+	}
+
+	return RTW_HAL_STATUS_SUCCESS;
+}
+
+enum rtw_hal_status rtw_hal_get_txinfo_power(void *hal,
+					s16 *txinfo_power_dbm)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	enum rtw_hal_status hal_status = RTW_HAL_STATUS_SUCCESS;
+	s16 power_dbm = 0;
+
+	hal_status = rtw_hal_bb_get_txinfo_power(hal_info, &power_dbm);
+	*txinfo_power_dbm = power_dbm;
+
+	return hal_status;
 }
 

@@ -72,6 +72,7 @@ enum rtw_fw_type {
 	RTW_FW_NIC_MP, /* 6 */
 	RTW_FW_AP_MP, /* 7 */
 	RTW_FW_VRAP, /* 8 */
+	RTW_FW_NIC_CE, /* 9 */
 	RTW_FW_MAX
 };
 
@@ -92,6 +93,9 @@ enum tx_pause_rson {
 	PAUSE_RSON_RFK,
 	PAUSE_RSON_PSD,
 	PAUSE_RSON_DFS,
+	PAUSE_RSON_DFS_CSA, /* allow beacon only */
+	PAUSE_RSON_DFS_CSA_MG, /* allow beacon and mgnt frame */
+	PAUSE_RSON_DFS_CAC,
 	PAUSE_RSON_DBCC,
 	PAUSE_RSON_RESET,
 	PAUSE_RSON_MAX
@@ -175,6 +179,7 @@ struct btc_ctrl_t {
 	u8 lps;
 	u8 tx_time;
 	u8 tx_retry;
+	u8 disable_rx_stbc;
 };
 
 /*except version*/
@@ -620,6 +625,7 @@ struct rtw_rate_info {
 	enum hal_rate_mode mode; /* 2bit 0:legacy, 1:HT, 2:VHT, 3:HE*/
 	enum hal_rate_bw bw; /*2bit 0:5M/10M/20M, 1:40M, 2:80M, 3:160M or 80+80*/
 	u8 mcs_ss_idx; /*HE: 3bit SS + 4bit MCS; non-HE: 5bit MCS/rate idx */
+	bool is_actrl; /* 0: don't append a-ctrl field; 1: append a-ctrl field */
 };
 
 /* from cmn_sta_info */
@@ -745,14 +751,14 @@ struct rtw_trx_stat {
 	/* Below info is for release report*/
 	u32 tx_fail_cnt;
 	u32 tx_ok_cnt;
-#ifdef CONFIG_USB_HCI
-	struct rtw_wp_rpt_stats wp_rpt_stats[PHL_AC_QUEUE_TOTAL];
-#endif
+	struct rtw_wp_rpt_stats *wp_rpt_stats;
 #ifdef CONFIG_PCI_HCI
-	u8 *wp_rpt_stats;
 	u32 ltr_tx_dly_count;
 	u32 ltr_last_tx_dly_time;
 #endif
+	u16 rx_rate;
+	u8 rx_bw;
+	u8 rx_gi_ltf;
 };
 
 struct bacam_ctrl_t {
@@ -849,8 +855,11 @@ struct phy_hw_cap_t {
 	#endif
 	u8 tx_num;
 	u8 rx_num;
+	u8 tx_path_num;
+	u8 rx_path_num;
 	u16 hw_rts_time_th;
 	u16 hw_rts_len_th;
+	u32 txagg_num;
 };
 
 
@@ -876,6 +885,11 @@ enum phl_rf_mode {
 	RF_MODE_MAX
 };
 
+enum phl_pwr_ctrl {
+	ALL_TIME_CTRL = 0,
+        GNT_TIME_CTRL,
+        PWR_CTRL_MAX
+};
 
 /*--------------------------------------------------------------------------*/
 /*[TX Power Unit(TPU) array size]*/
@@ -988,6 +1002,7 @@ struct rtw_tpu_info { /*TX Power Unit (TPU)*/
 	bool pwr_lmt_en;
 	u8 tx_ptrn_shap_idx;
 	u8 tx_ptrn_shap_idx_cck;
+	u16 pwr_constraint_mb;
 };
 
 struct rtw_hal_stat_info {
@@ -1099,6 +1114,7 @@ struct rtw_hal_com_t {
 #ifdef RTW_WKARD_CCX_RPT_LIMIT_CTRL
 	u8 spe_pkt_cnt_lmt;
 #endif
+	u32 uuid;
 };
 
 #define FL_CFG_OP_SET 0
@@ -1213,6 +1229,13 @@ enum ps_pwr_state {
 };
 
 #ifdef CONFIG_PHL_DFS
+struct hal_mac_dfs_rpt_cfg {
+	bool rpt_en;
+	u8 rpt_num_th;
+	bool rpt_en_to;
+	u8 rpt_to;
+};
+
 struct hal_dfs_rpt {
 	u8 *dfs_ptr;
 	u16 dfs_num;
@@ -1241,13 +1264,6 @@ enum hal_tsf_sync_act {
 	HAL_TSF_EN_SYNC_AUTO = 1,
 	HAL_TSF_DIS_SYNC_AUTO = 2,
 };
-
-#ifdef CONFIG_RTW_ACS
-struct auto_chan_sel_report {
-	u8 clm_ratio;
-	u8 nhm_pwr;
-};
-#endif
 
 struct watchdog_nhm_report {
 	u8 ccx_rpt_stamp;

@@ -27,7 +27,8 @@ enum btc_cx_state_map {
 	BTC_WBUSY_BSCAN,
 	BTC_WSCAN_BNOSCAN,
 	BTC_WSCAN_BSCAN,
-	BTC_WLINKING
+	BTC_WLINKING,
+	BTC_WIDLE_BSCAN
 };
 
 enum btc_ant_phase {
@@ -152,6 +153,12 @@ enum btc_cx_poicy_type {
 	/* TDMA Fix slot-9: W1:B1 = 40:10 */
 	BTC_CXP_FIX_TD4010ISO = (BTC_CXP_FIX << 8) | 9,
 
+	/* TDMA Fix slot-10: W1:B1 = 40:10 */
+	BTC_CXP_FIX_TD4010ISO_DL = (BTC_CXP_FIX << 8) | 10,
+
+	/* TDMA Fix slot-11: W1:B1 = 40:10 */
+	BTC_CXP_FIX_TD4010ISO_UL = (BTC_CXP_FIX << 8) | 11,
+
 	/* PS-TDMA Fix slot-0: W1:B1 = 30:30 */
 	BTC_CXP_PFIX_TD3030 = (BTC_CXP_PFIX << 8) | 0,
 
@@ -260,14 +267,13 @@ void _action_bt_whql(struct btc_t *btc);
 void _action_common(struct btc_t *btc);
 //extern const u32 cxtbl[];
 
-void _update_btc_state_map(struct btc_t *btc);
-void _set_bt_ignore_wlan_act(struct btc_t *btc, u8 enable);
+void _set_bt_ignore_wl_act(struct btc_t *btc, u8 enable);
 void _set_wl_tx_power(struct btc_t *btc, u32 level);
 void _set_wl_rx_gain(struct btc_t *btc, u32 level);
 void _set_bt_tx_power(struct btc_t *btc, u32 level);
 void _set_bt_rx_gain(struct btc_t *btc, u32 level);
-void _set_gnt_wl(struct btc_t *btc, u8 phy_map, u8 state);
-void _set_gnt_bt(struct btc_t *btc, u8 phy_map, u8 state);
+void _set_gnt(struct btc_t *btc, u8 phy_map, u8 wl_state, u8 bt_state);
+
 
 extern struct fbtc_tdma t_def[];
 extern struct fbtc_slot s_def[];

@@ -221,27 +221,51 @@ struct rtw_realwow_info {
 	struct rtw_realwow_ofld_content realwow_ofld_content;
 };
 
-struct rtw_wow_gpio_info {
-	u8 dev2hst_gpio_en;
-	u8 disable_inband;
-	u8 gpio_output_input;
-	u8 gpio_active;
-	u8 toggle_pulse;
-	u8 data_pin_wakeup;
-	u8 gpio_pulse_nonstop;
-	u8 gpio_time_unit;
-	u8 gpio_num;
-	u8 gpio_pulse_dura;
-	u8 gpio_pulse_period;
-	u8 gpio_pulse_count;
-	u8 customer_id;
-	u8 gpio_pulse_en_a;
-	u8 gpio_duration_unit_a;
-	u8 gpio_pulse_nonstop_a;
-	u8 special_reason_a;
-	u8 gpio_duration_a;
-	u8 gpio_pulse_count_a;
+struct rtw_dev2hst_gpio_info {
+	/* dword0 */
+	u32 dev2hst_gpio_en:1;
+	u32 disable_inband:1;
+	u32 gpio_output_input:1;
+	u32 gpio_active:1;
+	u32 toggle_pulse:1;
+	u32 data_pin_wakeup:1;
+	u32 gpio_pulse_nonstop:1;
+	u32 gpio_time_unit:1;
+	u32 gpio_num:8;
+	u32 gpio_pulse_dura:8;
+	u32 gpio_pulse_period:8;
+	/* dword1 */
+	u32 gpio_pulse_count:8;
+	u32 rsvd0:24;
+	/* dword2 */
+	u32 customer_id:8;
+	u32 rsvd1:24;
+	/* dword3 */
+	u32 rsn_a_en:1;
+	u32 rsn_a_toggle_pulse:1;
+	u32 rsn_a_pulse_nonstop:1;
+	u32 rsn_a_time_unit:1;
+	u32 rsvd2:28;
+	/* dword4 */
+	u32 rsn_a:8;
+	u32 rsn_a_pulse_duration:8;
+	u32 rsn_a_pulse_period:8;
+	u32 rsn_a_pulse_count:8;
+	/* dword5 */
+	u32 rsn_b_en:1;
+	u32 rsn_b_toggle_pulse:1;
+	u32 rsn_b_pulse_nonstop:1;
+	u32 rsn_b_time_unit:1;
+	u32 rsvd3:28;
+	/* dword6 */
+	u32 rsn_b:8;
+	u32 rsn_b_pulse_duration:8;
+	u32 rsn_b_pulse_period:8;
+	u32 rsn_b_pulse_count:8;
+};
 
+struct rtw_wow_gpio_info {
+	struct rtw_dev2hst_gpio_info d2h_gpio_info;
 	enum rtw_gpio_mode dev2hst_gpio_mode;
 	u8 dev2hst_gpio;
 	u8 dev2hst_high;

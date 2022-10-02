@@ -21,13 +21,31 @@ u16 read_efuse_cnt = EFUSE_WAIT_CNT;
 bool OTP_test;
 enum rtw_dv_sel dv_sel = DDV;
 
-static struct efuse_info_item offset_pcie = {
-	0x400, /* mac_addr */
+struct efuse_info_item len_pcie = {
+	6, /* mac_addr */
 	0, /* pid */
-	0x408, /* did */
-	0x406, /* vid */
-	0x40A, /* svid */
-	0x40C, /* smid */
+	2, /* did */
+	2, /* vid */
+	2, /* svid */
+	2, /* smid */
+};
+
+struct efuse_info_item len_usb = {
+	6, /* mac_addr */
+	2, /* pid */
+	0, /* did */
+	2, /* vid */
+	0, /* svid */
+	0, /* smid */
+};
+
+struct efuse_info_item len_sdio = {
+	6, /* mac_addr */
+	0, /* pid */
+	0, /* did */
+	0, /* vid */
+	0, /* svid */
+	0, /* smid */
 };
 
 static struct efuse_info_item offset_usb_8852a = {
@@ -39,6 +57,63 @@ static struct efuse_info_item offset_usb_8852a = {
 	0, /* smid */
 };
 
+static struct efuse_info_item offset_pcie_8852a = {
+	0x400, /* mac_addr */
+	0, /* pid */
+	0x408, /* did */
+	0x406, /* vid */
+	0x40A, /* svid */
+	0x40C, /* smid */
+};
+
+static struct efuse_info_item offset_sdio_8852a = {
+	0x41A, /* mac_addr */
+	0, /* pid */
+	0, /* did */
+	0, /* vid */
+	0, /* svid */
+	0, /* smid */
+};
+
+static u8 def_val_usb_mac_addr_8852a[] = {0x00, 0xE0, 0x4C, 0x88, 0x5A, 0x01};
+static u8 def_val_usb_pid_8852a[] = {0x5A, 0x88};
+static u8 def_val_usb_vid_8852a[] = {0xDA, 0x0B};
+
+static struct efuse_info_def_val def_val_usb_8852a = {
+	def_val_usb_mac_addr_8852a,
+	def_val_usb_pid_8852a,
+	NULL,
+	def_val_usb_vid_8852a,
+	NULL,
+	NULL,
+};
+
+static u8 def_val_pcie_mac_addr_8852a[] = {0x00, 0xE0, 0x4C, 0xC8, 0x22, 0x01};
+static u8 def_val_pcie_did_8852a[] = {0x52, 0x88};
+static u8 def_val_pcie_vid_8852a[] = {0xEC, 0x10};
+static u8 def_val_pcie_svid_8852a[] = {0xEC, 0x10};
+static u8 def_val_pcie_smid_8852a[] = {0x52, 0x88};
+
+static struct efuse_info_def_val def_val_pcie_8852a = {
+	def_val_pcie_mac_addr_8852a,
+	NULL,
+	def_val_pcie_did_8852a,
+	def_val_pcie_vid_8852a,
+	def_val_pcie_svid_8852a,
+	def_val_pcie_smid_8852a,
+};
+
+static u8 def_val_sdio_mac_addr_8852a[] = {0x00, 0xE0, 0x4C, 0xC8, 0x21, 0x01};
+
+static struct efuse_info_def_val def_val_sdio_8852a = {
+	def_val_sdio_mac_addr_8852a,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+};
+
 static struct efuse_info_item offset_usb_8852b = {
 	0x488, /* mac_addr */
 	0x482, /* pid */
@@ -48,7 +123,16 @@ static struct efuse_info_item offset_usb_8852b = {
 	0, /* smid */
 };
 
-static struct efuse_info_item offset_sdio = {
+static struct efuse_info_item offset_pcie_8852b = {
+	0x400, /* mac_addr */
+	0, /* pid */
+	0x408, /* did */
+	0x406, /* vid */
+	0x40A, /* svid */
+	0x40C, /* smid */
+};
+
+static struct efuse_info_item offset_sdio_8852b = {
 	0x41A, /* mac_addr */
 	0, /* pid */
 	0, /* did */
@@ -57,91 +141,43 @@ static struct efuse_info_item offset_sdio = {
 	0, /* smid */
 };
 
-static struct efuse_info_item def_val_pcie = {
-	0x0, /* mac_addr */
-	0, /* pid */
-	0x52, /* did */
-	0xEC, /* vid */
-	0xEC, /* svid */
-	0x52, /* smid */
+static u8 def_val_usb_mac_addr_8852b[] = {0x00, 0xE0,	0x4C, 0xB8, 0x52, 0x01};
+static u8 def_val_usb_pid_8852b[] = {0x52, 0xB8};
+static u8 def_val_usb_vid_8852b[] = {0xDA, 0x0B};
+
+static struct efuse_info_def_val def_val_usb_8852b = {
+	def_val_usb_mac_addr_8852b,
+	def_val_usb_pid_8852b,
+	NULL,
+	def_val_usb_vid_8852b,
+	NULL,
+	NULL,
 };
 
-static struct efuse_info_item def_val_usb_8852a = {
-	0x0, /* mac_addr */
-	0x5A, /* pid */
-	0, /* did */
-	0xDA, /* vid */
-	0, /* svid */
-	0, /* smid */
+static u8 def_val_pcie_mac_addr_8852b[] = {0x00, 0xE0, 0x4C, 0xC8, 0x22, 0x01};
+static u8 def_val_pcie_did_8852b[] = {0x52, 0xB8};
+static u8 def_val_pcie_vid_8852b[] = {0xEC, 0x10};
+static u8 def_val_pcie_svid_8852b[] = {0xEC, 0x10};
+static u8 def_val_pcie_smid_8852b[] = {0x52, 0xB8};
+
+static struct efuse_info_def_val def_val_pcie_8852b = {
+	def_val_pcie_mac_addr_8852b,
+	NULL,
+	def_val_pcie_did_8852b,
+	def_val_pcie_vid_8852b,
+	def_val_pcie_svid_8852b,
+	def_val_pcie_smid_8852b,
 };
 
-static struct efuse_info_item def_val_usb_8852b = {
-	0x0, /* mac_addr */
-	0x5B, /* pid */
-	0, /* did */
-	0xDA, /* vid */
-	0, /* svid */
-	0, /* smid */
-};
+static u8 def_val_sdio_mac_addr_8852b[] = {0x00, 0xE0, 0x4C, 0xC8, 0x21, 0x01};
 
-static struct efuse_info_item def_val_sdio = {
-	0x0, /* mac_addr */
-	0, /* pid */
-	0, /* did */
-	0, /* vid */
-	0, /* svid */
-	0, /* smid */
-};
-
-static struct efuse_info_item len_pcie = {
-	6, /* mac_addr */
-	0, /* pid */
-	2, /* did */
-	2, /* vid */
-	2, /* svid */
-	2, /* smid */
-};
-
-static struct efuse_info_item len_usb = {
-	6, /* mac_addr */
-	2, /* pid */
-	0, /* did */
-	2, /* vid */
-	0, /* svid */
-	0, /* smid */
-};
-
-static struct efuse_info_item len_sdio = {
-	6, /* mac_addr */
-	0, /* pid */
-	0, /* did */
-	0, /* vid */
-	0, /* svid */
-	0, /* smid */
-};
-
-static struct efuse_info efuse_info_pcie = {
-	&offset_pcie, /* offset */
-	&def_val_pcie, /* def_val */
-	&len_pcie, /* len */
-};
-
-static struct efuse_info efuse_info_usb_8852a = {
-	&offset_usb_8852a, /* offset */
-	&def_val_usb_8852a, /* def_val */
-	&len_usb, /* len */
-};
-
-static struct efuse_info efuse_info_usb_8852b = {
-	&offset_usb_8852b, /* offset */
-	&def_val_usb_8852b, /* def_val */
-	&len_usb, /* len */
-};
-
-static struct efuse_info efuse_info_sdio = {
-	&offset_sdio, /* offset */
-	&def_val_sdio, /* def_val */
-	&len_sdio, /* len */
+static struct efuse_info_def_val def_val_sdio_8852b = {
+	def_val_sdio_mac_addr_8852b,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
+	NULL,
 };
 
 static u32 efuse_map_init(struct mac_ax_adapter *adapter,
@@ -213,6 +249,10 @@ static u32 read_hw_efuse_dav(struct mac_ax_adapter *adapter, u32 offset, u32 siz
 static u32 write_hw_efuse_dav(struct mac_ax_adapter *adapter, u32 offset,
 			      u8 value);
 static void switch_dv(struct mac_ax_adapter *adapter, enum rtw_dv_sel);
+static u32 proc_dump_hidden(struct mac_ax_adapter *adapter);
+static u32 get_efuse_info_item(struct mac_ax_adapter *adapter, struct efuse_info *info);
+static u32 get_efuse_info_def_val(struct mac_ax_adapter *adapter, enum rtw_efuse_info id,
+				  void *value, u32 len);
 
 u32 mac_dump_efuse_map_wl_plus(struct mac_ax_adapter *adapter,
 			       enum mac_ax_efuse_read_cfg cfg, u8 *efuse_map)
@@ -602,6 +642,100 @@ u32 mac_read_efuse(struct mac_ax_adapter *adapter, u32 addr, u32 size, u8 *val,
 	ret = cnv_efuse_state(adapter, MAC_AX_EFUSE_IDLE);
 	if (ret != 0)
 		return ret;
+
+	return MACSUCCESS;
+}
+
+u32 mac_read_hidden_efuse(struct mac_ax_adapter *adapter, u32 addr, u32 size,
+			  u8 *val, enum mac_ax_efuse_hidden_cfg hidden_cfg)
+{
+	u32 ret, stat;
+	struct mac_ax_hw_info *hw_info = adapter->hw_info;
+	u32 log_sec_size = hw_info->efuse_size + hw_info->sec_data_efuse_size;
+
+	switch (hidden_cfg) {
+	case MAC_AX_EFUSE_HIDDEN_RF:
+		if (addr < log_sec_size || addr + size >
+		    log_sec_size + hw_info->hidden_efuse_rf_size) {
+			PLTFM_MSG_ERR("[ERR] Wrong hidden rf index\n");
+			return MACEFUSESIZE;
+		}
+		break;
+	default:
+		PLTFM_MSG_ERR("[ERR] Hidden config invalid\n");
+		return MACNOITEM;
+	}
+
+	ret = efuse_proc_ck(adapter);
+	if (ret != 0)
+		return ret;
+
+	ret = cnv_efuse_state(adapter, MAC_AX_EFUSE_PHY);
+	if (ret != 0)
+		return ret;
+
+	ret = switch_efuse_bank(adapter, MAC_AX_EFUSE_BANK_WIFI);
+	if (ret != 0) {
+		PLTFM_MSG_ERR("[ERR]switch efuse bank!!\n");
+		stat = cnv_efuse_state(adapter, MAC_AX_EFUSE_IDLE);
+		if (stat != 0)
+			return stat;
+		return ret;
+	}
+
+	ret = efuse_map_init(adapter, EFUSE_MAP_SEL_HIDDEN_RF);
+	if (ret != 0)
+		return ret;
+
+	ret = proc_dump_hidden(adapter);
+	if (ret != 0) {
+		PLTFM_MSG_ERR("[ERR]dump hidden!!\n");
+		stat = cnv_efuse_state(adapter, MAC_AX_EFUSE_IDLE);
+		if (stat != 0)
+			return stat;
+		return ret;
+	}
+
+	PLTFM_MEMCPY(val, adapter->efuse_param.hidden_rf_map +
+		     (addr - log_sec_size), size);
+
+	ret = cnv_efuse_state(adapter, MAC_AX_EFUSE_IDLE);
+	if (ret != 0)
+		return ret;
+
+	return MACSUCCESS;
+}
+
+static u32 proc_dump_hidden(struct mac_ax_adapter *adapter)
+{
+	u8 *map = NULL;
+	struct mac_ax_hw_info *hw_info = adapter->hw_info;
+	u32 efuse_size = hw_info->efuse_size;
+	u32 sec_data_efuse_size = hw_info->sec_data_efuse_size;
+	u32 hidden_efuse_rf_size = hw_info->hidden_efuse_rf_size;
+	u8 hidden_rf_map_valid = adapter->efuse_param.hidden_rf_map_valid;
+	u32 ret;
+
+	if (hidden_rf_map_valid == 0) {
+		map = (u8 *)PLTFM_MALLOC(hidden_efuse_rf_size);
+		if (!map) {
+			PLTFM_MSG_ERR("[ERR]malloc map\n");
+			return MACBUFALLOC;
+		}
+
+		ret = read_hw_efuse(adapter, efuse_size + sec_data_efuse_size,
+				    hidden_efuse_rf_size, map);
+		if (ret != 0) {
+			PLTFM_FREE(map, hidden_efuse_rf_size);
+			return ret;
+		}
+
+		PLTFM_MUTEX_LOCK(&efuse_tbl.lock);
+		PLTFM_MEMCPY(adapter->efuse_param.hidden_rf_map, map, hidden_efuse_rf_size);
+		adapter->efuse_param.hidden_rf_map_valid = 1;
+		PLTFM_MUTEX_UNLOCK(&efuse_tbl.lock);
+		PLTFM_FREE(map, hidden_efuse_rf_size);
+	}
 
 	return MACSUCCESS;
 }
@@ -1720,63 +1854,53 @@ u32 mac_get_efuse_info(struct mac_ax_adapter *adapter, u8 *efuse_map,
 		       enum rtw_efuse_info id, void *value, u32 length,
 		       u8 *autoload_status)
 {
-	u32 offset, def_val;
+	u32 offset;
 	u32 ret;
-	enum mac_ax_intf intf = adapter->hw_info->intf;
 	struct efuse_info info;
 
-	switch (intf) {
-	case MAC_AX_INTF_USB:
-		info = (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) ?
-		       efuse_info_usb_8852a : efuse_info_usb_8852b;
-		break;
-	case MAC_AX_INTF_PCIE:
-		info = efuse_info_pcie;
-		break;
-	case MAC_AX_INTF_SDIO:
-		info = efuse_info_sdio;
-		break;
-	default:
-		return MACINTF;
-	}
+	ret = get_efuse_info_item(adapter, &info);
+	if (ret != MACSUCCESS)
+		return ret;
 
 	ret = compare_info_length(&info, id, length);
 	if (ret != MACSUCCESS)
 		return ret;
 
+	if (*autoload_status == 0) {
+		ret = get_efuse_info_def_val(adapter, id, value, length);
+		if (ret != MACSUCCESS)
+			return ret;
+
+		return MACSUCCESS;
+	}
+
 	switch (id) {
 	case EFUSE_INFO_MAC_ADDR:
-		offset = info.offset->mac_addr;
-		def_val = info.def_val->mac_addr;
+		offset = info.offset.mac_addr;
 		break;
 	case EFUSE_INFO_MAC_PID:
-		offset = info.offset->pid;
-		def_val = info.def_val->pid;
+		offset = info.offset.pid;
 		break;
 	case EFUSE_INFO_MAC_DID:
-		offset = info.offset->did;
-		def_val = info.def_val->did;
+		offset = info.offset.did;
 		break;
 	case EFUSE_INFO_MAC_VID:
-		offset = info.offset->vid;
-		def_val = info.def_val->vid;
+		offset = info.offset.vid;
 		break;
 	case EFUSE_INFO_MAC_SVID:
-		offset = info.offset->svid;
-		def_val = info.def_val->svid;
+		offset = info.offset.svid;
 		break;
 	case EFUSE_INFO_MAC_SMID:
-		offset = info.offset->smid;
-		def_val = info.def_val->smid;
+		offset = info.offset.smid;
 		break;
 	default:
 		return MACNOITEM;
 	}
 
-	if (*autoload_status == 0)
-		PLTFM_MEMCPY(value, &def_val, 1);
-	else
-		PLTFM_MEMCPY(value, efuse_map + offset, length);
+	if ((offset + length) > adapter->hw_info->efuse_size)
+		return MACEFUSESIZE;
+
+	PLTFM_MEMCPY(value, efuse_map + offset, length);
 
 	return MACSUCCESS;
 }
@@ -1786,23 +1910,11 @@ u32 mac_set_efuse_info(struct mac_ax_adapter *adapter, u8 *efuse_map,
 {
 	u32 offset;
 	u32 ret;
-	enum mac_ax_intf intf = adapter->hw_info->intf;
 	struct efuse_info info;
 
-	switch (intf) {
-	case MAC_AX_INTF_USB:
-		info = (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) ?
-		       efuse_info_usb_8852a : efuse_info_usb_8852b;
-		break;
-	case MAC_AX_INTF_PCIE:
-		info = efuse_info_pcie;
-		break;
-	case MAC_AX_INTF_SDIO:
-		info = efuse_info_sdio;
-		break;
-	default:
-		return MACINTF;
-	}
+	ret = get_efuse_info_item(adapter, &info);
+	if (ret != MACSUCCESS)
+		return ret;
 
 	ret = compare_info_length(&info, id, length);
 	if (ret != MACSUCCESS)
@@ -1810,26 +1922,29 @@ u32 mac_set_efuse_info(struct mac_ax_adapter *adapter, u8 *efuse_map,
 
 	switch (id) {
 	case EFUSE_INFO_MAC_ADDR:
-		offset = info.offset->mac_addr;
+		offset = info.offset.mac_addr;
 		break;
 	case EFUSE_INFO_MAC_PID:
-		offset = info.offset->pid;
+		offset = info.offset.pid;
 		break;
 	case EFUSE_INFO_MAC_DID:
-		offset = info.offset->did;
+		offset = info.offset.did;
 		break;
 	case EFUSE_INFO_MAC_VID:
-		offset = info.offset->vid;
+		offset = info.offset.vid;
 		break;
 	case EFUSE_INFO_MAC_SVID:
-		offset = info.offset->svid;
+		offset = info.offset.svid;
 		break;
 	case EFUSE_INFO_MAC_SMID:
-		offset = info.offset->smid;
+		offset = info.offset.smid;
 		break;
 	default:
 		return MACNOITEM;
 	}
+
+	if ((offset + length) > adapter->hw_info->efuse_size)
+		return MACEFUSESIZE;
 
 	PLTFM_MEMCPY(efuse_map + offset, value, length);
 
@@ -1885,31 +2000,23 @@ u32 mac_read_hidden_rpt(struct mac_ax_adapter *adapter,
 	}
 
 	c2h_content = &c2h.c2hreg_cont.c2h_content;
-	rpt->rx_spatial_stream =
-	GET_FIELD(c2h_content->dword0, FWCMD_C2HREG_EFUSE_HIDDEN_RX_NSS);
-	rpt->bandwidth =
-	GET_FIELD(c2h_content->dword0, FWCMD_C2HREG_EFUSE_HIDDEN_BW);
-	rpt->tx_spatial_stream =
-	GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_TX_NSS);
-	rpt->protocol_80211 =
-	GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_PROT80211);
-	rpt->NIC_router =
-	GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_NIC_ROUTER);
+
+	rpt->rx_spatial_stream = GET_FIELD(c2h_content->dword0, FWCMD_C2HREG_EFUSE_HIDDEN_RX_NSS);
+	rpt->bandwidth = GET_FIELD(c2h_content->dword0, FWCMD_C2HREG_EFUSE_HIDDEN_BW);
+	rpt->tx_spatial_stream = GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_TX_NSS);
+	rpt->protocol_80211 = GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_PROT80211);
+	rpt->NIC_router = GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_NIC_ROUTER);
 	rpt->wl_func_support =
-	GET_FIELD(c2h_content->dword1,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_WL_FUNC_SUPPORT);
+	GET_FIELD(c2h_content->dword1, FWCMD_C2HREG_EFUSE_HIDDEN_WL_FUNC_SUPPORT);
 	rpt->hw_special_type =
-	GET_FIELD(c2h_content->dword2,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_HW_SPECIAL_TYPE);
+	GET_FIELD(c2h_content->dword2, FWCMD_C2HREG_EFUSE_HIDDEN_HW_SPECIAL_TYPE);
 	rpt->uuid =
-	GET_FIELD(c2h_content->dword3,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_3) << 24 |
-	GET_FIELD(c2h_content->dword2,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_2) << 16 |
-	GET_FIELD(c2h_content->dword2,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_1) << 8 |
-	GET_FIELD(c2h_content->dword2,
-		  FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_0);
+	GET_FIELD(c2h_content->dword3, FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_3) << 24 |
+	GET_FIELD(c2h_content->dword2, FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_2) << 16 |
+	GET_FIELD(c2h_content->dword2, FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_1) << 8 |
+	GET_FIELD(c2h_content->dword2, FWCMD_C2HREG_EFUSE_HIDDEN_UUID_BYTE_0);
+	rpt->tx_path_num = GET_FIELD(c2h_content->dword3, FWCMD_C2HREG_EFUSE_HIDDEN_TX_PATH_NUM);
+	rpt->rx_path_num = GET_FIELD(c2h_content->dword3, FWCMD_C2HREG_EFUSE_HIDDEN_RX_PATH_NUM);
 
 	ret = cnv_efuse_state(adapter, MAC_AX_EFUSE_IDLE);
 	if (ret != MACSUCCESS)
@@ -2419,6 +2526,16 @@ static u32 efuse_map_init(struct mac_ax_adapter *adapter,
 			}
 		}
 		break;
+	case EFUSE_MAP_SEL_HIDDEN_RF:
+		size = adapter->hw_info->hidden_efuse_rf_size;
+		if (!efuse_param->hidden_rf_map) {
+			efuse_param->hidden_rf_map = (u8 *)PLTFM_MALLOC(size);
+			if (!efuse_param->hidden_rf_map) {
+				PLTFM_MSG_ERR("[ERR]malloc map\n");
+				return MACBUFALLOC;
+			}
+		}
+		break;
 	default:
 		break;
 	}
@@ -2662,6 +2779,7 @@ static u32 write_hw_efuse(struct mac_ax_adapter *adapter, u32 offset, u8 value)
 	PLTFM_MUTEX_LOCK(&efuse_tbl.lock);
 	*bank_efuse_info.phy_map_valid = 0;
 	*bank_efuse_info.log_map_valid = 0;
+	efuse_param->hidden_rf_map_valid = 0;
 	PLTFM_MUTEX_UNLOCK(&efuse_tbl.lock);
 
 	offset += efuse_start;
@@ -2986,11 +3104,15 @@ static u32 dump_efuse_fw(struct mac_ax_adapter *adapter)
 			return ret;
 
 		/* Wait for C2H */
-		cnt = EFUSE_FW_DUMP_WAIT_CNT;
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
+			cnt = EFUSE_FW_DUMP_WAIT_CNT;
+		else
+			cnt = EFUSE_FW_DUMP_WAIT_CNT_V1;
+
 		while (--cnt) {
 			if (adapter->sm.efuse_ofld == MAC_AX_OFLD_H2C_DONE)
 				break;
-			PLTFM_DELAY_US(1);
+			PLTFM_DELAY_MS(1);
 		}
 		if (!cnt) {
 			PLTFM_MSG_ERR("[ERR]efuse C2H\n");
@@ -3547,22 +3669,22 @@ static u32 compare_info_length(struct efuse_info *info,
 
 	switch (id) {
 	case EFUSE_INFO_MAC_ADDR:
-		idle_len = info->len->mac_addr;
+		idle_len = info->len.mac_addr;
 		break;
 	case EFUSE_INFO_MAC_PID:
-		idle_len = info->len->pid;
+		idle_len = info->len.pid;
 		break;
 	case EFUSE_INFO_MAC_DID:
-		idle_len = info->len->did;
+		idle_len = info->len.did;
 		break;
 	case EFUSE_INFO_MAC_VID:
-		idle_len = info->len->vid;
+		idle_len = info->len.vid;
 		break;
 	case EFUSE_INFO_MAC_SVID:
-		idle_len = info->len->svid;
+		idle_len = info->len.svid;
 		break;
 	case EFUSE_INFO_MAC_SMID:
-		idle_len = info->len->smid;
+		idle_len = info->len.smid;
 		break;
 	default:
 		return MACNOITEM;
@@ -3962,5 +4084,181 @@ static u32 write_hw_efuse_dav(struct mac_ax_adapter *adapter, u32 offset,
 static void switch_dv(struct mac_ax_adapter *adapter, enum rtw_dv_sel sel)
 {
 	dv_sel = sel;
+}
+
+static u32 get_efuse_info_item(struct mac_ax_adapter *adapter, struct efuse_info *info)
+{
+	enum mac_ax_intf intf = adapter->hw_info->intf;
+
+	switch (intf) {
+	case MAC_AX_INTF_USB:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
+			info->offset = offset_usb_8852a;
+		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
+			info->offset = offset_usb_8852b;
+		else
+			return MACCHIPID;
+
+		info->len = len_usb;
+		break;
+	case MAC_AX_INTF_SDIO:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
+			info->offset = offset_sdio_8852a;
+		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
+			info->offset = offset_sdio_8852b;
+		else
+			return MACCHIPID;
+
+		info->len = len_sdio;
+		break;
+	case MAC_AX_INTF_PCIE:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A))
+			info->offset = offset_pcie_8852a;
+		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
+			info->offset = offset_pcie_8852b;
+		else
+			return MACCHIPID;
+
+		info->len = len_pcie;
+		break;
+	default:
+		PLTFM_MSG_ERR("undefined intf!!\n");
+		return MACINTF;
+	}
+
+	return MACSUCCESS;
+}
+
+static u32 get_efuse_info_def_val(struct mac_ax_adapter *adapter, enum rtw_efuse_info id,
+				  void *value, u32 len)
+{
+	enum mac_ax_intf intf = adapter->hw_info->intf;
+
+	switch (id) {
+	case EFUSE_INFO_MAC_ADDR:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value,
+					     def_val_usb_8852a.mac_addr_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value,
+					     def_val_sdio_8852a.mac_addr_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value,
+					     def_val_pcie_8852a.mac_addr_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value,
+					     def_val_usb_8852b.mac_addr_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value,
+					     def_val_sdio_8852b.mac_addr_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value,
+					     def_val_pcie_8852b.mac_addr_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	case EFUSE_INFO_MAC_PID:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852a.pid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852a.pid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852a.pid_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852b.pid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852b.pid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852b.pid_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	case EFUSE_INFO_MAC_DID:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852a.did_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852a.did_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852a.did_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852b.did_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852b.did_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852b.did_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	case EFUSE_INFO_MAC_VID:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852a.vid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852a.vid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852a.vid_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852b.vid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852b.vid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852b.vid_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	case EFUSE_INFO_MAC_SVID:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852a.svid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852a.svid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852a.svid_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852b.svid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852b.svid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852b.svid_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	case EFUSE_INFO_MAC_SMID:
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852A)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852a.smid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852a.smid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852a.smid_val, len);
+		} else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B)) {
+			if (intf == MAC_AX_INTF_USB)
+				PLTFM_MEMCPY(value, def_val_usb_8852b.smid_val, len);
+			else if (intf == MAC_AX_INTF_SDIO)
+				PLTFM_MEMCPY(value, def_val_sdio_8852b.smid_val, len);
+			else if (intf == MAC_AX_INTF_PCIE)
+				PLTFM_MEMCPY(value, def_val_pcie_8852b.smid_val, len);
+		} else {
+			return MACCHIPID;
+		}
+		break;
+	default:
+		return MACNOITEM;
+	}
+
+	return MACSUCCESS;
 }
 

@@ -47,6 +47,7 @@ enum rtw_hal_status halrf_tssi_trigger(void *rf_void, enum phl_phy_idx phy_idx);
 void halrf_do_tssi_scan(void *rf_void, enum phl_phy_idx phy_idx);
 void halrf_tssi_enable(void *rf_void, enum phl_phy_idx phy_idx);
 void halrf_tssi_disable(void *rf_void, enum phl_phy_idx phy_idx);
+void halrf_tssi_init(void *rf_void);
 enum rtw_hal_status halrf_gapk_trigger(void *rf_void,
 			enum phl_phy_idx phy_idx, bool force);
 enum rtw_hal_status halrf_gapk_enable(void *rf_void,
@@ -101,6 +102,7 @@ u8 halrf_get_power_track(void *rf_void);
 void halrf_tssi_get_efuse_ex(void *rf_void, enum phl_phy_idx phy_idx);
 bool halrf_tssi_check_efuse_data(void *rf_void, enum phl_phy_idx phy_idx);
 void halrf_set_ref_power_to_struct(void *rf_void, enum phl_phy_idx phy_idx);
+bool halrf_set_power_constraint (void *rf_void, enum phl_phy_idx phy_idx, u16 mb, bool apply_to_hw);
 void halrf_bf_config_rf(void *rf_void);
 void halrf_rfk_reg_backup(void *rf_void);
 void halrf_rfc_reg_backup(void *rf_void);
@@ -120,7 +122,6 @@ void halrf_deinit(struct rtw_phl_com_t *phl_com,
 /**************halrf_hw_cfg.c**************/
 bool halrf_init_reg_by_hdr(void *rf_void);
 bool halrf_nctl_init_reg_by_hdr(void *rf_void);
-bool halrf_config_radio(void *rf_void, enum phl_phy_idx phy);
 bool halrf_config_radio_a_reg(void *rf_void, bool is_form_folder,
 				u32 folder_len, u32 *folder_array);
 bool halrf_config_radio_b_reg(void *rf_void, bool is_form_folder,
@@ -157,6 +158,9 @@ bool halrf_get_efuse_info(void *rf_void, u8 *efuse_map,
 		       u8 autoload_status);
 
 bool halrf_set_dbcc(void *rf_void, bool dbcc_en);
+
+void halrf_wlan_tx_power_control(void *rf_void, enum phl_phy_idx phy,
+	enum phl_pwr_ctrl pwr_ctrl_idx, u32 tx_power_val, bool enable);
 
 bool halrf_wl_tx_power_control(void *rf_void, u32 tx_power_val);
 
@@ -201,13 +205,13 @@ void halrf_set_fix_power_to_struct(void *rf_void,
 					enum phl_phy_idx phy, s8 dbm);
 
 void halrf_pwr_by_rate_info(struct rf_info *rf,
-		char input[][16], u32 *_used, char *output, u32 *_out_len);
+		char input[][16], u32 *_used, char *output, u32 *_out_len, enum phl_phy_idx phy);
 
 void halrf_pwr_limit_info(struct rf_info *rf,
-		char input[][16], u32 *_used, char *output, u32 *_out_len);
+		char input[][16], u32 *_used, char *output, u32 *_out_len, enum phl_phy_idx phy);
 
 void halrf_pwr_limit_ru_info(struct rf_info *rf,
-		char input[][16], u32 *_used, char *output, u32 *_out_len);
+		char input[][16], u32 *_used, char *output, u32 *_out_len, enum phl_phy_idx phy);
 
 void halrf_get_tssi_info(struct rf_info *rf, char input[][16], u32 *_used,
 			 char *output, u32 *_out_len);
@@ -258,6 +262,9 @@ s8 halrf_xtal_tracking_offset(void *rf_void, enum phl_phy_idx phy_idx);
 void halrf_hw_tx(void *rf_void, u8 path, u16 cnt, s16 dbm, u32 rate, u8 bw,
 				bool enable);
 
+void halrf_kfree_get_info(void *rf_void, char input[][16], u32 *_used,
+			 char *output, u32 *_out_len);
+
 void halrf_set_mp_regulation(void *rf_void, enum phl_phy_idx phy, u8 regulation);
 u32 halrf_tssi_get_final(void *rf_void, enum phl_phy_idx phy_idx, u8 path);
 
@@ -267,5 +274,5 @@ void halrf_reload_pwr_limit_tbl_and_set(struct rf_info *rf,
 
 u32 halrf_test_event_trigger(void *rf_void,
 	enum phl_phy_idx phy, enum halrf_event_idx idx, enum halrf_event_func func);
-
+void halrf_rfe_ant_num_chk(void *rf_void);
 #endif

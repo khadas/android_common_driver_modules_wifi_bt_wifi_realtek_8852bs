@@ -316,12 +316,14 @@ _phl_custom_mdl_set_info(void* dispr,
 				ret = MDL_RET_FAIL;
 			}
 			break;
+#ifdef CONFIG_PHL_CUSTOM_FEATURE_FB
 		case BK_MODL_OP_CUS_SET_ROLE_CAP:
 			ret = phl_custom_fb_set_role_cap(dispr,
 			                             (void *)ctx,
 			                             &ctx->fb_ctx,
 			                             info);
 			break;
+#endif
 		default:
 			break;
 	}
@@ -373,9 +375,11 @@ _phl_custom_mdl_query_info(void* dispr,
 				ret = MDL_RET_FAIL;
 			}
 			break;
+#ifdef CONFIG_PHL_CUSTOM_FEATURE_FB
 		case BK_MODL_OP_CUS_UPDATE_ROLE_CAP:
 	   		ret = phl_custom_fb_update_opt_ie(dispr, (void*)ctx, &ctx->fb_ctx, info);
 		break;
+#endif
 	default:
 		break;
 	}

@@ -35,6 +35,7 @@
 #include "halbb_ic_sw_info.h"
 #include "halbb_interface.h"
 
+#include "halbb_dbg_cnsl_out.h"
 #include "halbb_rua_tbl_ex.h"
 
 #if (PLATFOM_IS_LITTLE_ENDIAN)
@@ -132,6 +133,7 @@
 #include "halbb_dyn_csi_rsp.h"
 #include "halbb_dyn_csi_rsp_ex.h"
 #include "halbb_ant_div.h"
+#include "halbb_path_div.h"
 #include "halbb_statistics.h"
 #include "halbb_ch_info_ex.h"
 #include "halbb_ch_info.h"
@@ -141,6 +143,7 @@
 #include "halbb_rua_tbl.h"
 #include "halbb_fwofld.h"
 #include "halbb_fwofld_ex.h"
+#include "halbb_dyn_dtr.h"
 #include "halbb_ex.h"
 #include "halbb.h"
 

@@ -208,6 +208,7 @@ struct halrf_fw_offload {
 struct halrf_rx_dck_info {
 	bool is_afe;
 	struct rfk_location loc[KPATH]; /*max RF path*/
+	u32 rxdck_time;
 };
 
 struct rf_info {
@@ -233,6 +234,7 @@ struct rf_info {
 	/*[BTC / RFK Info ]*/
 	bool 			rfk_is_processing;
 	bool			is_bt_iqk_timeout;
+	bool			is_chl_rfk;
 	/*[initial]*/
 	u8 		pre_rxbb_bw[KPATH];
 	/*[TSSI Info]*/

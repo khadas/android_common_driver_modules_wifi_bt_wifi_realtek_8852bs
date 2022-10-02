@@ -59,6 +59,10 @@ enum rtw_phl_status
 phl_mr_chandef_upt(struct phl_info_t *phl_info,
 		struct hw_band_ctl_t *band_ctrl, struct rtw_chan_ctx *chanctx);
 
+int phl_mr_get_chandef_by_band(struct phl_info_t *phl_info,
+					enum phl_band_idx band_idx,
+					struct rtw_chan_def *chandef);
+
 enum rtw_phl_status
 phl_mr_get_chandef(struct phl_info_t *phl_info, struct rtw_wifi_role_t *wifi_role,
 			bool sync, struct rtw_chan_def *chandef);

@@ -207,6 +207,11 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
 	u64 tsf;
 	u32 tsf_h = 0, tsf_l = 0;
 
+	info.operation = op;
+
+	if (op == SCAN_OFLD_OP_RPT || op == SCAN_OFLD_OP_STOP)
+		goto end;
+
 	if (cfg->delay != 0) {
 		hstatus = rtw_hal_mac_get_tsf(hal, &hw_port, &tsf_h, &tsf_l);
 		if (hstatus == RTW_HAL_STATUS_SUCCESS) {
@@ -222,7 +227,6 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
 
 	}
 	/* configure scan offload */
-	info.operation = op;
 	info.probe_req_pkt_id = cfg->probe_req_id;
 	info.period = cfg->period;
 	info.slow_period = cfg->slow_period;
@@ -237,6 +241,8 @@ rtw_hal_wow_cfg_nlo(void *hal, enum SCAN_OFLD_OP op, u16 mac_id,
 	} else {
 		info.mode = SCAN_OFLD_MD_PD_SLOW;
 	}
+
+end:
 
 	hstatus = rtw_hal_mac_scan_ofld(hal_info, (u8)mac_id,
 				hw_band, hw_port, &info);
@@ -259,6 +265,7 @@ rtw_hal_wow_cfg_nlo_chnl_list(void *hal, struct rtw_nlo_info *cfg)
 
 	for (i = 0; i < cfg->channel_num; i++) {
 		/* set channel to mac */
+		cfg->channel_list[i].probe_req_id = cfg->probe_req_id;
 		hstatus = rtw_hal_mac_scan_ofld_add_ch(hal_info,
 						&cfg->channel_list[i],
 						i == (cfg->channel_num-1) ? true : false);
@@ -371,7 +378,7 @@ rtw_hal_wow_func_en(struct rtw_phl_com_t *phl_com, void *hal, u16 macid,
 				break;
 		}
 		/* config gpio */
-		if (cfg->wow_gpio->dev2hst_gpio_en) {
+		if (cfg->wow_gpio->d2h_gpio_info.dev2hst_gpio_en) {
 			hstatus = rtw_hal_mac_cfg_dev2hst_gpio(hal_info, true, cfg->wow_gpio);
 			if (RTW_HAL_STATUS_SUCCESS != hstatus)
 				break;
@@ -444,7 +451,7 @@ rtw_hal_wow_func_dis(struct rtw_phl_com_t *phl_com, void *hal, u16 macid,
 			PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rtw_hal_mac_cfg_realwow_ofld failed \n");
 	}
 	/* config gpio */
-	if (cfg->wow_gpio->dev2hst_gpio_en) {
+	if (cfg->wow_gpio->d2h_gpio_info.dev2hst_gpio_en) {
 		hstatus = rtw_hal_mac_cfg_dev2hst_gpio(hal_info, false, NULL);
 		if (RTW_HAL_STATUS_SUCCESS != hstatus)
 			PHL_TRACE(COMP_PHL_WOW, _PHL_INFO_, "[wow] rtw_hal_mac_cfg_dev2hst_gpio failed \n");

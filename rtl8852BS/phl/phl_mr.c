@@ -600,6 +600,9 @@ _phl_mrc_module_ap_stop_pre_hdlr(struct phl_info_t *phl_info,
 		goto _exit;
 	}
 #endif
+	PHL_INFO("%s, try to cancel ecsa\n", __func__);
+	psts = rtw_phl_ecsa_cancel((void*)phl_info, wrole);
+	psts = RTW_PHL_STATUS_SUCCESS; /* ecsa cancel fail does not block ap stop */
 
 _exit:
 	PHL_TRACE(COMP_PHL_MCC, _PHL_INFO_, "%s: psts(%d)\n",
@@ -1856,6 +1859,72 @@ _exit:
 	return phl_sts;
 }
 
+int phl_mr_get_chandef_by_band(struct phl_info_t *phl_info,
+					enum phl_band_idx band_idx,
+					struct rtw_chan_def *chandef)
+{
+	void *drv = phl_to_drvpriv(phl_info);
+	struct rtw_phl_com_t *phl_com = phl_info->phl_com;
+	struct mr_ctl_t *mr_ctl = phlcom_to_mr_ctrl(phl_com);
+	struct hw_band_ctl_t *band_ctrl = &(mr_ctl->band_ctrl[band_idx]);
+	struct phl_queue *chan_ctx_queue = &band_ctrl->chan_ctx_queue;
+	struct rtw_chan_ctx *chanctx = NULL;
+	int chctx_num = 0;
+	u8 chctx_role_num = 0;
+
+	if (!chandef) {
+		PHL_ERR("%s failed - chandef == NULL\n", __func__);
+		return chctx_num;
+	}
+
+	/*init chandef*/
+	chandef->chan = 0;
+	chctx_num = phl_mr_get_chanctx_num(phl_info, band_ctrl);
+
+	if (chctx_num == 0) {
+		PHL_INFO("%s band:%d chctx_num(%d)\n", __func__, band_idx, chctx_num);
+	}
+	else if (chctx_num == 1) {/*SWR or SCC*/
+		_os_spinlock(drv, &chan_ctx_queue->lock, _ps, NULL);
+		if (list_empty(&chan_ctx_queue->queue)) {
+			PHL_ERR("%s chan_ctx_queue->queue is empty\n", __func__);
+			_os_warn_on(1);
+		}
+
+		chanctx = list_first_entry(&chan_ctx_queue->queue,
+						struct rtw_chan_ctx, list);
+		chctx_role_num = phl_chanctx_get_rnum(phl_info, chan_ctx_queue, chanctx);
+		if (chctx_role_num == 0) {
+			PHL_ERR("%s-%d chctx_role_num == 0\n", __FUNCTION__, __LINE__);
+			chctx_num = 0;
+			_os_warn_on(1);
+		}
+		/*chctx_role_num == 1*/
+		_os_mem_cpy(drv, chandef, &chanctx->chan_def,
+					sizeof(struct rtw_chan_def));
+		_os_spinunlock(drv, &chan_ctx_queue->lock, _ps, NULL);
+	}
+	else if (chctx_num == 2) {/*MCC*/
+		PHL_ERR("%s band:%d chctx_num(%d) is not support yet\n",
+			__func__, band_idx, chctx_num);
+	}
+	else {
+		PHL_ERR("%s band:%d chctx_num(%d) is invalid\n",
+			__func__, band_idx, chctx_num);
+		_os_warn_on(1);
+	}
+	return chctx_num;
+}
+
+int rtw_phl_mr_get_chandef_by_hwband(void *phl,
+					enum phl_band_idx band_idx,
+					struct rtw_chan_def *chandef)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl;
+
+	return phl_mr_get_chandef_by_band(phl_info, band_idx, chandef);
+}
+
 enum rtw_phl_status
 phl_mr_get_chandef(struct phl_info_t *phl_info, struct rtw_wifi_role_t *wifi_role,
 			bool sync, struct rtw_chan_def *chandef)
@@ -2270,17 +2339,19 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
 		 u8 (*issue_null_data)(void *priv, u8 ridx, bool ps))
 {
 	enum rtw_phl_status psts = RTW_PHL_STATUS_SUCCESS;
-#ifdef CONFIG_MR_SUPPORT
+
 	struct rtw_phl_com_t *phl_com = wrole->phl_com;
 	struct mr_ctl_t *mr_ctl = phlcom_to_mr_ctrl(phl_com);
 	u8 hw_band = wrole->hw_band;
 	struct hw_band_ctl_t *band_ctrl = &(mr_ctl->band_ctrl[hw_band]);
 	void *drv = phl_to_drvpriv(phl_info);
 	struct rtw_chan_ctx *chanctx = NULL;
+#ifdef CONFIG_MR_SUPPORT
 	struct rtw_wifi_role_t *wr = NULL;
 	struct mr_scan_chctx mctx = {0};
-	int ctx_num = 0;
 	u8 ridx = 0;
+#endif
+	int ctx_num = 0;
 	u8 cur_ch = rtw_hal_get_cur_ch(phl_info->hal, hw_band);
 	bool found = false;
 
@@ -2290,7 +2361,7 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
 
 	if (ctx_num == 0){
 		PHL_DBG("ctx_num == 0!\n");
-		return psts;
+		goto _exit;
 	}
 
 	_os_spinlock(drv, &band_ctrl->chan_ctx_queue.lock, _ps, NULL);
@@ -2300,9 +2371,11 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
 			continue;
 		}
 		PHL_INFO("%s current chanctx found!\n", __FUNCTION__);
-		mctx.chandef = &chanctx->chan_def;
+
 		found = true;
 
+#ifdef CONFIG_MR_SUPPORT
+		mctx.chandef = &chanctx->chan_def;
 		for (ridx = 0; ridx < MAX_WIFI_ROLE_NUMBER; ridx++) {
 			if (chanctx->role_map & BIT(ridx)) {
 				wr = &phl_com->wifi_roles[ridx];
@@ -2318,14 +2391,16 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
 				}
 			}
 		}
+#endif
 	}
 	_os_spinunlock(drv, &band_ctrl->chan_ctx_queue.lock, _ps, NULL);
 
 	if(!found){
 		PHL_WARN("No chanctx is the same as current channel!\n");
-		return psts;
+		goto _exit;
 	}
 
+#ifdef CONFIG_MR_SUPPORT
 	for (ridx = 0; ridx < MAX_WIFI_ROLE_NUMBER; ridx++) {
 		if ((mctx.role_map_ap) && (mctx.role_map_ap & BIT(ridx))) {
 			wr = &phl_com->wifi_roles[ridx];
@@ -2361,35 +2436,63 @@ phl_mr_offch_hdl(struct phl_info_t *phl_info,
 				psts = RTW_PHL_STATUS_FAILURE;
 			}
 			else{
-				if(off_ch)
+				if(off_ch) {
 					SET_STATUS_FLAG(wr->status, WR_STATUS_PS_ANN);
-				else
-					CLEAR_STATUS_FLAG(wr->status, WR_STATUS_PS_ANN);
-#ifdef RTW_WKARD_ISSUE_NULL_SLEEP_PROTECTION
-				if(off_ch)
+					#ifdef RTW_WKARD_ISSUE_NULL_SLEEP_PROTECTION
 					_os_sleep_ms(phl_to_drvpriv(phl_info), ISSUE_NULL_TIME);
-#endif
+					#endif
+				}
+				else {
+					CLEAR_STATUS_FLAG(wr->status, WR_STATUS_PS_ANN);
+				}
 			}
-
 		}
 	}
-#else
-	if ((wrole->type == PHL_RTYPE_STATION || wrole->type == PHL_RTYPE_TDLS) && wrole->mstate == MLME_LINKED) {
-		if (issue_null_data && issue_null_data(obj_priv, wrole->id, off_ch) != _SUCCESS) {
+#else /* !CONFIG_MR_SUPPORT */
+	if ((wrole->type == PHL_RTYPE_STATION || wrole->type == PHL_RTYPE_P2P_GC || wrole->type == PHL_RTYPE_TDLS)
+		&& wrole->mstate == MLME_LINKED) {
+		if(issue_null_data == NULL){
+			PHL_ERR("WR-ID:%d, issue null_data function not found\n", wrole->id);
+			goto _exit;
+		}
+
+		if(((TEST_STATUS_FLAG(wrole->status, WR_STATUS_PS_ANN)) && off_ch) ||
+		   ((!TEST_STATUS_FLAG(wrole->status, WR_STATUS_PS_ANN)) && !off_ch))
+			goto _exit;
+
+		if (issue_null_data(obj_priv, wrole->id, off_ch) != _SUCCESS) {
 			PHL_ERR("WR-ID:%d, issue null_data failed\n", wrole->id);
 			_os_warn_on(1);
 			psts = RTW_PHL_STATUS_FAILURE;
-		}else{
-#ifdef RTW_WKARD_ISSUE_NULL_SLEEP_PROTECTION
-			if(off_ch)
+		}
+		else{
+			if(off_ch) {
+				SET_STATUS_FLAG(wrole->status, WR_STATUS_PS_ANN);
+		#ifdef RTW_WKARD_ISSUE_NULL_SLEEP_PROTECTION
 				_os_sleep_ms(phl_to_drvpriv(phl_info), ISSUE_NULL_TIME);
-#endif
+		#endif
+			}
+			else {
+				CLEAR_STATUS_FLAG(wrole->status, WR_STATUS_PS_ANN);
+			}
 		}
 
-	} else if (wrole->type == PHL_RTYPE_AP) {
-		rtw_hal_beacon_stop(phl_info->hal, wrole, off_ch);
+	} else if (wrole->type == PHL_RTYPE_AP || wrole->type == PHL_RTYPE_P2P_GO) {
+		if(((TEST_STATUS_FLAG(wrole->status, WR_STATUS_BCN_STOP)) && off_ch) ||
+		   ((!TEST_STATUS_FLAG(wrole->status, WR_STATUS_BCN_STOP)) && !off_ch))
+			goto _exit;
+		if(off_ch){
+			rtw_hal_beacon_stop(phl_info->hal, wrole, off_ch);
+			SET_STATUS_FLAG(wrole->status, WR_STATUS_BCN_STOP);
+		}
+		else{
+			rtw_hal_beacon_stop(phl_info->hal, wrole, off_ch);
+			CLEAR_STATUS_FLAG(wrole->status, WR_STATUS_BCN_STOP);
+		}		
 	}
+	
 #endif
+_exit:
 	return psts;
 }
 
@@ -2592,12 +2695,6 @@ static bool _mr_tdmra_need(struct phl_info_t *phl_info,
 	u8 ridx;
 	u8 tdmra_need = false;
 
-	if (phl_com->dev_cap.mcc_sup == false) {
-		PHL_INFO("%s: don't support MCC\n", __func__);
-		tdmra_need = false;
-		goto exit;
-	}
-
 	ctx_num = phl_mr_get_chanctx_num(phl_info, band_ctrl);
 	if (ctx_num == 0)
 		goto exit;
@@ -2639,7 +2736,12 @@ static bool _mr_tdmra_need(struct phl_info_t *phl_info,
 			tdmra_need = false;
 		}
 	} else if (ctx_num == 2) {
-		tdmra_need = true;
+		if (phl_com->dev_cap.mcc_sup == false) {
+			PHL_INFO("_mr_tdmra_need(): don't support MCC\n");
+			tdmra_need = false;
+		} else {
+			tdmra_need = true;
+		}
 	} else {
 		PHL_INFO("[MR]%s: Do not support ctx_num(%d)\n",
 			__func__, ctx_num);
@@ -3177,9 +3279,8 @@ void rtw_phl_mr_ops_init(void *phl, struct rtw_phl_mr_ops *mr_ops)
 	mr_ctl->mr_ops.phl_mr_update_noa = mr_ops->phl_mr_update_noa;
 #endif /* CONFIG_PHL_P2PPS */
 #ifdef CONFIG_MCC_SUPPORT
-	if (phl_com->dev_cap.mcc_sup == true) {
+	if (mr_ops->mcc_ops != NULL)
 		rtw_phl_mcc_init_ops(phl_info, mr_ops->mcc_ops);
-	}
 #endif
 }
 
@@ -3390,11 +3491,6 @@ u8 phl_mr_query_mcc_inprogress (struct phl_info_t *phl_info, struct rtw_wifi_rol
 	u8 ret = false;
 	u8 mcc_inprogress = false;
 
-	if (phl_com->dev_cap.mcc_sup == false) {
-		ret = false;
-		goto _exit;
-	}
-
 	chanctx_num = phl_mr_get_chanctx_num(phl_info, band_ctrl);
 	mcc_inprogress = rtw_phl_mcc_inprogress(phl_info, wrole->hw_band);
 
@@ -3418,8 +3514,6 @@ u8 phl_mr_query_mcc_inprogress (struct phl_info_t *phl_info, struct rtw_wifi_rol
 		ret = false;
 		break;
 	}
-
-_exit:
 	return ret;
 }
 

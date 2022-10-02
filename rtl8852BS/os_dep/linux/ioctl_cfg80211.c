@@ -28,6 +28,8 @@
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
 #define STATION_INFO_INACTIVE_TIME	BIT(NL80211_STA_INFO_INACTIVE_TIME)
+#define STATION_INFO_RX_BYTES		BIT(NL80211_STA_INFO_RX_BYTES)
+#define STATION_INFO_TX_BYTES		BIT(NL80211_STA_INFO_TX_BYTES)
 #define STATION_INFO_LLID			BIT(NL80211_STA_INFO_LLID)
 #define STATION_INFO_PLID			BIT(NL80211_STA_INFO_PLID)
 #define STATION_INFO_PLINK_STATE	BIT(NL80211_STA_INFO_PLINK_STATE)
@@ -35,15 +37,22 @@
 #define STATION_INFO_TX_BITRATE		BIT(NL80211_STA_INFO_TX_BITRATE)
 #define STATION_INFO_RX_PACKETS		BIT(NL80211_STA_INFO_RX_PACKETS)
 #define STATION_INFO_TX_PACKETS		BIT(NL80211_STA_INFO_TX_PACKETS)
+#define STATION_INFO_TX_RETRIES		BIT(NL80211_STA_INFO_TX_RETRIES)
 #define STATION_INFO_TX_FAILED		BIT(NL80211_STA_INFO_TX_FAILED)
+#define STATION_INFO_RX_BITRATE		BIT(NL80211_STA_INFO_RX_BITRATE)
 #define STATION_INFO_LOCAL_PM		BIT(NL80211_STA_INFO_LOCAL_PM)
 #define STATION_INFO_PEER_PM		BIT(NL80211_STA_INFO_PEER_PM)
 #define STATION_INFO_NONPEER_PM		BIT(NL80211_STA_INFO_NONPEER_PM)
+#define STATION_INFO_RX_BYTES64		BIT(NL80211_STA_INFO_RX_BYTES64)
+#define STATION_INFO_TX_BYTES64		BIT(NL80211_STA_INFO_TX_BYTES64)
 #define STATION_INFO_ASSOC_REQ_IES	0
 #endif /* Linux kernel >= 4.0.0 */
 
 #define RTW_MAX_MGMT_TX_CNT (8)
+
+#ifndef RTW_MAX_MGMT_TX_MS_GAS
 #define RTW_MAX_MGMT_TX_MS_GAS (500)
+#endif /*RTW_MAX_MGMT_TX_MS_GAS*/
 
 #define RTW_SCAN_IE_LEN_MAX      2304
 #define RTW_MAX_REMAIN_ON_CHANNEL_DURATION 5000 /* ms */
@@ -230,6 +239,8 @@ enum band_type _nl80211_band_to_rtw_band[] = {
 	#endif
 #endif
 };
+
+static int rtw_cfg80211_set_assocresp_ies(struct net_device *net, const u8 *buf, int len);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
 static u8 rtw_chbw_to_cfg80211_chan_def(struct wiphy *wiphy, struct cfg80211_chan_def *chdef, u8 ch, u8 bw, u8 offset, u8 ht)
@@ -1511,6 +1522,8 @@ static int rtw_cfg80211_ap_set_encryption(struct net_device *dev, struct ieee_pa
 
 	if (psecuritypriv->dot11AuthAlgrthm == dot11AuthAlgrthm_8021X && psta) { /* psk/802_1x */
 		if (param->u.crypt.set_tx == 1) {
+			u8 iv[IV_LENGTH];
+
 			/* pairwise key */
 			if (param->u.crypt.key_len == 32)
 				_rtw_memcpy(psta->dot118021x_UncstKey.skey,
@@ -1576,6 +1589,15 @@ static int rtw_cfg80211_ap_set_encryption(struct net_device *dev, struct ieee_pa
 
 			psta->dot11txpn.val = RTW_GET_LE64(param->u.crypt.seq);
 			psta->dot11rxpn.val = RTW_GET_LE64(param->u.crypt.seq);
+			if (rtw_pn_to_iv(param->u.crypt.seq,
+			    iv, param->u.crypt.idx,
+			    padapter->securitypriv.dot11PrivacyAlgrthm)) {
+				struct stainfo_rxcache *prxcache = &psta->sta_recvpriv.rxcache;
+				int i;
+
+				for (i = 0; i < RTW_MAX_TID_NUM; i++)
+					_rtw_memcpy(prxcache->iv[i], iv, IV_LENGTH);
+			}
 			psta->ieee8021x_blocked = _FALSE;
 
 			if (psta->dot118021XPrivacy != _NO_PRIVACY_) {
@@ -1797,6 +1819,8 @@ static int rtw_cfg80211_set_encryption(struct net_device *dev, struct ieee_param
 					psta->dot118021XPrivacy = padapter->securitypriv.dot11PrivacyAlgrthm;
 
 				if (param->u.crypt.set_tx == 1) { /* pairwise key */
+					u8 iv[IV_LENGTH];
+
 					RTW_INFO(FUNC_ADPT_FMT" set %s PTK idx:%u, len:%u\n"
 						, FUNC_ADPT_ARG(padapter), param->u.crypt.alg, param->u.crypt.idx, param->u.crypt.key_len);
 
@@ -1819,6 +1843,15 @@ static int rtw_cfg80211_set_encryption(struct net_device *dev, struct ieee_param
 					}
 					psta->dot11txpn.val = RTW_GET_LE64(param->u.crypt.seq);
 					psta->dot11rxpn.val = RTW_GET_LE64(param->u.crypt.seq);
+					if (rtw_pn_to_iv(param->u.crypt.seq,
+					    iv, param->u.crypt.idx,
+					    padapter->securitypriv.dot11PrivacyAlgrthm)) {
+						struct stainfo_rxcache *prxcache = &psta->sta_recvpriv.rxcache;
+						int i;
+
+						for (i = 0; i < RTW_MAX_TID_NUM; i++)
+							_rtw_memcpy(prxcache->iv[i], iv, IV_LENGTH);
+					}
 					psta->bpairwise_key_installed = _TRUE;
 					#ifdef CONFIG_RTW_80211R
 					psta->ft_pairwise_key_installed = _TRUE;
@@ -2496,6 +2529,109 @@ static void rtw_cfg80211_fill_mesh_only_sta_info(struct mesh_plink_ent *plink, s
 }
 #endif /* CONFIG_RTW_MESH */
 
+static void rtw_desc_rate_to_nss_mcs(u16 rate_idx, u8 *rate_mode, u8 *nss, u8 *mcs)
+{
+	u8 mcs_in = 0, nss_in = 0;
+
+	/* enum rtw_data_rate */
+	if ((RTW_DATA_RATE_MCS0 <= rate_idx) &&
+	   (rate_idx <= RTW_DATA_RATE_MCS31)) {
+		*rate_mode = RTW_HT_MODE;
+		mcs_in = rate_idx - RTW_DATA_RATE_MCS0;
+	} else if ((RTW_DATA_RATE_VHT_NSS1_MCS0 <= rate_idx) &&
+		   (rate_idx <= RTW_DATA_RATE_VHT_NSS4_MCS9)) {
+		*rate_mode = RTW_VHT_MODE;
+		mcs_in = rate_idx & 0xF;
+		nss_in = ((rate_idx - RTW_DATA_RATE_VHT_NSS1_MCS0) >> 4) + 1;
+	} else if ((RTW_DATA_RATE_HE_NSS1_MCS0 <= rate_idx) &&
+		   (rate_idx <= RTW_DATA_RATE_HE_NSS4_MCS11)) {
+		*rate_mode = RTW_HE_MODE;
+		mcs_in = rate_idx & 0xF;
+		nss_in = ((rate_idx - RTW_DATA_RATE_HE_NSS1_MCS0) >> 4) + 1;
+	} else {
+		*rate_mode = RTW_LEGACY_MODE;
+	}
+
+	if (nss)
+		*nss = nss_in;
+	if (mcs)
+		*mcs = mcs_in;
+}
+
+static void sta_set_rate_info(_adapter *adapter, struct rate_info *rinfo,
+			      u16 rtw_rate_idx, u8 sgi, u8 bw)
+{
+	u8 mcs = 0;
+	u8 nss = 0;
+	u8 mod = 0;
+
+	rinfo->flags = 0;
+	rtw_desc_rate_to_nss_mcs(rtw_rate_idx, &mod, &nss, &mcs);
+
+	if (sgi)
+		rinfo->flags |= RATE_INFO_FLAGS_SHORT_GI;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
+	if (mod == RTW_HE_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_HE_MCS;
+		rinfo->bw = bw == CHANNEL_WIDTH_160 ? RATE_INFO_BW_160 :
+			    bw == CHANNEL_WIDTH_80 ? RATE_INFO_BW_80 :
+			    bw == CHANNEL_WIDTH_40 ? RATE_INFO_BW_40 : RATE_INFO_BW_20;
+		rinfo->nss = nss;
+		rinfo->mcs = mcs;
+	} else if (mod == RTW_VHT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_VHT_MCS;
+		rinfo->bw = bw == CHANNEL_WIDTH_160 ? RATE_INFO_BW_160 :
+			    bw == CHANNEL_WIDTH_80 ? RATE_INFO_BW_80 :
+			    bw == CHANNEL_WIDTH_40 ? RATE_INFO_BW_40 : RATE_INFO_BW_20;
+		rinfo->nss = nss;
+		rinfo->mcs = mcs;
+	} else if (mod == RTW_HT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_MCS;
+		rinfo->bw = bw ? RATE_INFO_BW_40 : RATE_INFO_BW_20;
+		rinfo->mcs = mcs;
+	}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0))
+	if (mod == RTW_VHT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_VHT_MCS;
+		rinfo->bw = bw == CHANNEL_WIDTH_160 ? RATE_INFO_BW_160 :
+			    bw == CHANNEL_WIDTH_80 ? RATE_INFO_BW_80 :
+			    bw == CHANNEL_WIDTH_40 ? RATE_INFO_BW_40 : RATE_INFO_BW_20;
+		rinfo->nss = nss;
+		rinfo->mcs = mcs;
+	} else if (mod == RTW_HT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_MCS;
+		rinfo->bw = bw ? RATE_INFO_BW_40 : RATE_INFO_BW_20;
+		rinfo->mcs = mcs;
+	}
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
+	if (mod == RTW_VHT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_VHT_MCS;
+		rinfo->flags |= bw == CHANNEL_WIDTH_160 ? RATE_INFO_FLAGS_160_MHZ_WIDTH :
+				bw == CHANNEL_WIDTH_80 ? RATE_INFO_FLAGS_80_MHZ_WIDTH :
+				bw == CHANNEL_WIDTH_40 ? RATE_INFO_FLAGS_40_MHZ_WIDTH : 0;
+		rinfo->nss = nss;
+		rinfo->mcs = mcs;
+	} else if (mod == RTW_HT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_MCS;
+		rinfo->flags |= bw ? RATE_INFO_FLAGS_40_MHZ_WIDTH : 0;
+		rinfo->mcs = mcs;
+	}
+#else
+	if (mod == RTW_VHT_MODE) {
+		rinfo->legacy = 0;
+		RTW_INFO("Cannot report VHT rate in current kernel version\n");
+	} else if (mod == RTW_HT_MODE) {
+		rinfo->flags |= RATE_INFO_FLAGS_MCS;
+		rinfo->flags |= bw ? RATE_INFO_FLAGS_40_MHZ_WIDTH : 0;
+		rinfo->mcs = mcs;
+	}
+#endif
+	else {
+		rinfo->legacy = rtw_desc_rate_to_bitrate(0, rtw_rate_idx, 0);
+	}
+}
+
 static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 	struct net_device *ndev,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 16, 0))
@@ -2506,6 +2642,8 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 	struct station_info *sinfo)
 {
 	int ret = 0;
+	u8 bw, sgi;
+	u16 rtw_rate_idx;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
 	struct mlme_priv *pmlmepriv = &padapter->mlmepriv;
 	struct sta_info *psta = NULL;
@@ -2513,7 +2651,6 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 #ifdef CONFIG_RTW_MESH
 	struct mesh_plink_ent *plink = NULL;
 #endif
-
 	sinfo->filled = 0;
 
 	if (!mac) {
@@ -2579,8 +2716,40 @@ static int cfg80211_rtw_get_station(struct wiphy *wiphy,
 		sinfo->rx_packets = sta_rx_data_pkts(psta);
 		sinfo->filled |= STATION_INFO_TX_PACKETS;
 		sinfo->tx_packets = psta->sta_stats.tx_pkts;
-		sinfo->filled |= STATION_INFO_TX_FAILED;
-		sinfo->tx_failed = psta->sta_stats.tx_fail_cnt;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 9, 0))
+		sinfo->filled |= STATION_INFO_RX_BYTES64;
+		sinfo->filled |= STATION_INFO_TX_BYTES64;
+#else
+		sinfo->filled |= STATION_INFO_RX_BYTES;
+		sinfo->filled |= STATION_INFO_TX_BYTES;
+#endif
+		sinfo->rx_bytes = psta->sta_stats.rx_bytes;
+		sinfo->tx_bytes = psta->sta_stats.tx_bytes;
+
+		/* Although according to cfg80211.h struct station_info */
+		/* @txrate: current unicast bitrate from this station */
+		/* We still report sinfo->txrate as bitrate to this station */
+		sinfo->filled |= STATION_INFO_TX_BITRATE;
+		rtw_rate_idx = rtw_get_current_tx_rate(padapter, psta);
+		sgi = rtw_get_current_tx_sgi(padapter, psta);
+		bw = psta->phl_sta->wrole->chandef.bw;
+		sta_set_rate_info(padapter, &sinfo->txrate, rtw_rate_idx, sgi, bw);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39))
+		/* Although @rxrate: current unicast bitrate to this station */
+		/* We report sinfo->rxrate as bitrate from this station */
+		sinfo->filled |= STATION_INFO_RX_BITRATE;
+		rtw_get_current_rx_info(padapter, psta, &rtw_rate_idx, &bw, &sgi);
+		sta_set_rate_info(padapter, &sinfo->rxrate, rtw_rate_idx, sgi, bw);
+#endif
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37))
+		if (rtw_get_sta_tx_stat(padapter, psta) != -ENOTSUPP) {
+			sinfo->filled |= STATION_INFO_TX_FAILED;
+			sinfo->filled |= STATION_INFO_TX_RETRIES;
+			sinfo->tx_failed = psta->sta_stats.tx_fail_cnt_sum;
+			sinfo->tx_retries = psta->sta_stats.tx_retry_cnt_sum;
+		}
+#endif
 	}
 
 #ifdef CONFIG_RTW_MESH
@@ -3653,7 +3822,8 @@ static int rtw_cfg80211_set_wpa_ie(_adapter *padapter, u8 *pie, size_t ielen)
 	int ret = 0;
 	int wpa_ielen = 0;
 	int wpa2_ielen = 0;
-	u8 *pwpa, *pwpa2;
+	int rsnx_ielen = 0;
+	u8 *pwpa, *pwpa2, *prsnx;
 	u8 null_addr[] = {0, 0, 0, 0, 0, 0};
 
 	if (pie == NULL || !ielen) {
@@ -3704,7 +3874,29 @@ static int rtw_cfg80211_set_wpa_ie(_adapter *padapter, u8 *pie, size_t ielen)
 
 			RTW_INFO("got wpa2_ie, wpa2_ielen:%u\n", wpa2_ielen);
 		}
+
+		prsnx = rtw_get_ie(buf, WLAN_EID_RSNX, &rsnx_ielen, ielen);
+		if (prsnx && (rsnx_ielen > 0)) {
+			if ((rsnx_ielen + 2) <= MAX_RSNX_IE_LEN) {
+				_rtw_memset(padapter->securitypriv.rsnx_ie, 0,
+					MAX_RSNX_IE_LEN);
+				padapter->securitypriv.rsnx_ie_len = \
+					(rsnx_ielen + 2);
+				_rtw_memcpy(padapter->securitypriv.rsnx_ie,
+					prsnx,
+					padapter->securitypriv.rsnx_ie_len);
+			} else
+				RTW_ERR("%s:no more buf to save RSNX Cap!\n",
+					__func__);
+		} else {
+			_rtw_memset(padapter->securitypriv.rsnx_ie, 0,
+				MAX_RSNX_IE_LEN);
+			padapter->securitypriv.rsnx_ie_len = 0;
+		}
+
 	}
+
+
 
 	if (group_cipher == 0)
 		group_cipher = WPA_CIPHER_NONE;
@@ -4709,20 +4901,14 @@ static int rtw_cfg80211_monitor_if_xmit_entry(struct sk_buff *skb, struct net_de
 	struct rtw_ieee80211_hdr *dot11_hdr;
 	struct ieee80211_radiotap_header *rtap_hdr;
 	_adapter *padapter = (_adapter *)rtw_netdev_priv(ndev);
-#ifdef CONFIG_DFS_MASTER
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(padapter);
-#endif
 
 	RTW_INFO(FUNC_NDEV_FMT"\n", FUNC_NDEV_ARG(ndev));
 
 	rtw_mstat_update(MSTAT_TYPE_SKB, MSTAT_ALLOC_SUCCESS, skb->truesize);
 
-	if (IS_CH_WAITING(rfctl)) {
-		#ifdef CONFIG_DFS_MASTER
-		if (rtw_rfctl_overlap_radar_detect_ch(rfctl))
-			goto fail;
-		#endif
-	}
+	if (adapter_is_tx_blocked_by_ch_waiting(padapter))
+		goto fail;
 
 	if (unlikely(skb->len < sizeof(struct ieee80211_radiotap_header)))
 		goto fail;
@@ -5304,6 +5490,13 @@ static int cfg80211_rtw_start_ap(struct wiphy *wiphy, struct net_device *ndev,
 	rtw_ft_update_assocresp_ies(ndev, settings);
 #endif
 
+	if (settings->beacon.assocresp_ies &&
+		settings->beacon.assocresp_ies_len > 0) {
+			rtw_cfg80211_set_assocresp_ies(ndev,
+			settings->beacon.assocresp_ies,
+			settings->beacon.assocresp_ies_len);
+	}
+
 	if (settings->ssid && settings->ssid_len) {
 		WLAN_BSSID_EX *pbss_network = &adapter->mlmepriv.cur_network.network;
 		WLAN_BSSID_EX *pbss_network_ext = &adapter->mlmeextpriv.mlmext_info.network;
@@ -5835,7 +6028,7 @@ static int	cfg80211_rtw_del_station(struct wiphy *wiphy, struct net_device *ndev
 
 	/* broadcast deauth */
 	if (is_broadcast_mac_addr(target_mac)) {
-		if (MLME_IS_AP(padapter)) {
+		if (MLME_IS_AP(padapter) && MLME_IS_ASOC(padapter)) {
 			is_ucast = 0;
 			issue_deauth(padapter, (u8 *)target_mac, WLAN_REASON_PREV_AUTH_NOT_VALID);
 		}
@@ -6401,7 +6594,7 @@ void rtw_cfg80211_external_auth_request(_adapter *padapter, union recv_frame *rf
 	freq = rtw_ch2freq(pmlmeext->chandef.chan);
 
 #ifdef CONFIG_DEBUG_CFG80211
-	RTW_INFO(FUNC_ADPT_FMT": freq(%d, %d)\n", FUNC_ADPT_ARG(padapter), freq);
+	RTW_INFO(FUNC_ADPT_FMT": freq=%d channel=%d\n", FUNC_ADPT_ARG(padapter), freq, padapter_link->mlmeextpriv.chandef.chan);
 #endif
 
 #if (KERNEL_VERSION(4, 17, 0) <= LINUX_VERSION_CODE) \
@@ -6903,7 +7096,7 @@ inline s32 rtw_cfg80211_get_last_ro_ch_passing_ms(_adapter *adapter)
 	return rtw_get_passing_time_ms(adapter->cfg80211_rochinfo.last_ro_ch_time);
 }
 
-#ifndef RTW_USE_CFG80211_REPORT_PROBE_REQ
+#ifndef CONFIG_CFG80211_REPORT_PROBE_REQ
 static inline bool chk_is_p2p_device(_adapter *adapter, struct wireless_dev *wdev)
 {
 	struct wiphy *wiphy = adapter_to_wiphy(adapter);
@@ -6941,6 +7134,7 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 	//struct rtw_wdev_priv *pwdev_priv;
 	struct cfg80211_roch_info *pcfg80211_rochinfo;
 	struct back_op_param bkop_parm;
+	struct wifidirect_info *pwdinfo;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0))
 	u8 channel_type = 0;
 #endif
@@ -6967,13 +7161,13 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 #endif
 	pregistrypriv = &padapter->registrypriv;
 	pcfg80211_rochinfo = &padapter->cfg80211_rochinfo;
+	pwdinfo = &padapter->wdinfo;
 
-#ifndef RTW_USE_CFG80211_REPORT_PROBE_REQ
+#ifndef CONFIG_CFG80211_REPORT_PROBE_REQ
 #ifdef CONFIG_P2P
 	is_p2p = chk_is_p2p_device(padapter, wdev);
 
 	if (is_p2p) {
-		struct wifidirect_info *pwdinfo = &padapter->wdinfo;
 
 		if (rtw_p2p_chk_role(pwdinfo, P2P_ROLE_DISABLE))
 			rtw_p2p_enable(padapter, P2P_ROLE_DEVICE);
@@ -6985,6 +7179,17 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 	}
 #endif
 #endif
+	if (rtw_p2p_chk_role(pwdinfo, P2P_ROLE_DEVICE)) {
+
+		if (pwdinfo->listen_channel != remain_ch)
+			RTW_INFO(FUNC_ADPT_FMT"listen_channel %u,remain_ch %u\n",
+			FUNC_ADPT_ARG(padapter),
+			pwdinfo->listen_channel,
+			remain_ch);
+
+		rtw_update_listen_chan_def(padapter, pwdinfo->listen_channel, CHANNEL_WIDTH_20, CHAN_OFFSET_NO_EXT);
+		rtw_hw_update_chan_def(padapter);
+	}
 
 	*cookie = ATOMIC_INC_RETURN(&pcfg80211_rochinfo->ro_ch_cookie_gen);
 
@@ -7015,7 +7220,8 @@ static s32 cfg80211_rtw_remain_on_channel(struct wiphy *wiphy,
 		bkop_parm.off_ch_ext_dur = pregistrypriv->roch_extend_dur;
 	else
 		bkop_parm.off_ch_ext_dur = pregistrypriv->roch_extend_dur * 6;
-
+	if(0)
+		RTW_INFO("%s bkop_parm.off_ch_ext_dur=%u\n", __func__,bkop_parm.off_ch_ext_dur);
 	rtw_phl_remain_on_ch_cmd(padapter, *cookie, wdev,
 		channel, channel_type, duration, &bkop_parm, is_p2p);
 
@@ -7263,6 +7469,9 @@ static int _cfg80211_rtw_mgmt_tx(_adapter *padapter, u8 tx_ch, u8 no_cck, const 
 	#endif
 #endif
 	u8 frame_styp;
+	u8 hdr_len = sizeof(struct rtw_ieee80211_hdr_3addr);
+	u8 *ies;
+	sint ies_len;
 
 	rtw_cfg80211_set_is_mgmt_tx(padapter, 1);
 
@@ -7338,12 +7547,24 @@ static int _cfg80211_rtw_mgmt_tx(_adapter *padapter, u8 tx_ch, u8 no_cck, const 
 	rtw_xframe_chk_wfd_ie(pmgntframe);
 #endif /* CONFIG_P2P */
 
-#ifdef CONFIG_ECSA_PHL
-	/* Update channel switch count of CSA/ECSA IE in probe response */
-	frame_styp = (le16_to_cpu(pwlanhdr->frame_ctl)) & IEEE80211_FCTL_STYPE;
-	if (frame_styp == IEEE80211_STYPE_PROBE_RESP)
+	frame_styp = get_frame_sub_type(pframe);
+	if (frame_styp == WIFI_PROBERSP) {
+		/* Update VHT capability IE, HE capability IE and HE operation IE */
+		ies = pmgntframe->buf_addr + TXDESC_OFFSET + hdr_len + _BEACON_IE_OFFSET_;
+		ies_len = pattrib->pktlen - hdr_len - _BEACON_IE_OFFSET_;
+		#ifdef CONFIG_80211AC_VHT
+		rtw_update_probe_rsp_vht_cap(padapter, ies, ies_len);
+		#endif
+		#ifdef CONFIG_80211AX_HE
+		rtw_update_probe_rsp_he_cap_and_op(padapter, ies, &ies_len);
+		pattrib->pktlen = ies_len + hdr_len + _BEACON_IE_OFFSET_;
+		#endif
+
+		#ifdef CONFIG_ECSA_PHL
+		/* Update channel switch count of CSA/ECSA IE in probe response */
 		rtw_ecsa_update_probe_resp(pmgntframe);
-#endif
+		#endif
+	}
 
 	pattrib->last_txcmdsz = pattrib->pktlen;
 
@@ -7517,7 +7738,7 @@ static int cfg80211_rtw_mgmt_tx(struct wiphy *wiphy,
 	tx_ch = (u8)ieee80211_frequency_to_channel(chan->center_freq);
 	if (IS_CH_WAITING(rfctl)) {
 		#ifdef CONFIG_DFS_MASTER
-		if (_rtw_rfctl_overlap_radar_detect_ch(rfctl, tx_ch, CHANNEL_WIDTH_20, CHAN_OFFSET_NO_EXT)) {
+		if (rtw_rfctl_overlap_radar_detect_ch(rfctl, nl80211_band_to_rtw_band(chan->band), tx_ch, CHANNEL_WIDTH_20, CHAN_OFFSET_NO_EXT)) {
 			ret = -EINVAL;
 			goto exit;
 		}

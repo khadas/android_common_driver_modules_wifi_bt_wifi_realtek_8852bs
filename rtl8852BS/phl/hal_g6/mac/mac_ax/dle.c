@@ -2395,6 +2395,32 @@ void dle_func_en(struct mac_ax_adapter *adapter, u8 en)
 {
 	u32 val32;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+#if MAC_USB_IO_ACC
+	u32 reg, mask, ret;
+#endif
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = R_AX_DMAC_FUNC_EN;
+		mask = B_AX_DLE_WDE_EN | B_AX_DLE_PLE_EN;
+		val32 = 0;
+		if (en == MAC_AX_FUNC_EN)
+			val32 |= (B_AX_DLE_WDE_EN | B_AX_DLE_PLE_EN);
+		else if (en == MAC_AX_FUNC_DIS)
+			val32 &= ~(B_AX_DLE_WDE_EN | B_AX_DLE_PLE_EN);
+		else
+			return;
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 1);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		return;
+	}
+#endif
 
 	val32 = MAC_REG_R32(R_AX_DMAC_FUNC_EN);
 	if (en == MAC_AX_FUNC_EN)
@@ -2410,6 +2436,32 @@ void dle_clk_en(struct mac_ax_adapter *adapter, u8 en)
 {
 	u32 val32;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+#if MAC_USB_IO_ACC
+	u32 reg, mask, ret;
+#endif
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = R_AX_DMAC_CLK_EN;
+		mask = B_AX_DLE_WDE_CLK_EN | B_AX_DLE_PLE_CLK_EN;
+		val32 = 0;
+		if (en == MAC_AX_FUNC_EN)
+			val32 |= (B_AX_DLE_WDE_CLK_EN | B_AX_DLE_PLE_CLK_EN);
+		else if (en == MAC_AX_FUNC_DIS)
+			val32 &= ~(B_AX_DLE_WDE_CLK_EN | B_AX_DLE_PLE_CLK_EN);
+		else
+			return;
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		return;
+	}
+#endif
 
 	val32 = MAC_REG_R32(R_AX_DMAC_CLK_EN);
 	if (en == MAC_AX_FUNC_EN)
@@ -2451,7 +2503,7 @@ struct dle_mem_t *get_dle_mem_cfg(struct mac_ax_adapter *adapter,
 			cfg = dle_mem_usb_8852a;
 		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B) &&
 			 (get_usb_mode(adapter) == MAC_AX_USB2))
-			cfg = dle_mem_usb2_8852b;
+			cfg = dle_mem_usb3_8852b;
 		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852B))
 			cfg = dle_mem_usb3_8852b;
 		else if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C))
@@ -2505,6 +2557,89 @@ u32 dle_mix_cfg(struct mac_ax_adapter *adapter, struct dle_mem_t *cfg)
 	u32 val32;
 	struct dle_size_t *size_cfg;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+#if MAC_USB_IO_ACC
+	u32 reg, mask, ret;
+#endif
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		bound = 0;
+		size_cfg = cfg->wde_size;
+
+		reg = R_AX_WDE_PKTBUF_CFG;
+		mask = SET_CLR_WORD(0, B_AX_WDE_PAGE_SEL_MSK,
+				    B_AX_WDE_PAGE_SEL);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_START_BOUND_MSK,
+				    B_AX_WDE_START_BOUND);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_FREE_PAGE_NUM_MSK,
+				    B_AX_WDE_FREE_PAGE_NUM);
+		val32 = 0;
+		switch (size_cfg->pge_size) {
+		default:
+		case MAC_AX_WDE_PG_64:
+			val32 = SET_CLR_WORD(val32, S_AX_WDE_PAGE_SEL_64,
+					     B_AX_WDE_PAGE_SEL);
+			break;
+		case MAC_AX_WDE_PG_128:
+			val32 = SET_CLR_WORD(val32, S_AX_WDE_PAGE_SEL_128,
+					     B_AX_WDE_PAGE_SEL);
+			break;
+		case MAC_AX_WDE_PG_256:
+			PLTFM_MSG_ERR("[ERR]WDE DLE doesn't support 256 byte!\n");
+			return MACHWNOSUP;
+		}
+		val32 = SET_CLR_WORD(val32, bound, B_AX_WDE_START_BOUND);
+		val32 = SET_CLR_WORD(val32, size_cfg->lnk_pge_num,
+				     B_AX_WDE_FREE_PAGE_NUM);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return ret;
+		}
+
+		bound = (size_cfg->lnk_pge_num + size_cfg->unlnk_pge_num)
+			* size_cfg->pge_size / DLE_BOUND_UNIT;
+		size_cfg = cfg->ple_size;
+
+		reg = R_AX_PLE_PKTBUF_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_PAGE_SEL_MSK,
+				    B_AX_PLE_PAGE_SEL);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_START_BOUND_MSK,
+				    B_AX_PLE_START_BOUND);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_FREE_PAGE_NUM_MSK,
+				    B_AX_PLE_FREE_PAGE_NUM);
+		val32 = 0;
+		switch (size_cfg->pge_size) {
+		default:
+		case MAC_AX_PLE_PG_64:
+			PLTFM_MSG_ERR("[ERR]PLE DLE doesn't support 64 byte!\n");
+			return MACHWNOSUP;
+		case MAC_AX_PLE_PG_128:
+			val32 = SET_CLR_WORD(val32, S_AX_PLE_PAGE_SEL_128,
+					     B_AX_PLE_PAGE_SEL);
+			break;
+		case MAC_AX_PLE_PG_256:
+			val32 = SET_CLR_WORD(val32, S_AX_PLE_PAGE_SEL_256,
+					     B_AX_PLE_PAGE_SEL);
+			break;
+		}
+		val32 = SET_CLR_WORD(val32, bound, B_AX_PLE_START_BOUND);
+		val32 = SET_CLR_WORD(val32, size_cfg->lnk_pge_num,
+				     B_AX_PLE_FREE_PAGE_NUM);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return ret;
+		}
+
+		return ret;
+	}
+#endif
 
 	val32 = MAC_REG_R32(R_AX_WDE_PKTBUF_CFG);
 	bound = 0;
@@ -2564,6 +2699,80 @@ void wde_quota_cfg(struct mac_ax_adapter *adapter,
 {
 	u32 val32;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+#if MAC_USB_IO_ACC
+	u32 reg, mask, ret;
+#endif
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = R_AX_WDE_QTA0_CFG;
+		mask = SET_CLR_WORD(0, B_AX_WDE_Q0_MIN_SIZE_MSK,
+				    B_AX_WDE_Q0_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_Q0_MAX_SIZE_MSK,
+				    B_AX_WDE_Q0_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->hif, B_AX_WDE_Q0_MIN_SIZE) |
+			SET_WORD(max_cfg->hif, B_AX_WDE_Q0_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_WDE_QTA1_CFG;
+		mask = SET_CLR_WORD(0, B_AX_WDE_Q1_MIN_SIZE_MSK,
+				    B_AX_WDE_Q1_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_Q1_MAX_SIZE_MSK,
+				    B_AX_WDE_Q1_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->wcpu, B_AX_WDE_Q1_MIN_SIZE) |
+			SET_WORD(max_cfg->wcpu, B_AX_WDE_Q1_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_WDE_QTA3_CFG;
+		mask = SET_CLR_WORD(0, B_AX_WDE_Q3_MIN_SIZE_MSK,
+				    B_AX_WDE_Q3_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_Q3_MAX_SIZE_MSK,
+				    B_AX_WDE_Q3_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->pkt_in, B_AX_WDE_Q3_MIN_SIZE) |
+			SET_WORD(max_cfg->pkt_in, B_AX_WDE_Q3_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_WDE_QTA4_CFG;
+		mask = SET_CLR_WORD(0, B_AX_WDE_Q4_MIN_SIZE_MSK,
+				    B_AX_WDE_Q4_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_WDE_Q4_MAX_SIZE_MSK,
+				    B_AX_WDE_Q4_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cpu_io, B_AX_WDE_Q4_MIN_SIZE) |
+			SET_WORD(max_cfg->cpu_io, B_AX_WDE_Q4_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		return;
+	}
+#endif
 
 	val32 = SET_WORD(min_cfg->hif, B_AX_WDE_Q0_MIN_SIZE) |
 		SET_WORD(max_cfg->hif, B_AX_WDE_Q0_MAX_SIZE);
@@ -2588,6 +2797,211 @@ void ple_quota_cfg(struct mac_ax_adapter *adapter,
 {
 	u32 val32;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
+#if MAC_USB_IO_ACC
+	u32 reg, mask, ret;
+#endif
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = R_AX_PLE_QTA0_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q0_MIN_SIZE_MSK,
+				    B_AX_PLE_Q0_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q0_MAX_SIZE_MSK,
+				    B_AX_PLE_Q0_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cma0_tx, B_AX_PLE_Q0_MIN_SIZE) |
+			SET_WORD(max_cfg->cma0_tx, B_AX_PLE_Q0_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA1_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q1_MIN_SIZE_MSK,
+				    B_AX_PLE_Q1_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q1_MAX_SIZE_MSK,
+				    B_AX_PLE_Q1_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cma1_tx, B_AX_PLE_Q1_MIN_SIZE) |
+			SET_WORD(max_cfg->cma1_tx, B_AX_PLE_Q1_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA2_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q2_MIN_SIZE_MSK,
+				    B_AX_PLE_Q2_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q2_MAX_SIZE_MSK,
+				    B_AX_PLE_Q2_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->c2h, B_AX_PLE_Q2_MIN_SIZE) |
+			SET_WORD(max_cfg->c2h, B_AX_PLE_Q2_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA3_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q3_MIN_SIZE_MSK,
+				    B_AX_PLE_Q3_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q3_MAX_SIZE_MSK,
+				    B_AX_PLE_Q3_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->h2c, B_AX_PLE_Q3_MIN_SIZE) |
+			SET_WORD(max_cfg->h2c, B_AX_PLE_Q3_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA4_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q4_MIN_SIZE_MSK,
+				    B_AX_PLE_Q4_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q4_MAX_SIZE_MSK,
+				    B_AX_PLE_Q4_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->wcpu, B_AX_PLE_Q4_MIN_SIZE) |
+			SET_WORD(max_cfg->wcpu, B_AX_PLE_Q4_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA5_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q5_MIN_SIZE_MSK,
+				    B_AX_PLE_Q5_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q5_MAX_SIZE_MSK,
+				    B_AX_PLE_Q5_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->mpdu_proc, B_AX_PLE_Q5_MIN_SIZE) |
+			SET_WORD(max_cfg->mpdu_proc, B_AX_PLE_Q5_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA6_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q6_MIN_SIZE_MSK,
+				    B_AX_PLE_Q6_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q6_MAX_SIZE_MSK,
+				    B_AX_PLE_Q6_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cma0_dma, B_AX_PLE_Q6_MIN_SIZE) |
+			SET_WORD(max_cfg->cma0_dma, B_AX_PLE_Q6_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA7_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q7_MIN_SIZE_MSK,
+				    B_AX_PLE_Q7_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q7_MAX_SIZE_MSK,
+				    B_AX_PLE_Q7_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cma1_dma, B_AX_PLE_Q7_MIN_SIZE) |
+			SET_WORD(max_cfg->cma1_dma, B_AX_PLE_Q7_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA8_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q8_MIN_SIZE_MSK,
+				    B_AX_PLE_Q8_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q8_MAX_SIZE_MSK,
+				    B_AX_PLE_Q8_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->bb_rpt, B_AX_PLE_Q8_MIN_SIZE) |
+			SET_WORD(max_cfg->bb_rpt, B_AX_PLE_Q8_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA9_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q9_MIN_SIZE_MSK,
+				    B_AX_PLE_Q9_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q9_MAX_SIZE_MSK,
+				    B_AX_PLE_Q9_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->wd_rel, B_AX_PLE_Q9_MIN_SIZE) |
+			SET_WORD(max_cfg->wd_rel, B_AX_PLE_Q9_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		reg = R_AX_PLE_QTA10_CFG;
+		mask = SET_CLR_WORD(0, B_AX_PLE_Q10_MIN_SIZE_MSK,
+				    B_AX_PLE_Q10_MIN_SIZE);
+		mask = SET_CLR_WORD(mask, B_AX_PLE_Q10_MAX_SIZE_MSK,
+				    B_AX_PLE_Q10_MAX_SIZE);
+		val32 = 0;
+		val32 = SET_WORD(min_cfg->cpu_io, B_AX_PLE_Q10_MIN_SIZE) |
+			SET_WORD(max_cfg->cpu_io, B_AX_PLE_Q10_MAX_SIZE);
+
+		ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return;
+		}
+
+		if (is_chip_id(adapter, MAC_AX_CHIP_ID_8852C) ||
+		    is_chip_id(adapter, MAC_AX_CHIP_ID_8192XB)) {
+			reg = R_AX_PLE_QTA11_CFG;
+			mask = SET_CLR_WORD(0, B_AX_PLE_Q11_MIN_SIZE_MSK,
+					    B_AX_PLE_Q11_MIN_SIZE);
+			mask = SET_CLR_WORD(mask, B_AX_PLE_Q11_MAX_SIZE_MSK,
+					    B_AX_PLE_Q11_MAX_SIZE);
+			val32 = 0;
+			val32 = SET_WORD(min_cfg->tx_rpt, B_AX_PLE_Q11_MIN_SIZE) |
+				SET_WORD(max_cfg->tx_rpt, B_AX_PLE_Q11_MAX_SIZE);
+
+			ret = write_mac_reg_ofld(adapter, reg, mask, val32, 0);
+			if (ret != MACSUCCESS) {
+				PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+					      __func__, reg);
+				return;
+			}
+		}
+
+		return;
+	}
+#endif
 
 	val32 = SET_WORD(min_cfg->cma0_tx, B_AX_PLE_Q0_MIN_SIZE) |
 		SET_WORD(max_cfg->cma0_tx, B_AX_PLE_Q0_MAX_SIZE);
@@ -2722,6 +3136,9 @@ u32 dle_init(struct mac_ax_adapter *adapter, enum mac_ax_qta_mode mode,
 {
 	u32 ret = MACSUCCESS;
 	u32 cnt, val32_1, val32_2;
+#if MAC_USB_IO_ACC
+	u32 reg, mask;
+#endif
 	struct dle_mem_t *cfg, *ext_cfg;
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	struct dle_mem_t cfg_tmp;
@@ -2789,6 +3206,33 @@ u32 dle_init(struct mac_ax_adapter *adapter, enum mac_ax_qta_mode mode,
 	dle_quota_cfg(adapter, cfg);
 
 	dle_func_en(adapter, MAC_AX_FUNC_EN);
+
+#if MAC_USB_IO_ACC
+	if (adapter->hw_info->intf == MAC_AX_INTF_USB &&
+	    adapter->sm.fwdl == MAC_AX_FWDL_INIT_RDY) {
+		reg = R_AX_WDE_INI_STATUS;
+		mask = WDE_MGN_INI_RDY;
+		val32_1 = WDE_MGN_INI_RDY;
+		ret = poll_mac_reg_ofld(adapter, reg, mask, val32_1, 1);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return ret;
+		}
+
+		reg = R_AX_PLE_INI_STATUS;
+		mask = PLE_MGN_INI_RDY;
+		val32_1 = PLE_MGN_INI_RDY;
+		ret = poll_mac_reg_ofld(adapter, reg, mask, val32_1, 1);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]%s FW_OFLD in 0x%X\n",
+				      __func__, reg);
+			return ret;
+		}
+
+		return ret;
+	}
+#endif
 
 	cnt = DLE_WAIT_CNT;
 	while (cnt--) {

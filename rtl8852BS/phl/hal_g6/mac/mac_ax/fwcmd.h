@@ -53,6 +53,9 @@
 #define FWCMD_C2H_FUNC_NULL		0xFF
 #define FWCMD_C2H_CAT_NULL		0xFF
 
+#define FWCMD_C2H_FUNC_FTMRPT 0x2
+#define FWCMD_C2H_FUNC_FTMACKRPT 0x3
+
 /**
  * @struct h2c_buf_head
  * @brief h2c_buf_head

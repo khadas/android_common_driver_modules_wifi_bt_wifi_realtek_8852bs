@@ -97,7 +97,8 @@
 #define DMA_MOD_USB 0x2
 #define DMA_MOD_SDIO 0x3
 
-#define  NAV_12MS 0xBC // (12ms, unit: 64us)
+#define  NAV_12MS 0x5D // (12ms, unit: 128us)
+#define  NAV_25MS 0xC4 // (25ms, unit: 128us)
 
 #define FWD_TO_HOST 0
 #define FWD_TO_WLCPU 1

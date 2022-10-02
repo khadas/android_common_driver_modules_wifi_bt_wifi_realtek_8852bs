@@ -23,16 +23,22 @@ enum _phl_dbg_comp_mode {
 	PHL_SET_COMP_VALUE = 0x4,
 };
 
+#ifdef CONFIG_RTW_DISABLE_PHL_LOG
+u32 phl_log_components = 0;
+u8 phl_log_level = 0;
+#else
 u32 phl_log_components = COMP_PHL_XMIT |
 			 COMP_PHL_WOW |
 			/* COMP_PHL_CMDDISP |*/
 			 COMP_PHL_RECV |
 			 COMP_PHL_MAC |
-			 #ifdef CONFIG_POWER_SAVE
-			 COMP_PHL_PS | 
-			 #endif
+			#ifdef CONFIG_POWER_SAVE
+			 COMP_PHL_PS |
+			#endif
 			 COMP_PHL_DBG | 0;
-u8 phl_log_level = _PHL_NONE_;
+u8 phl_log_level = _PHL_INFO_;
+#endif /*CONFIG_RTW_DISABLE_PHL_LOG*/
+
 struct dbg_mem_ctx debug_memory_ctx;
 
 void debug_dump_mac_address(u8 *mac_addr)
@@ -228,9 +234,6 @@ u32 rtw_phl_dbg_ctrl_comp(u8 ctrl, u32 para_dbg)
 			PHL_PRINT("[DBG] bit num is illegal\n");
 		else
 			phl_dbg_clear_log_comp(para_dbg);
-		break;
-	case PHL_SHOW_COMP:
-		phl_dbg_show_log_comp(para_dbg);
 		break;
 	case PHL_SET_COMP_VALUE:
 		phl_dbg_set_log_comp_value(para_dbg);

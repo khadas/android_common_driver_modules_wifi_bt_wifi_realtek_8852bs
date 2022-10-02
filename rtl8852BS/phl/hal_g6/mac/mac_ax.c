@@ -425,12 +425,25 @@ u32 mac_ax_ops_exit(struct mac_ax_adapter *adapter)
 {
 	u32 ret;
 	struct mac_ax_efuse_param *efuse_param = &adapter->efuse_param;
+	struct mac_ax_cmd_ofld_info *ofld_info = &adapter->cmd_ofld_info;
+	struct mac_ax_efuse_ofld_info *efuse_ofld_info = &adapter->efuse_ofld_info;
+	struct mac_ax_hw_info *hw_info = adapter->hw_info;
 	struct scan_chinfo_list *scan_list;
 
 	ret = h2cb_exit(adapter);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("[ERR]h2c buffer exit %d\n", ret);
 		return ret;
+	}
+
+	if (ofld_info->buf) {
+		PLTFM_FREE(ofld_info->buf, CMD_OFLD_MAX_LEN);
+		ofld_info->buf = NULL;
+	}
+
+	if (efuse_ofld_info->buf) {
+		PLTFM_FREE(efuse_ofld_info->buf, hw_info->dav_log_efuse_size);
+		efuse_ofld_info->buf = NULL;
 	}
 
 	ret = free_sec_info_tbl(adapter, SEC_CAM_NORMAL);
@@ -529,6 +542,12 @@ u32 mac_ax_ops_exit(struct mac_ax_adapter *adapter)
 		PLTFM_FREE(efuse_param->dav_log_efuse_map,
 			   adapter->hw_info->dav_log_efuse_size);
 		efuse_param->dav_log_efuse_map = (u8 *)NULL;
+	}
+
+	if (efuse_param->hidden_rf_map) {
+		PLTFM_FREE(efuse_param->hidden_rf_map,
+			   adapter->hw_info->hidden_efuse_rf_size);
+		efuse_param->hidden_rf_map = (u8 *)NULL;
 	}
 
 	scan_list = adapter->scanofld_info.list;

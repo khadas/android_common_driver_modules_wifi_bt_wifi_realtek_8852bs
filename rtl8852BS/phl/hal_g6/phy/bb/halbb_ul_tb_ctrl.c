@@ -56,6 +56,11 @@ void halbb_ul_tb_chk(struct bb_info *bb)
 		bb_ul_tb->dyn_tb_bedge_en = true;
 	else
 		bb_ul_tb->dyn_tb_bedge_en = false;
+
+	if (bb->ic_type == BB_RTL8852B && bb->hal_com->cv > CBV) {
+		bb_ul_tb->dyn_tb_bedge_en = false;
+		BB_DBG(bb, DBG_UL_TB_CTRL, "[%s] 52B C-cut turn off dyn bedge setting\n", __func__);
+	}
 	BB_DBG(bb, DBG_UL_TB_CTRL, "def_if_bandedge = %d, def_tri_idx = %d\n", bb_ul_tb->def_if_bandedge, bb_ul_tb->def_tri_idx);
 	BB_DBG(bb, DBG_UL_TB_CTRL, "dyn_tb_bedge_en = %d, dyn_tb_tri_en = %d\n", bb_ul_tb->dyn_tb_bedge_en, bb_ul_tb->dyn_tb_tri_en);
 }
@@ -86,11 +91,6 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 	if (phl->fw_info.fw_type != RTW_FW_NIC) {
 		BB_DBG(bb, DBG_UL_TB_CTRL, "Not STA mode, fw_type = %d\n", phl->fw_info.fw_type);
 		return;
-	}
-
-	if (bb_link->first_connect) {
-		BB_DBG(bb, DBG_UL_TB_CTRL, "first_connect = %d\n", bb_link->first_connect);
-		halbb_ul_tb_chk(bb);
 	}
 
 	if (!bb_link->is_linked || bb_link->first_disconnect) {

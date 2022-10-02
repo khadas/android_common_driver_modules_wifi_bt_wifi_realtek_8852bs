@@ -731,9 +731,11 @@ bool halbb_cfo_acc_mode_en(struct bb_info *bb)
 	struct bb_cfo_trk_info *cfo_trk = &bb->bb_cfo_trk_i;
 	struct bb_link_info *link = &bb->bb_link_i;
 	struct rtw_phl_com_t *phl = bb->phl_com;
+	struct rtw_hal_com_t *hal = bb->hal_com;
 	struct dev_cap_t *dev = &phl->dev_cap;
 	struct rtw_phl_stainfo_t *sta;
-	u32 i = 0, cfo_tf_cnt, cfo_tf_cnt_cur = 0;
+	u8 sta_cnt = 0;
+	u32 i = 0, cfo_tf_cnt = 0, cfo_tf_cnt_cur = 0;
 	bool is_ul_ofdma = false;
 
 	if (!cfo_trk->cfo_dyn_acc_en)
@@ -742,20 +744,17 @@ bool halbb_cfo_acc_mode_en(struct bb_info *bb)
 	for (i = 0; i < PHL_MAX_STA_NUM; i++) {
 		if (!bb->sta_exist[i])
 			continue;
-
 		sta = bb->phl_sta_info[i];
-
 		if (!is_sta_active(sta))
 			continue;
-
-		if (sta->macid == 0)
-			continue;
-
+		sta_cnt++;
 		cfo_tf_cnt_cur += sta->stats.rx_tf_cnt;
-		BB_DBG(bb, DBG_COMMON_FLOW, "[%d] macid=%d\n", i, sta->macid);
+		BB_DBG(bb, DBG_CFO_TRK, "[%d] macid=%d\n", i, sta->macid);
+		if (sta_cnt >= hal->assoc_sta_cnt)
+			break;
 	}
 
-	cfo_tf_cnt = cfo_tf_cnt_cur - cfo_trk->cfo_tf_cnt_pre;
+	cfo_tf_cnt = SUBTRACT_TO_0(cfo_tf_cnt_cur,cfo_trk->cfo_tf_cnt_pre);
 
 	if (cfo_tf_cnt > cfo_trk->cfo_tf_cnt_th)
 		is_ul_ofdma = true;

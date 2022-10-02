@@ -175,7 +175,7 @@
 #define MAC_AX_RXPPDU_IDX \
 	{MAC_AX_RX_CNT_IDX_MAX, MAC_AX_RX_CNT_IDX_MAX, 8, 16, 20, 24, 28}
 #define MAC_AX_RXFA_IDX \
-	{5, 2, 9, 17, 21, 25, 29}
+	{5, 2, 9, 13, 17, 21, 25, 29}
 
 #define Read_DBG_FS_REG() GET_FIELD(MAC_REG_R32(R_AX_UDM0), B_AX_UDM0_FS_CODE)
 
@@ -1150,4 +1150,23 @@ void pltfm_dbg_dump(struct mac_ax_adapter *adapter);
  */
 
 u32 mac_get_fw_status(struct mac_ax_adapter *adapter);
+
+/**
+ * @addtogroup Common
+ * @{
+ * @addtogroup DebugPackage
+ * @{
+ */
+/**
+ * @brief mac_get_ple_dbg_addr
+ * print_dbg_port
+ * @param *adapter
+ * @return Please Place Description here.
+ * @retval u32
+ */
+u32 mac_get_ple_dbg_addr(struct mac_ax_adapter *adapter);
+/**
+ * @}
+ * @}
+ */
 #endif

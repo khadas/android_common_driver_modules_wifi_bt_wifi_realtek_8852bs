@@ -186,6 +186,9 @@ phl_ps_cfg_pwr_lvl(struct phl_info_t *phl_info, u8 ps_mode, u8 cur_pwr_lvl, u8 r
 	hstatus = rtw_hal_ps_pwr_lvl_cfg(phl_info->phl_com, phl_info->hal,
 				req_pwr_lvl);
 
+	if (cur_pwr_lvl == PS_PWR_LVL_PWR_GATED)
+		hstatus = rtw_hal_pg_redownload_fw(phl_info->phl_com, phl_info->hal);
+
 	_ps_ntfy_after_pwr_cfg(phl_info, ps_mode, cur_pwr_lvl, req_pwr_lvl,
 						   (hstatus == RTW_HAL_STATUS_SUCCESS ? true : false));
 
@@ -449,11 +452,12 @@ enum rtw_phl_status phl_ps_lps_leave(struct phl_info_t *phl_info, struct ps_cfg 
 
 enum rtw_phl_status phl_ps_ips_proto_cfg(struct phl_info_t *phl_info, struct ps_cfg *cfg, bool ips_en)
 {
-	if (cfg->pwr_lvl == PS_PWR_LVL_PWROFF)
-		return RTW_PHL_STATUS_SUCCESS;
-
 	/* ips protocol config */
 	PHL_TRACE(COMP_PHL_PS, _PHL_INFO_, "[PS], %s(): \n", __func__);
+
+#ifdef CONFIG_PHL_PS_FW_DBG
+	rtw_hal_cfg_fw_ps_log(phl_info->hal, (ips_en ? true : false));
+#endif
 
 	phl_ps_ips_cfg(phl_info, cfg, ips_en);
 
@@ -464,16 +468,20 @@ enum rtw_phl_status phl_ps_ips_enter(struct phl_info_t *phl_info, struct ps_cfg 
 {
 	enum rtw_phl_status status = RTW_PHL_STATUS_FAILURE;
 
-	status = phl_ps_ips_proto_cfg(phl_info, cfg, true);
-	if (status != RTW_PHL_STATUS_SUCCESS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips protocol fail!\n", __func__);
-		return status;
+	if (cfg->proto_cfg) {
+		status = phl_ps_ips_proto_cfg(phl_info, cfg, true);
+		if (status != RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips protocol fail!\n", __func__);
+			return status;
+		}
 	}
 
-	status = phl_ps_cfg_pwr_lvl(phl_info, cfg->ps_mode, cfg->cur_pwr_lvl, cfg->pwr_lvl);
-	if (status != RTW_PHL_STATUS_SUCCESS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips pwr lvl fail!\n", __func__);
-		return status;
+	if (cfg->pwr_cfg) {
+		status = phl_ps_cfg_pwr_lvl(phl_info, cfg->ps_mode, cfg->cur_pwr_lvl, cfg->pwr_lvl);
+		if (status != RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips pwr lvl fail!\n", __func__);
+			return status;
+		}
 	}
 
 	return status;
@@ -483,19 +491,38 @@ enum rtw_phl_status phl_ps_ips_leave(struct phl_info_t *phl_info, struct ps_cfg 
 {
 	enum rtw_phl_status status = RTW_PHL_STATUS_FAILURE;
 
-	status = phl_ps_cfg_pwr_lvl(phl_info, cfg->ps_mode, cfg->cur_pwr_lvl, cfg->pwr_lvl);
-	if (status != RTW_PHL_STATUS_SUCCESS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips pwr lvl fail!\n", __func__);
-		return status;
+	if (cfg->pwr_cfg) {
+		status = phl_ps_cfg_pwr_lvl(phl_info, cfg->ps_mode, cfg->cur_pwr_lvl, cfg->pwr_lvl);
+		if (status != RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips pwr lvl fail!\n", __func__);
+			return status;
+		}
 	}
 
-	status = phl_ps_ips_proto_cfg(phl_info, cfg, false);
-	if (status != RTW_PHL_STATUS_SUCCESS) {
-		PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips protocol fail!\n", __func__);
-		return status;
+	if (cfg->proto_cfg) {
+		status = phl_ps_ips_proto_cfg(phl_info, cfg, false);
+		if (status != RTW_PHL_STATUS_SUCCESS) {
+			PHL_TRACE(COMP_PHL_PS, _PHL_ERR_, "[PS], %s(): config ips protocol fail!\n", __func__);
+			return status;
+		}
 	}
 
 	return status;
+}
+
+static void _ps_ntfy(struct phl_info_t *phl_info, struct ps_cfg *cfg, enum phl_msg_evt_id event)
+{
+	struct rtw_wifi_role_t *wrole = NULL;
+	struct rtw_phl_stainfo_t *sta = NULL;
+
+	sta = rtw_phl_get_stainfo_by_macid(phl_info, cfg->macid);
+	if (sta != NULL)
+		wrole = sta->wrole;
+	else
+		PHL_TRACE(COMP_PHL_PS, _PHL_WARNING_, "[PS], %s(): cannot get sta!\n", __func__);
+
+	if (wrole != NULL)
+		rtw_hal_notification(phl_info->hal, event, wrole->hw_band);
 }
 
 enum rtw_phl_status
@@ -507,10 +534,13 @@ phl_ps_enter_ps(struct phl_info_t *phl_info, struct ps_cfg *cfg)
 			__func__, phl_ps_ps_mode_to_str(cfg->ps_mode), phl_ps_pwr_lvl_to_str(cfg->pwr_lvl),
 			cfg->macid, (cfg->token == NULL) ? 0xFF : *cfg->token, cfg->proto_cfg, cfg->pwr_cfg);
 
-	if (cfg->ps_mode == PS_MODE_LPS)
+	if (cfg->ps_mode == PS_MODE_LPS) {
 		status = phl_ps_lps_enter(phl_info, cfg);
-	else if (cfg->ps_mode == PS_MODE_IPS)
+		if (status == RTW_PHL_STATUS_SUCCESS)
+			_ps_ntfy(phl_info, cfg, MSG_EVT_PS_LPS_ENTER);
+	} else if (cfg->ps_mode == PS_MODE_IPS) {
 		status = phl_ps_ips_enter(phl_info, cfg);
+	}
 
 	return status;
 }
@@ -524,10 +554,13 @@ phl_ps_leave_ps(struct phl_info_t *phl_info, struct ps_cfg *cfg)
 			__func__, phl_ps_ps_mode_to_str(cfg->ps_mode), phl_ps_pwr_lvl_to_str(cfg->pwr_lvl),
 			cfg->macid, (cfg->token == NULL) ? 0xFF : *cfg->token, cfg->proto_cfg, cfg->pwr_cfg);
 
-	if (cfg->ps_mode == PS_MODE_LPS)
+	if (cfg->ps_mode == PS_MODE_LPS) {
 		status = phl_ps_lps_leave(phl_info, cfg);
-	else if (cfg->ps_mode == PS_MODE_IPS)
+		if (status == RTW_PHL_STATUS_SUCCESS)
+			_ps_ntfy(phl_info, cfg, MSG_EVT_PS_LPS_LEAVE);
+	} else if (cfg->ps_mode == PS_MODE_IPS) {
 		status = phl_ps_ips_leave(phl_info, cfg);
+	}
 
 	return status;
 }

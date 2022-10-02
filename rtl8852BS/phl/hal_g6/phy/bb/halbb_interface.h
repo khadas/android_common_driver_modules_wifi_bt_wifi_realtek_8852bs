@@ -167,7 +167,8 @@ enum halbb_event_idx_t {
 	BB_EVENT_TIMER_CFO		= 1,
 	BB_EVENT_TIMER_ANTDIV		= 2,
 	BB_EVENT_TIMER_TDMA_CR		= 3,
-	BB_EVENT_TIMER_LA		= 4
+	BB_EVENT_TIMER_LA		= 4,
+	BB_EVENT_TIMER_DTR		= 5
 };
 
 enum halbb_timer_state_t {

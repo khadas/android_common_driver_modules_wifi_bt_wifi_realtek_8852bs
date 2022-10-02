@@ -73,6 +73,9 @@ rtw_phl_dbcc_test(void *phl, enum dbcc_test_id id, void *param);
 enum band_type rtw_phl_get_band_type(u8 chan);
 u8 rtw_phl_get_center_ch(u8 ch,
 	enum channel_width bw, enum chan_offset offset);
+int rtw_phl_bch2freq(enum band_type band, int ch);
+bool rtw_phl_bchbw_to_freq_range(enum band_type band, u8 ch
+	, enum channel_width bw, enum chan_offset offset, u32 *hi, u32 *lo);
 u8
 rtw_phl_get_operating_class(
 	struct rtw_chan_def chan_def

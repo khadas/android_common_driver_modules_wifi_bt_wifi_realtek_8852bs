@@ -73,7 +73,7 @@ const enum halrf_pw_lmt_regulation_type _tpo_to_pw_lmt_regu_type[TPO_NA] = {
 	[TPO_QATAR]		= PW_LMT_REGU_QATAR,
 	[TPO_UKRAINE]		= PW_LMT_REGU_UKRAINE,
 	[TPO_CN]		= PW_LMT_REGU_CN,
-	/*[TPO_UK]		= PW_LMT_REGU_UK,*/
+	[TPO_UK]		= PW_LMT_REGU_UK,
 };
 
 u8 halrf_get_regulation_info(struct rf_info *rf, u8 band)
@@ -949,7 +949,10 @@ s8 halrf_get_power_by_rate(struct rf_info *rf,
 			pwr_by_rate, band, rate_tmp, channel);
 	}
 
-	return pwr_by_rate;
+	if (offset == 0)
+		return pwr_by_rate + halrf_get_pwr_control(rf, phy);
+	else
+		return pwr_by_rate;
 }
 
 s8 halrf_get_power_by_rate_band(struct rf_info *rf,
@@ -1027,7 +1030,7 @@ s8 halrf_get_power_limit(struct rf_info *rf,
 	if (pwr_limit == 127)
 		pwr_limit = 0;
 
-	return pwr_limit;
+	return pwr_limit + halrf_get_pwr_control(rf, phy);
 }
 
 s8 halrf_get_power_limit_ru(struct rf_info *rf,
@@ -1076,7 +1079,7 @@ s8 halrf_get_power_limit_ru(struct rf_info *rf,
 	if (pwr_limit_ru == 127)
 		pwr_limit_ru = 0;
 
-	return pwr_limit_ru;
+	return pwr_limit_ru + halrf_get_pwr_control(rf, phy);
 }
 
 s16 halrf_get_power(void *rf_void,
@@ -1324,3 +1327,98 @@ void halrf_reload_pwr_limit_tbl_and_set(struct rf_info *rf,
 
 	RF_DBG(rf, DBG_RF_POWER, "<======%s finish!\n", __func__);
 }
+
+void halrf_modify_pwr_table_bitmask(struct rf_info *rf,
+	enum phl_phy_idx phy, enum phl_pwr_table pwr_table)
+{
+	struct rtw_tpu_info *tpu = &rf->hal_com->band[phy].rtw_tpu_i;
+	struct rtw_tpu_pwr_by_rate_info *rate = &tpu->rtw_tpu_pwr_by_rate_i;
+	struct rtw_tpu_pwr_imt_info *lmt = &rf->hal_com->band[phy].rtw_tpu_i.rtw_tpu_pwr_imt_i;
+	
+	u8 i, j, k;
+
+	if (pwr_table & PWR_BY_RATE) {
+		for (i = 0; i < TPU_SIZE_PWR_TAB_lGCY; i++)
+			rate->pwr_by_rate_lgcy[i] &= 0x7f;
+
+		for (i = 0; i < HAL_MAX_PATH; i++) {
+			for (j = 0; j < TPU_SIZE_PWR_TAB; j++)
+				rate->pwr_by_rate[i][j] &= 0x7f;
+		}
+	}
+
+	if (pwr_table & PWR_LIMIT) {
+		for (i = 0; i < HAL_MAX_PATH; i++) {
+			for (k = 0; k < TPU_SIZE_BF; k++) {
+				lmt->pwr_lmt_cck_20m[i][k] &= 0x7f;
+				lmt->pwr_lmt_cck_40m[i][k] &= 0x7f;
+				
+				lmt->pwr_lmt_lgcy_20m[i][k] &= 0x7f;
+
+				for (j = 0; j < TPU_SIZE_BW20_SC; j++)
+					lmt->pwr_lmt_20m[i][j][k] &= 0x7f;
+
+				for (j = 0; j < TPU_SIZE_BW40_SC; j++)
+					lmt->pwr_lmt_40m[i][j][k] &= 0x7f;
+
+				for (j = 0; j < TPU_SIZE_BW80_SC; j++)
+					lmt->pwr_lmt_80m[i][j][k] &= 0x7f;
+
+				lmt->pwr_lmt_160m[i][k] &= 0x7f;
+				lmt->pwr_lmt_40m_2p5[i][k] &= 0x7f;
+				lmt->pwr_lmt_40m_0p5[i][k] &= 0x7f;
+			}
+		}
+	}
+
+	if (pwr_table & PWR_LIMIT_RU) {
+		for (i = 0; i < HAL_MAX_PATH; i++)
+			for (j = 0; j < TPU_SIZE_RUA; j++)
+				for (k = 0; k < TPU_SIZE_BW20_SC; k++)
+					tpu->pwr_lmt_ru[i][j][k] &= 0x7f;
+	}
+}
+
+s8 halrf_get_pwr_control(struct rf_info *rf, enum phl_phy_idx phy)
+{
+	struct halrf_pwr_info *pwr = &rf->pwr_info;
+	s8 tmp;
+
+	tmp = (pwr->power_constraint[phy] * -1) + pwr->dpk_mcc_power;
+	
+	return tmp;
+}
+
+bool halrf_pwr_is_minus(struct rf_info *rf, u32 reg_tmp)
+{
+	return reg_tmp & BIT(6);
+}
+
+s32 halrf_show_pwr_table(struct rf_info *rf, u32 reg_tmp)
+{
+	s32 tmp;
+
+	(reg_tmp & BIT(6)) ? (tmp = (reg_tmp | 0xffffff80)) : (tmp = reg_tmp);
+
+	if (tmp < 0)
+		return tmp * -1 * 10 / 2;
+	else
+		return tmp * 10 / 2;
+}
+
+/*mb = 100 * dB*/
+bool halrf_set_power_constraint (void *rf_void, enum phl_phy_idx phy_idx, u16 mb, bool apply_to_hw)
+{
+	struct rf_info *rf = (struct rf_info *)rf_void;
+	struct halrf_pwr_info *pwr = &rf->pwr_info;
+
+	pwr->power_constraint[phy_idx] = (u8)((mb * 4) / 100);
+
+	if (apply_to_hw) {
+		halrf_set_power(rf, phy_idx, PWR_BY_RATE);
+		halrf_set_power(rf, phy_idx, PWR_LIMIT);
+		halrf_set_power(rf, phy_idx, PWR_LIMIT_RU);
+	}
+	return true;
+}
+

@@ -1541,6 +1541,11 @@ u32 halbb_get_fw_ra_rpt(struct bb_info *bb, u16 len, u8 *c2h)
 	rt_i->gi_ltf = ra_rpt_i->rpt_gi_ltf;
 	rt_i->bw = ra_rpt_i->rpt_bw;
 	rt_i->mode = ra_rpt_i->rpt_md_sel;
+	if (ra_rpt_i->rpt_md_sel == BB_HE_MODE)
+		rt_i->is_actrl = ((ra_rpt_i->rpt_mcs_nss & 0xf) <= 2) ? false : true;
+	else
+		rt_i->is_actrl = false;
+
 	BB_DBG(bb, DBG_RA, "RA RPT: macid = %d, mode = %d, giltf = %x, mcs_nss = %x\n",
 		   macid_rpt, rt_i->mode, rt_i->gi_ltf, rt_i->mcs_ss_idx);
 	return 0;
@@ -2184,6 +2189,15 @@ void halbb_ra_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			   "RA registered, H2C Byte[0->3]={0x%x,0x%x,0x%x,0x%x}\n",
 			   tmp1, tmp2, tmp3, tmp4);
+		if ((bb->ic_type == BB_RTL8852A) ||
+		    (bb->ic_type == BB_RTL8852B)) {
+			tmp1 = halbb_get_reg(bb, 0x1ec, MASKBYTE3);
+			BB_DBG_CNSL(out_len, used, output + used,
+				    out_len - used,
+				    "dyn_stbc:{en,ok,banned,fail_cnt}={%d,%d,%d,%d}\n",
+				    (tmp1 >> 7) & 0x1, (tmp1 >> 6) & 0x1,
+				    (tmp1 >> 5) & 0x1, tmp1 & 0x1f);
+		}
 	}
 	//if (rssi_i)
 	//	hal_mem_free(bb->hal_com, rssi_i, rssi_len);

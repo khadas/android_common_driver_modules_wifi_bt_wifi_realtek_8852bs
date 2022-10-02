@@ -44,6 +44,12 @@
 /*@--------------------------[Enum]------------------------------------------*/
 /*@--------------------------[Prptotype]-------------------------------------*/
 struct bb_info;
+u8 halbb_ex_cn_report_8852b(struct bb_info *bb);
+
+u8 halbb_ex_evm_1ss_report_8852b(struct bb_info *bb);
+u8 halbb_ex_evm_max_report_8852b(struct bb_info *bb);
+u8 halbb_ex_evm_min_report_8852b(struct bb_info *bb);
+
 bool halbb_set_pwr_ul_tb_ofst_8852b(struct bb_info *bb,
 				    s16 pw_ofst, enum phl_phy_idx phy_idx);
 void halbb_tx_triangular_shap_cfg_8852b(struct bb_info *bb, u8 shape_idx,
@@ -131,6 +137,8 @@ bool halbb_ch_setting_8852b(struct bb_info *bb, u8 central_ch, enum rf_path path
 			    bool *is_2g_ch);
 
 void halbb_ctrl_rf_mode_8852b(struct bb_info *bb,  enum phl_rf_mode mode);
+
+void halbb_ctrl_rf_mode_rx_path_8852b(struct bb_info *bb,  enum rf_path rx_path);
 
 bool halbb_ctrl_ch2_80p80_8852b(struct bb_info *bb, u8 central_ch);
 

@@ -1059,7 +1059,7 @@ s16 rtw_rfctl_get_oper_txpwr_max_mbm(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 of
 	return mbm;
 }
 
-s16 rtw_rfctl_get_reg_max_txpwr_mbm(struct rf_ctl_t *rfctl, u8 ch, u8 bw, u8 offset, bool eirp)
+s16 rtw_rfctl_get_reg_max_txpwr_mbm(struct rf_ctl_t *rfctl, enum band_type band, u8 ch, u8 bw, u8 offset, bool eirp)
 {
 	/* TODO: get maximum txpower of current operating class & channel belongs to this radio allowed by regulatory */
 	s16 mbm = 1300;
@@ -2350,6 +2350,8 @@ static u8 rtw_chk_htc_en(_adapter *padapter, struct sta_info *psta, struct pkt_a
 	if (psta->hepriv.he_option == _TRUE) {
 		/*By test, some HE AP eapol & arp & dhcp pkt can not append ht control*/
 		if ((0x888e == pattrib->ether_type) || (0x0806 == pattrib->ether_type) || (pattrib->dhcp_pkt == 1))
+			return 0;
+		else if (!rtw_chk_phy_can_append_actrl(padapter, psta))
 			return 0;
 		else
 			return rtw_he_htc_en(padapter, psta);
@@ -7305,6 +7307,9 @@ void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 #ifdef CONFIG_XMIT_ACK
 	struct xmit_priv *pxmitpriv = &(GET_PRIMARY_ADAPTER(padapter))->xmitpriv;
 #endif
+	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
+	struct rtw_phl_com_t *phl_com = GET_PHL_COM(dvobj);
+	struct rtw_wifi_role_t *phl_role = padapter->phl_role;
 
 	PHLTX_LOG;
 
@@ -7347,7 +7352,12 @@ void fill_txreq_mdata(_adapter *padapter, struct xmit_frame *pxframe)
 		mdata->ampdu_en = 1;
 		mdata->bk = 0;
 		mdata->ampdu_density = pxframe->attrib.ampdu_spacing;
-		mdata->max_agg_num = 0x3F; /* temporally fix to 64 */
+
+		/* set tx ampdu number */
+		if (phl_role->hw_band < HW_BAND_MAX)
+			mdata->max_agg_num = phl_com->phy_cap[phl_role->hw_band].txagg_num;
+		else
+			mdata->max_agg_num = 0x3F; /* temporally fix to 64 */
 	} else {
 		mdata->ampdu_en = 0;
 		mdata->bk = 1;

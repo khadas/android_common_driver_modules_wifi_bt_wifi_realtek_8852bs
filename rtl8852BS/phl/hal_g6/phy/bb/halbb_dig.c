@@ -456,6 +456,17 @@ u8 halbb_get_rxb_idx(struct bb_info *bb, enum rf_path path)
 	return rxb_idx;
 }
 
+void halbb_read_gaincode(struct bb_info *bb, enum rf_path path,
+			 struct agc_gaincode_set *container)
+{
+	container->lna_idx = halbb_get_lna_idx(bb, path);
+	container->tia_idx = halbb_get_tia_idx(bb, path);
+	container->rxb_idx = halbb_get_rxb_idx(bb, path);
+
+	BB_DIG_DBG(bb, DIG_DBG_LV0, "Read gaincode = (%d,%d,%2d)\n",
+		   container->lna_idx, container->tia_idx, container->rxb_idx);
+}
+
 u8 halbb_igi_by_edcca(struct bb_info *bb, u8 igi)
 {
 #ifdef HALBB_EDCCA_SUPPORT
@@ -934,14 +945,11 @@ void halbb_dig_gain_para_init(struct bb_info *bb)
 		BB_DIG_DBG(bb, DIG_DBG_LV0, "tia_gain_a[%d]=%d\n",
 			   i, bb_dig->tia_gain_a[i]);
 
-	/*lna initial gain index*/
-	bb_dig->max_gaincode.lna_idx = halbb_get_lna_idx(bb, RF_PATH_A);
-	bb_dig->max_gaincode.tia_idx = halbb_get_tia_idx(bb, RF_PATH_A);
-	bb_dig->max_gaincode.rxb_idx = halbb_get_rxb_idx(bb, RF_PATH_A);
-
-	BB_DIG_DBG(bb, DIG_DBG_LV0, "Read max gaincode = (%d,%d,%2d)\n",
-		   bb_dig->max_gaincode.lna_idx, bb_dig->max_gaincode.tia_idx,
-		   bb_dig->max_gaincode.rxb_idx);
+#ifdef HALBB_FW_OFLD_SUPPORT
+	if (bb->bb_cmn_hooker->skip_io_init_en && !bb_dig->init_dig_cr_success)
+		return;
+#endif
+	halbb_read_gaincode(bb, RF_PATH_A, &bb_dig->max_gaincode);
 }
 
 
@@ -1084,6 +1092,14 @@ void halbb_dig_reset(struct bb_info *bb)
 
 	halbb_mem_set(bb, &bb_dig->dig_fa_i, 0, sizeof(struct bb_dig_fa_info));
 	halbb_dig_para_reset(bb);
+
+#ifdef HALBB_FW_OFLD_SUPPORT
+	if (bb->bb_cmn_hooker->skip_io_init_en && !bb_dig->init_dig_cr_success) {
+		halbb_read_gaincode(bb, RF_PATH_A, &bb_dig->max_gaincode);
+		return;
+	}
+#endif
+
 #ifdef BB_8852A_2_SUPPORT
 	halbb_dig_set_igi_cr_8852a(bb, bb_dig->max_gaincode);
 #endif
@@ -1092,10 +1108,24 @@ void halbb_dig_reset(struct bb_info *bb)
 	halbb_sdagc_follow_pagc_config(bb, false);
 }
 
+void halbb_dig_init_io_en(struct bb_info *bb)
+{
+	struct bb_dig_info *dig = &bb->bb_dig_i;
+	u8 igi_new;
+
+	BB_DBG(bb, DBG_DIG, "[%s]=========>\n", __func__);
+
+	halbb_dig_gain_para_init(bb);
+	halbb_dig_para_update(bb);
+	igi_new = halbb_dig_igi_by_ofst(bb, dig->igi_rssi, 0);
+	halbb_dig_cfg_bbcr(bb, igi_new);
+
+	dig->init_dig_cr_success = true;
+}
+
 void halbb_dig_init(struct bb_info *bb)
 {
 	struct bb_dig_info *bb_dig = &bb->bb_dig_i;
-	u8 igi_new;
 
 	if(phl_is_mp_mode(bb->phl_com))
 		return;
@@ -1104,6 +1134,7 @@ void halbb_dig_init(struct bb_info *bb)
 
 	/* DIG sub-DM configurations */
 	halbb_dig_mode_update(bb, DIG_ORIGIN);
+	bb_dig->igi_rssi = IGI_NOLINK - 10; /*init IGI state*/
 	bb_dig->igi_pause_cnt = 0;
 	bb_dig->le_igi_ofst = 0;
 	bb_dig->dbg_lv = DIG_DBG_LV2;
@@ -1115,16 +1146,22 @@ void halbb_dig_init(struct bb_info *bb)
 	bb_dig->dig_timer_i.cb_time = 50;
 #endif
 	halbb_dig_ifs_clm_para_init(bb);
-	halbb_dig_gain_para_init(bb);
-	halbb_dig_reset(bb);
 	bb_dig->dig_state_h_i.igi_fa_rssi = 1; /*init state*/
-	halbb_dig_para_update(bb);
-
 #ifdef HALBB_DIG_DAMPING_CHK
 	halbb_dig_damping_chk_init(bb);
 #endif
-	igi_new = halbb_dig_igi_by_ofst(bb, IGI_NOLINK, 0);
-	halbb_dig_cfg_bbcr(bb, igi_new);
+	halbb_dig_reset(bb);
+
+#ifdef HALBB_FW_OFLD_SUPPORT
+	BB_DBG(bb, DBG_DIG, "[%s][phy=%d]skip_io_init_en = %d\n",
+	       __func__, bb->bb_phy_idx, bb->bb_cmn_hooker->skip_io_init_en);
+
+	if (bb->bb_cmn_hooker->skip_io_init_en) {
+		bb_dig->init_dig_cr_success = false;
+		return;
+	}
+#endif
+	halbb_dig_init_io_en(bb);
 }
 
 void halbb_dig_deinit(struct bb_info *bb)
@@ -1250,6 +1287,17 @@ void halbb_dig(struct bb_info *bb)
 	s8 ofst;
 
 	BB_DIG_DBG(bb, DIG_DBG_LV0, "%s ======>\n", __func__);
+
+#ifdef HALBB_FW_OFLD_SUPPORT
+	if (bb->bb_cmn_hooker->skip_io_init_en) {
+		if (!dig->init_dig_cr_success) {
+			halbb_dig_init_io_en(bb);
+			BB_DBG(bb, DBG_DIG, "init_dig_cr_success = %d\n",
+			       dig->init_dig_cr_success);
+			return;
+		}
+	}
+#endif
 
 	dig->need_update |= (bb_link->first_connect | bb_link->first_disconnect);
 
@@ -1943,6 +1991,10 @@ void halbb_cr_cfg_dig_init(struct bb_info *bb)
 		cr->seg0r_pd_spatial_reuse_en_a_m = SEG0R_PD_SPATIAL_REUSE_EN_A_M;
 		cr->seg0r_pd_lower_bound_a = SEG0R_PD_LOWER_BOUND_A;
 		cr->seg0r_pd_lower_bound_a_m = SEG0R_PD_LOWER_BOUND_A_M;
+		cr->cca_rssi_lmt_en_a = R1B_RX_CCA_RSSI_LMT_EN_A;
+		cr->cca_rssi_lmt_en_a_m = R1B_RX_CCA_RSSI_LMT_EN_A_M;
+		cr->rssi_nocca_low_th_a = R1B_RX_RSSI_NOCCA_LOW_TH_A;
+		cr->rssi_nocca_low_th_a_m = R1B_RX_RSSI_NOCCA_LOW_TH_A_M;
 		cr->path0_p20_follow_by_pagcugc_en_a = PATH0_P20_R_FOLLOW_BY_PAGCUGC_EN_A;
 		cr->path0_p20_follow_by_pagcugc_en_a_m = PATH0_P20_R_FOLLOW_BY_PAGCUGC_EN_A_M;
 		cr->path0_s20_follow_by_pagcugc_en_a = PATH0_S20_R_FOLLOW_BY_PAGCUGC_EN_A;
@@ -2043,6 +2095,10 @@ void halbb_cr_cfg_dig_init(struct bb_info *bb)
 		cr->seg0r_pd_spatial_reuse_en_a_m = SEG0R_PD_SPATIAL_REUSE_EN_C_M;
 		cr->seg0r_pd_lower_bound_a = SEG0R_PD_LOWER_BOUND_C;
 		cr->seg0r_pd_lower_bound_a_m = SEG0R_PD_LOWER_BOUND_C_M;
+		cr->cca_rssi_lmt_en_a = R1B_RX_CCA_RSSI_LMT_EN_C;
+		cr->cca_rssi_lmt_en_a_m = R1B_RX_CCA_RSSI_LMT_EN_C_M;
+		cr->rssi_nocca_low_th_a = R1B_RX_RSSI_NOCCA_LOW_TH_C;
+		cr->rssi_nocca_low_th_a_m = R1B_RX_RSSI_NOCCA_LOW_TH_C_M;
 #if 0
 		cr->path0_ib_pbk = PATH0_R_IB_PBK_C;
 		cr->path0_ib_pbk_m = PATH0_R_IB_PBK_C_M;

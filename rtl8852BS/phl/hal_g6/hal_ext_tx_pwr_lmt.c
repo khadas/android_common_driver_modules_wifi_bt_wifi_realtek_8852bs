@@ -23,14 +23,30 @@ rtw_hal_set_power_lmt(void *hal, u8 band_idx)
 	enum rtw_hal_status status = RTW_HAL_STATUS_SUCCESS;
 	enum phl_phy_idx phy_idx = HW_PHY_0;
 
-	if (band_idx == 1)
-		phy_idx = HW_PHY_1;
-
+	if (band_idx == 1) {
+		if (hal_info->hal_com->dbcc_en) {
+			phy_idx = HW_PHY_1;
+		} else {
+			PHL_WARN("%s: band_idx(%d) dbcc_en(%d)\n", __func__,
+				 band_idx, hal_info->hal_com->dbcc_en);
+			return status;
+		}
+	}
 	status = rtw_hal_rf_set_power(hal_info, phy_idx, PWR_LIMIT);
-
 	return status;
 }
 
+void
+rtw_hal_set_ext_pwr_lmt_en(void *hal,
+		bool enable)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+	struct rtw_hal_com_t *hal_com = hal_info->hal_com;
+
+	PHL_INFO("%s: en(%d)\n", __func__, enable);
+
+	hal_com->ext_pwr_lmt_en = enable;
+}
 
 void
 rtw_hal_enable_ext_pwr_lmt(void *hal, u8 hw_band,
@@ -44,9 +60,6 @@ rtw_hal_enable_ext_pwr_lmt(void *hal, u8 hw_band,
 	PHL_INFO("%s\n", __func__);
 
 	tpu_ext_pwr_lmt_info = &(hal_com->rtw_tpu_ext_pwr_lmt_i[hw_band]);
-
-	/* enable external tx power limit mechanism */
-	hal_com->ext_pwr_lmt_en = true;
 
 	/* Fill external tx power limit into hal_com->rtw_tpu_ext_pwr_lmt_info */
 	for (i = 0; i < HAL_MAX_PATH; i++) {
@@ -65,5 +78,7 @@ rtw_hal_enable_ext_pwr_lmt(void *hal, u8 hw_band,
 
 	rtw_hal_rf_update_ext_pwr_lmt_table(hal_info);
 
+	/* enable external tx power limit mechanism */
+	hal_com->ext_pwr_lmt_en = true;
 }
 

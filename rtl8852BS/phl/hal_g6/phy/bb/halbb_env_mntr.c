@@ -104,6 +104,8 @@ void halbb_ccx_top_setting_init(struct bb_info *bb)
 	halbb_set_reg_phy0_1(bb, cr->ccx_trig, cr->ccx_trig_m, 1);
 	halbb_set_reg_phy0_1(bb, cr->ccx_edcca_opt, cr->ccx_edcca_opt_m,
 			     CCX_EDCCA_BW20_0);
+	halbb_set_reg_phy0_1(bb, cr->ccx_source_sel, cr->ccx_source_sel_m,
+			     4); /*dccl output, full bandwidth*/
 }
 
 void halbb_ccx_racing_release(struct bb_info *bb)
@@ -3012,6 +3014,8 @@ void halbb_cr_cfg_env_mntr_init(struct bb_info *bb)
 		cr->ccx_trig_m = MEASUREMENT_TRIG_A_M;
 		cr->ccx_edcca_opt = CCX_EDCCA_OPT_A;
 		cr->ccx_edcca_opt_m = CCX_EDCCA_OPT_A_M;
+		cr->ccx_source_sel = CCX_SOURCE_SEL_A;
+		cr->ccx_source_sel_m = CCX_SOURCE_SEL_A_M;
 		cr->clm_unit_idx = CLM_COUNTER_UNIT_A;
 		cr->clm_unit_idx_m = CLM_COUNTER_UNIT_A_M;
 		cr->clm_opt = CLM_CCA_OPT_A;
@@ -3248,6 +3252,8 @@ void halbb_cr_cfg_env_mntr_init(struct bb_info *bb)
 		cr->ccx_trig_m = MEASUREMENT_TRIG_C_M;
 		cr->ccx_edcca_opt = CCX_EDCCA_OPT_C;
 		cr->ccx_edcca_opt_m = CCX_EDCCA_OPT_C_M;
+		cr->ccx_source_sel = CCX_SOURCE_SEL_C;
+		cr->ccx_source_sel_m = CCX_SOURCE_SEL_C_M;
 		cr->clm_unit_idx = CLM_COUNTER_UNIT_C;
 		cr->clm_unit_idx_m = CLM_COUNTER_UNIT_C_M;
 		cr->clm_opt = CLM_CCA_OPT_C;

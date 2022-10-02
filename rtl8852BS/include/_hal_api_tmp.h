@@ -199,15 +199,6 @@ static inline bool rtw_hal_sec_read_cam_is_gk(_adapter *adapter, u8 id)
 	return _TRUE;
 }
 
-static inline u8 rtw_hal_get_current_tx_rate(_adapter *adapter, struct sta_info *psta)
-{
-	return 0;
-}
-static u8 rtw_get_current_tx_sgi(_adapter *padapter, struct sta_info *psta)
-{
-	return 0;
-}
-
 static inline void rtw_hal_linked_info_dump(_adapter *padapter, u8 benable)
 {}
 
@@ -237,7 +228,7 @@ static inline u8 rtw_hal_get_vht_ndp_tx_rate(_adapter *adapter, u8 bfer_str_num)
 }
 
 static inline u8 rtw_hal_get_sounding_info(_adapter *adapter,u16 *throughput,
-				       u8 total_bfee_num, u8 *tx_rate)
+				       u8 total_bfee_num, u16 *tx_rate)
 {
 	return 0;
 }
@@ -246,9 +237,6 @@ static inline void rtw_hal_dump_target_tx_power(void *sel, _adapter *adapter)
 {}
 
 static inline void rtw_hal_dump_tx_power_by_rate(void *sel, _adapter *adapter)
-{}
-
-static inline void rtw_hal_dump_macaddr(void *sel, _adapter *adapter)
 {}
 
 static inline void rtw_hal_dump_trx_mode(void *sel, _adapter *adapter)
@@ -343,34 +331,6 @@ static inline s32 rtw_hal_fill_h2c_cmd(_adapter *padapter, u8 ElementID, u32 Cmd
 */
 	return 0;
 }
-
-#ifdef CONFIG_DFS_MASTER
-static inline void rtw_odm_radar_detect_reset(_adapter *adapter)
-{
-	//phydm_radar_detect_reset(adapter_to_phydm(adapter));
-}
-
-static inline void rtw_odm_radar_detect_disable(_adapter *adapter)
-{
-	//phydm_radar_detect_disable(adapter_to_phydm(adapter));
-}
-
-/* called after ch, bw is set */
-static inline void rtw_odm_radar_detect_enable(_adapter *adapter)
-{
-	//phydm_radar_detect_enable(adapter_to_phydm(adapter));
-}
-
-static inline BOOLEAN rtw_odm_radar_detect(_adapter *adapter)
-{
-	return 0;//phydm_radar_detect(adapter_to_phydm(adapter));
-}
-
-static inline u8 rtw_odm_radar_detect_polling_int_ms(struct dvobj_priv *dvobj)
-{
-	return 0;//phydm_dfs_polling_time(dvobj_to_phydm(dvobj));
-}
-#endif /* CONFIG_DFS_MASTER */
 
 static inline void rtw_hal_reqtxrpt(_adapter *padapter, u8 macid)
 {

@@ -30,8 +30,16 @@
 	#define DRV_BB_DFS_DISABLE
 #endif
 
+#ifdef CONFIG_PHL_THERMAL_PROTECT
+	#define CONFIG_HAL_THERMAL_PROTECT
+#endif
+
 #ifdef CONFIG_BB_TIMER_SUPPORT_DISABLE
 	#define DRV_BB_TIMER_SUPPORT_DISABLE
+#endif
+
+#ifdef CONFIG_PHL_PATH_DIV
+	#define DRV_BB_PATH_DIV_ENABLE
 #endif
 
 /* Compile flag for fw for different cut versions.
@@ -44,8 +52,9 @@
 #endif
 
 #ifdef CONFIG_RTL8852B
-#define MAC_FW_8852B_U1 1
+/*#define MAC_FW_8852B_U1 1 */
 #define MAC_FW_8852B_U2 1
+#define MAC_FW_8852B_U3 1
 #endif
 
 

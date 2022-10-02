@@ -165,3 +165,48 @@ u32 rtw_phl_get_phy_stat_info(void *phl, enum phl_band_idx hw_band,
 
 	return rtw_hal_get_phy_stat_info(phl_info->hal, hw_band, phy_stat);
 }
+
+void rtw_phl_enable_interrupt_sync(struct rtw_phl_com_t* phl_com)
+{
+#ifdef CONFIG_SYNC_INTERRUPT
+	struct rtw_phl_evt_ops *evt_ops = &phl_com->evt_ops;
+
+	evt_ops->set_interrupt_caps(phl_com->drv_priv, true);
+#else
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+
+	rtw_hal_enable_interrupt(phl_com, phl_info->hal);
+#endif /* CONFIG_SYNC_INTERRUPT */
+}
+
+void rtw_phl_disable_interrupt_sync(struct rtw_phl_com_t* phl_com)
+{
+#ifdef CONFIG_SYNC_INTERRUPT
+	struct rtw_phl_evt_ops *evt_ops = &phl_com->evt_ops;
+
+	evt_ops->set_interrupt_caps(phl_com->drv_priv, false);
+#else
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+
+	rtw_hal_disable_interrupt(phl_com, phl_info->hal);
+#endif /* CONFIG_SYNC_INTERRUPT */
+}
+
+
+#ifdef CONFIG_PHL_FW_DUMP_EFUSE
+void rtw_phl_fw_dump_efuse_precfg(struct rtw_phl_com_t* phl_com)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+
+	phl_datapath_start(phl_info);
+	rtw_phl_enable_interrupt_sync(phl_com);
+}
+
+void rtw_phl_fw_dump_efuse_postcfg(struct rtw_phl_com_t* phl_com)
+{
+	struct phl_info_t *phl_info = (struct phl_info_t *)phl_com->phl_priv;
+
+	rtw_phl_disable_interrupt_sync(phl_com);
+	phl_datapath_stop(phl_info);
+}
+#endif

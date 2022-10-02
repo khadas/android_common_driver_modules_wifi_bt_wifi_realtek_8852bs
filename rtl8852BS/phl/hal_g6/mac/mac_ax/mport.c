@@ -1095,7 +1095,7 @@ static u32 chk_bcnq_empty(struct mac_ax_adapter *adapter, u8 band, u8 port,
 	MAC_REG_W32(ptcl_dbg_regl[band], val32);
 	PLTFM_DELAY_US(PTCL_DBG_DLY_US);
 
-	cnt = CHK_BCNQ_CNT;
+	cnt = CHK_BCNQ_CNT * bcn_spc;
 	emp_cont_cnt = 0;
 	do {
 		val32 = MAC_REG_R32(ptcl_dbg_info_regl[band]);
@@ -1114,10 +1114,10 @@ static u32 chk_bcnq_empty(struct mac_ax_adapter *adapter, u8 band, u8 port,
 			return MACSUCCESS;
 		}
 
-		ret = dly_port_tu(adapter, band, port, bcn_spc);
+		ret = dly_port_tu(adapter, band, port, 1);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR] dly B%dP%d %d tu fail %d\n",
-				      band, port, bcn_spc, val32);
+				      band, port, 1, val32);
 			return ret;
 		}
 		cnt--;
@@ -1134,7 +1134,7 @@ static u32 chk_bcnq_empty(struct mac_ax_adapter *adapter, u8 band, u8 port,
 	MAC_REG_W32(ptcl_dbg_regl[band], val32);
 	PLTFM_DELAY_US(PTCL_DBG_DLY_US);
 
-	cnt = CHK_BCNQ_CNT;
+	cnt = CHK_BCNQ_CNT * bcn_spc;
 	emp_cont_cnt = 0;
 	do {
 		val32 = MAC_REG_R32(ptcl_dbg_info_regl[band]);
@@ -1147,10 +1147,10 @@ static u32 chk_bcnq_empty(struct mac_ax_adapter *adapter, u8 band, u8 port,
 		if (emp_cont_cnt >= BCNQ_EMP_CONT_CNT)
 			return MACSUCCESS;
 
-		ret = dly_port_tu(adapter, band, port, bcn_spc);
+		ret = dly_port_tu(adapter, band, port, 1);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR] dly B%dP%d %d tu fail %d\n",
-				      band, port, bcn_spc, val32);
+				      band, port, 1, val32);
 			return ret;
 		}
 		cnt--;
@@ -1161,7 +1161,8 @@ static u32 chk_bcnq_empty(struct mac_ax_adapter *adapter, u8 band, u8 port,
 	return MACPOLLTO;
 }
 
-static u32 fast_bcn_drop(struct mac_ax_adapter *adapter, u8 band, u8 port)
+static u32 fast_bcn_drop(struct mac_ax_adapter *adapter, u8 band, u8 port,
+			 struct mac_ax_port_info *pinfo)
 {
 	struct mac_ax_intf_ops *ops = adapter_to_intf_ops(adapter);
 	struct mac_ax_port_cfg_para cfg_para;
@@ -1186,7 +1187,7 @@ static u32 fast_bcn_drop(struct mac_ax_adapter *adapter, u8 band, u8 port)
 	val32 = MAC_REG_R32(bcndrp_regl[band]) | port_drp_sel;
 	MAC_REG_W32(bcndrp_regl[band], val32);
 
-	if (port == MAC_AX_PORT_0) {
+	if (port == MAC_AX_PORT_0 && pinfo->mbssid_en_stat == MAC_AX_MBSSID_ENABLED) {
 		mbid_drp_sel = B_AX_BCN_DROP_ALL_P0MB1 |
 			       B_AX_BCN_DROP_ALL_P0MB2 |
 			       B_AX_BCN_DROP_ALL_P0MB3;
@@ -1242,7 +1243,7 @@ static u32 fast_bcn_drop(struct mac_ax_adapter *adapter, u8 band, u8 port)
 		return ret;
 	}
 
-	if (port == MAC_AX_PORT_0) {
+	if (port == MAC_AX_PORT_0 && pinfo->mbssid_en_stat == MAC_AX_MBSSID_ENABLED) {
 		ret = _get_max_mbid(adapter, &mbid_num);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR] get_max_mbid %d\n", ret);
@@ -1290,7 +1291,7 @@ static u32 fast_bcn_drop(struct mac_ax_adapter *adapter, u8 band, u8 port)
 	val32 = MAC_REG_R32(bcndrp_regl[band]) & ~port_drp_sel;
 	MAC_REG_W32(bcndrp_regl[band], val32);
 
-	if (port == MAC_AX_PORT_0) {
+	if (port == MAC_AX_PORT_0 && pinfo->mbssid_en_stat == MAC_AX_MBSSID_ENABLED) {
 		val32 = MAC_REG_R32(mbssid_drp_regl[band]) & ~mbid_drp_sel;
 		MAC_REG_W32(mbssid_drp_regl[band], val32);
 	}
@@ -1328,7 +1329,7 @@ u32 _patch_port_dis_flow(struct mac_ax_adapter *adapter, u8 band, u8 port,
 		bcn_set_bk = MAC_REG_R32(phb_regl[band][port]);
 
 	if (pinfo->stat == PORT_ST_AP || pinfo->stat == PORT_ST_ADHOC) {
-		ret = fast_bcn_drop(adapter, band, port);
+		ret = fast_bcn_drop(adapter, band, port, pinfo);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR] fast bcn drop fail %d\n",
 				      ret);
@@ -1370,7 +1371,7 @@ u32 _patch_port_dis_flow(struct mac_ax_adapter *adapter, u8 band, u8 port,
 		}
 	}
 
-	if (port == MAC_AX_PORT_0) {
+	if (port == MAC_AX_PORT_0 && pinfo->mbssid_en_stat == MAC_AX_MBSSID_ENABLED) {
 		ret = _get_max_mbid(adapter, &mbid_max);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR] get_max_mbid %d\n", ret);
@@ -1586,6 +1587,8 @@ fail:
 		}
 
 		ret = _patch_port_dis_flow(adapter, band, port, pinfo);
+
+		pinfo->mbssid_en_stat = MAC_AX_MBSSID_INIT;
 		break;
 
 	case MAC_AX_PCFG_TX_SW:
@@ -1864,6 +1867,7 @@ fail:
 				      band, port, mbssid_idx, ret);
 			return ret;
 		}
+		pinfo->mbssid_en_stat = MAC_AX_MBSSID_ENABLED;
 		break;
 
 	case MAC_AX_PCFG_BCN_ERLY:
@@ -2001,7 +2005,8 @@ fail:
 		break;
 
 	case MAC_AX_PCFG_BCN_DRP_ALL:
-		if (port == MAC_AX_PORT_0 && mbssid_idx) {
+		if (port == MAC_AX_PORT_0 && mbssid_idx &&
+		    pinfo->mbssid_en_stat == MAC_AX_MBSSID_ENABLED) {
 			val32 = MAC_REG_R32(mbssid_drp_regl[band]);
 			w_val32 = set_val ?
 				  val32 | b_mbid_drp_l[mbssid_idx - 1] :
@@ -2218,6 +2223,9 @@ fail:
 
 	pinfo = &adapter->port_info[get_bp_idx(band, port)];
 
+	if (mbid_num)
+		pinfo->mbssid_en_stat = MAC_AX_MBSSID_ENABLED;
+
 	ret = check_mac_en(adapter, band, MAC_AX_CMAC_SEL);
 	if (ret != MACSUCCESS) {
 		PLTFM_MSG_ERR("[ERR]chk mac en %d\n", ret);
@@ -2352,6 +2360,16 @@ fail:
 		}
 	}
 
+	if (port == MAC_AX_PORT_0) {
+		ret = port0_subspc_set(adapter, band, mbid_num,
+				       &bcn_erly, &hold_time);
+		if (ret != MACSUCCESS) {
+			PLTFM_MSG_ERR("[ERR]B%dP%d subspc set fail %d\n",
+				      band, port, ret);
+			return ret;
+		}
+	}
+
 	cfg_para.val = hold_time;
 	ret = mac_port_cfg(adapter, MAC_AX_PCFG_BCN_HOLD_TIME, &cfg_para);
 	if (ret == MACSETVALERR)
@@ -2434,14 +2452,6 @@ fail:
 		ret = port0_mbid_set(adapter, band, mbid_num, mbid_max);
 		if (ret != MACSUCCESS) {
 			PLTFM_MSG_ERR("[ERR]B%dP%d mbid set fail %d\n",
-				      band, port, ret);
-			return ret;
-		}
-
-		ret = port0_subspc_set(adapter, band, mbid_num,
-				       &bcn_erly, &hold_time);
-		if (ret != MACSUCCESS) {
-			PLTFM_MSG_ERR("[ERR]B%dP%d subspc set fail %d\n",
 				      band, port, ret);
 			return ret;
 		}

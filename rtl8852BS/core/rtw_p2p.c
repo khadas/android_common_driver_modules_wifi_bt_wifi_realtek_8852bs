@@ -2939,7 +2939,7 @@ int rtw_p2p_enable(_adapter *padapter, enum P2P_ROLE role)
 	struct wifidirect_info *pwdinfo = &(padapter->wdinfo);
 
 	if (role == P2P_ROLE_DEVICE || role == P2P_ROLE_CLIENT || role == P2P_ROLE_GO) {
-#ifndef RTW_USE_CFG80211_REPORT_PROBE_REQ
+#ifndef CONFIG_CFG80211_REPORT_PROBE_REQ
 #if defined(CONFIG_CONCURRENT_MODE) && !RTW_P2P_GROUP_INTERFACE
 		/*	Commented by Albert 2011/12/30 */
 		/*	The driver just supports 1 P2P group operation. */

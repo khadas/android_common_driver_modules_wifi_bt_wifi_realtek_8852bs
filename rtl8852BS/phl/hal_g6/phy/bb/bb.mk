@@ -47,7 +47,9 @@ halbb-y += $(path_halbb_d1)/halbb.o \
 			$(path_halbb_d1)/halbb_ant_div.o \
 			$(path_halbb_d1)/halbb_dig.o \
 			$(path_halbb_d1)/halbb_fwofld.o \
-			$(path_halbb_d1)/halbb_dyn_csi_rsp.o
+			$(path_halbb_d1)/halbb_dyn_csi_rsp.o \
+			$(path_halbb_d1)/halbb_path_div.o \
+			$(path_halbb_d1)/halbb_dyn_dtr.o
 
 ifeq ($(CONFIG_RTL8852A), y)
 ic := 8852a

@@ -799,6 +799,20 @@ u32 mac_get_wl_dis_val(struct mac_ax_adapter *adapter, u8 *val)
 		return ret;
 	}
 
-	return mac_get_gpio_val(adapter, gpio, val);
+	return ops->get_gpio_val(adapter, gpio, val);
+}
+
+u32 mac_get_uart_fw_dbg_gpio(struct mac_ax_adapter *adapter, u8 *uart_tx_gpio, u8 *uart_rx_gpio)
+{
+	if (adapter->gpio_info.uart_tx_gpio == 0xFF &&
+	    adapter->gpio_info.uart_rx_gpio == 0xFF) {
+		/* not initialized*/
+		return MACNOTSUP;
+	}
+
+	*uart_tx_gpio = adapter->gpio_info.uart_tx_gpio;
+	*uart_rx_gpio = adapter->gpio_info.uart_rx_gpio;
+
+	return MACSUCCESS;
 }
 

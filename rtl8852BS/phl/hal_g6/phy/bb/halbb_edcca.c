@@ -50,6 +50,13 @@ void halbb_set_edcca_thre(struct bb_info *bb)
 	halbb_set_reg(bb, cr->r_edcca_level, cr->r_edcca_level_m, l2h);
 	
 	halbb_set_reg(bb, cr->r_dwn_level, cr->r_dwn_level_m, (u32)bb_edcca->th_hl_diff);
+	/* cca_sec = edcca_sec || ppducca_sec : ppducca here is not equal to ofdm_cca from packet detection*/
+	/* edcca_level_s20 = r_edcca_level*/
+	/* edcca_level_s40 = r_edcca_level + 3*/
+	/* edcca_level_s80 = r_edcca_level + 6*/
+	/* ppdu_level_s20 = max(r_ppdu_level, r_obss_level)*/
+	/* ppdu_level_s40 = max(r_ppdu_level, r_obss_level + 3)*/
+	/* ppdu_level_s80 = max(r_ppdu_level + 3, r_obss_level + 6)*/
 }
 
 u8 halbb_edcca_thre_transfer_rssi(struct bb_info *bb)
@@ -71,14 +78,6 @@ void halbb_edcca_thre_calc(struct bb_info *bb)
 	struct bb_edcca_info *bb_edcca = &bb->bb_edcca_i;
 	u8 band = bb->hal_com->band[0].cur_chandef.band;
 	u8 th_h = 0;
-
-	BB_DBG(bb, DBG_EDCCA, "[EDCCA] Mode=%d, Band=%d\n",
-	       bb_edcca->edcca_mode, band);
-
-	BB_DBG(bb, DBG_EDCCA,
-	       "[EDCCA] Adapt-5G_th=%d(dBm), Adapt-2.4G_th=%d(dBm),Carrier-sense_th=%d(dBm)\n", 
-	       bb_edcca->th_h_5g - 128, bb_edcca->th_h_2p4g - 128,
-	       bb_edcca->th_h_cs - 128);
 
 	if (bb_edcca->edcca_mode == EDCCA_NORMAL_MODE) {
 		BB_DBG(bb, DBG_EDCCA, "Normal Mode without EDCCA\n");
@@ -120,8 +119,8 @@ void halbb_edcca_event_nofity(struct bb_info *bb, u8 pause_type)
 	u8 pause_result = 0;
 	u32 val[5] = {0};
 
-	if (bb_edcca->edcca_mode != EDCCA_NORMAL_MODE)
-		return;
+	BB_DBG(bb, DBG_EDCCA, "[%s], pause_type=%d, edcca_mode=%d\n",
+	       __func__, pause_type, bb_edcca->edcca_mode);
 
 	val[0] = EDCCA_MAX;
 	pause_result = halbb_pause_func(bb, F_EDCCA, pause_type, HALBB_PAUSE_LV_2, 1, val);
@@ -133,12 +132,42 @@ void halbb_edcca_log(struct bb_info *bb)
 	struct edcca_hw_rpt *rpt = &bb_edcca->edcca_rpt;
 	struct bb_edcca_cr_info *cr = &bb->bb_edcca_i.bb_edcca_cr_i;
 	enum channel_width bw = 0;
-	u8 edcca_p_th = 0;
-	u8 edcca_s_th = 0;
-	u8 edcca_diff = 0;
-	bool edcca_en = 0;
+	struct bb_ch_info *ch = &bb->bb_ch_i;
+	u8 band = bb->hal_com->band[0].cur_chandef.band;
+	char ext_loss[HALBB_MAX_PATH][HALBB_SNPRINT_SIZE];
+	u8 i = 0;
 
 	bw = bb->hal_com->band[0].cur_chandef.bw;
+
+	BB_DBG(bb, DBG_EDCCA, "[EDCCA] Mode=%d, Band=%d\n",
+	       bb_edcca->edcca_mode, band);
+
+	BB_DBG(bb, DBG_EDCCA,
+	       "[EDCCA] Adapt-5G_th=%d(dBm), Adapt-2.4G_th=%d(dBm),Carrier-sense_th=%d(dBm)\n",
+	       bb_edcca->th_h_5g - 128, bb_edcca->th_h_2p4g - 128,
+	       bb_edcca->th_h_cs - 128);
+
+	BB_DBG(bb, DBG_EDCCA, "th_h=%d(dBm), th_l=%d(dBm)\n",
+	       bb_edcca->th_h - 128, bb_edcca->th_l - 128);
+
+	for (i = 0; i < HALBB_MAX_PATH; i++)
+		halbb_print_sign_frac_digit(bb, ch->ext_loss[i], 8, 2,
+					    ext_loss[i], HALBB_SNPRINT_SIZE);
+
+	halbb_print_sign_frac_digit(bb, ch->ext_loss_avg, 8, 2, bb->dbg_buf,
+				    HALBB_SNPRINT_SIZE);
+
+#if (defined(HALBB_COMPILE_ABOVE_4SS))
+	BB_DBG(bb, DBG_EDCCA,
+	       "loss{avg, a, b, c, d} = {%s,%s,%s,%s,%s} dB=\n",
+	       bb->dbg_buf, ext_loss[0], ext_loss[1], ext_loss[2], ext_loss[3]);
+#elif (defined(HALBB_COMPILE_ABOVE_2SS))
+	BB_DBG(bb, DBG_EDCCA,
+	       "loss{avg, a, b} = {%s,%s,%s} dB\n",
+	       bb->dbg_buf, ext_loss[0], ext_loss[1]);
+#else
+	BB_DBG(bb, DBG_EDCCA, "loss=%s dB\n", ext_loss[0]);
+#endif
 
 	switch (bw) {
 	case CHANNEL_WIDTH_80_80:
@@ -153,8 +182,8 @@ void halbb_edcca_log(struct bb_info *bb)
 		       rpt->flag_s40, rpt->flag_s80);
 		BB_DBG(bb, DBG_EDCCA,
 		       "pwdb {FB,p20,s20,s40,s80}={%d,%d,%d,%d,%d}(dBm)\n",
-		       rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20, rpt->pwdb_s40,
-		       rpt->pwdb_s80);
+		       rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20,
+		       rpt->pwdb_s40, rpt->pwdb_s80);
 		break;
 	case CHANNEL_WIDTH_80:
 		BB_DBG(bb, DBG_EDCCA,
@@ -165,11 +194,12 @@ void halbb_edcca_log(struct bb_info *bb)
 		       rpt->flag_s40);
 		BB_DBG(bb, DBG_EDCCA,
 		       "pwdb {FB,p20,s20,s40}={%d,%d,%d,%d}(dBm)\n",
-		       rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20, rpt->pwdb_s40);
+		       rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20,
+		       rpt->pwdb_s40);
 		break;
 	case CHANNEL_WIDTH_40:
-		BB_DBG(bb, DBG_EDCCA, "pwdb per20{0,1}={%d,%d}(dBm)\n", rpt->pwdb_0,
-		       rpt->pwdb_1);
+		BB_DBG(bb, DBG_EDCCA, "pwdb per20{0,1}={%d,%d}(dBm)\n",
+		       rpt->pwdb_0, rpt->pwdb_1);
 		BB_DBG(bb, DBG_EDCCA, "path=%d, flag {FB,p20,s20}={%d,%d,%d}\n",
 		       rpt->path, rpt->flag_fb, rpt->flag_p20, rpt->flag_s20);
 		BB_DBG(bb, DBG_EDCCA, "pwdb {FB,p20,s20}={%d,%d,%d}(dBm)\n",
@@ -177,23 +207,14 @@ void halbb_edcca_log(struct bb_info *bb)
 		break;
 	case CHANNEL_WIDTH_20:
 		BB_DBG(bb, DBG_EDCCA, "pwdb per20{0}={%d}(dBm)\n", rpt->pwdb_0);
-		BB_DBG(bb, DBG_EDCCA, "path=%d, flag {FB,p20}={%d,%d}\n", rpt->path,
-		       rpt->flag_fb, rpt->flag_p20);
-		BB_DBG(bb, DBG_EDCCA, "pwdb {FB,p20}={%d,%d}(dBm)\n", rpt->pwdb_fb,
-		       rpt->pwdb_p20);
+		BB_DBG(bb, DBG_EDCCA, "path=%d, flag {FB,p20}={%d,%d}\n",
+		       rpt->path, rpt->flag_fb, rpt->flag_p20);
+		BB_DBG(bb, DBG_EDCCA, "pwdb {FB,p20}={%d,%d}(dBm)\n",
+		       rpt->pwdb_fb, rpt->pwdb_p20);
 		break;
 	default:
 		break;
 	}
-
-	edcca_en = (bool)halbb_get_reg(bb, cr->r_snd_en, cr->r_snd_en_m);
-	edcca_p_th = (u8)halbb_get_reg(bb, cr->r_edcca_level_p, cr->r_edcca_level_p_m);
-	edcca_s_th = (u8)halbb_get_reg(bb, cr->r_edcca_level, cr->r_edcca_level_m);
-	edcca_diff = (u8)halbb_get_reg(bb, cr->r_dwn_level, cr->r_dwn_level_m);
-
-	BB_DBG(bb, DBG_EDCCA,
-	       "reg val{en, p20_h_th, sec_h_th, diff}:{%d, %d, %d, %d}\n",
-	       edcca_en, edcca_p_th, edcca_s_th, edcca_diff);
 }
 
 void halbb_edcca_get_result(struct bb_info *bb)
@@ -283,13 +304,11 @@ void halbb_edcca(struct bb_info *bb)
 {
 	struct bb_edcca_info *bb_edcca = &bb->bb_edcca_i;
 
-	if (halbb_edcca_abort(bb))
-		return;
-
 	bb_edcca->edcca_mode = bb->phl_com->edcca_mode;
-	halbb_edcca_thre_calc(bb);
-	BB_DBG(bb, DBG_EDCCA, "th_h=%d(dBm), th_l=%d(dBm)\n",
-	       bb_edcca->th_h - 128, bb_edcca->th_l - 128);
+
+	if (halbb_edcca_abort(bb) == false) /*show edcca log when edcca is paused*/
+		halbb_edcca_thre_calc(bb);
+
 	halbb_edcca_get_result(bb);
 	halbb_edcca_log(bb);
 }
@@ -308,6 +327,9 @@ void halbb_fw_edcca(struct bb_info *bb)
 
 	bb_edcca->edcca_mode = phl->edcca_mode;
 	//bb_edcca->edcca_mode = EDCCA_ADAPT_MODE;
+
+	BB_DBG(bb, DBG_EDCCA, "notify_switch_band/fw_edcca, edcca_mode=%d\n",
+	       bb_edcca->edcca_mode);
 
 	if (halbb_edcca_abort(bb))
 		return;
@@ -341,19 +363,153 @@ void halbb_fw_edcca(struct bb_info *bb)
 		BB_WARNING(" H2C cmd: FW Tx error!!\n");
 }
 
+void halbb_edcca_cnsl_log(struct bb_info *bb, u32 *_used, char *output,
+			  u32 *_out_len)
+{
+	struct bb_edcca_info *bb_edcca = &bb->bb_edcca_i;
+	struct edcca_hw_rpt *rpt = &bb_edcca->edcca_rpt;
+	struct bb_edcca_cr_info *cr = &bb->bb_edcca_i.bb_edcca_cr_i;
+	struct bb_ch_info *ch = &bb->bb_ch_i;
+	enum channel_width bw = 0;
+	u32 used = *_used;
+	u32 out_len = *_out_len;
+	u8 edcca_p_th = 0;
+	u8 edcca_s_th = 0;
+	u8 edcca_diff = 0;
+	u8 ppdu_s_th = 0;
+	u8 obss_th = 0;
+	bool edcca_en = 0;
+	char ext_loss[HALBB_MAX_PATH][HALBB_SNPRINT_SIZE];
+	u8 i = 0;
+
+	bw = bb->hal_com->band[0].cur_chandef.bw;
+
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "Adapt-5G_th=%d(dBm), Adapt-2.4G_th=%d(dBm), Carrier-sense_th=%d(dBm)\n",
+		    bb_edcca->th_h_5g - 128, bb_edcca->th_h_2p4g - 128,
+		    bb_edcca->th_h_cs - 128);
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "Mode=%d, th_h=%d(dBm), th_l=%d(dBm)\n",
+		    bb_edcca->edcca_mode, bb_edcca->th_h - 128,
+		    bb_edcca->th_l - 128);
+
+	halbb_edcca_get_result(bb);
+
+	for (i = 0; i < HALBB_MAX_PATH; i++)
+		halbb_print_sign_frac_digit(bb, ch->ext_loss[i], 8, 2,
+					    ext_loss[i], HALBB_SNPRINT_SIZE);
+
+	halbb_print_sign_frac_digit(bb, ch->ext_loss_avg, 8, 2, bb->dbg_buf,
+				    HALBB_SNPRINT_SIZE);
+
+#if (defined(HALBB_COMPILE_ABOVE_4SS))
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "ext_loss{avg,a,b,c,d}={%s,%s,%s,%s,%s} dB\n",
+		    bb->dbg_buf, ext_loss[0], ext_loss[1], ext_loss[2],
+		    ext_loss[3]);
+#elif (defined(HALBB_COMPILE_ABOVE_2SS))
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "ext_loss{avg,a,b}={%s,%s,%s} dB\n",
+		    bb->dbg_buf, ext_loss[0], ext_loss[1]);
+#else
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "ext_loss=%s dB\n", ext_loss[0]);
+#endif
+
+	switch (bw) {
+	case CHANNEL_WIDTH_80_80:
+	case CHANNEL_WIDTH_160:
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb per20{0,1,2,3,4,5,6,7}={%d,%d,%d,%d,%d,%d,%d,%d}(dBm)\n",
+			    rpt->pwdb_0, rpt->pwdb_1, rpt->pwdb_2,
+			    rpt->pwdb_3, rpt->pwdb_4, rpt->pwdb_5,
+			    rpt->pwdb_6, rpt->pwdb_7);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "path-%d, edcca_flag {FB,p20,s20,s40,s80}={%d,%d,%d,%d,%d}\n",
+			    rpt->path, rpt->flag_fb, rpt->flag_p20,
+			    rpt->flag_s20, rpt->flag_s40, rpt->flag_s80);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb {FB,p20,s20,s40,s80}={%d,%d,%d,%d,%d}(dBm)\n",
+			    rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20,
+			    rpt->pwdb_s40, rpt->pwdb_s80);
+		break;
+	case CHANNEL_WIDTH_80:
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb per20{0,1,2,3}={%d,%d,%d,%d}(dBm)\n",
+			    rpt->pwdb_0, rpt->pwdb_1, rpt->pwdb_2, rpt->pwdb_3);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "path-%d, edcca_flag {FB,p20,s20,s40}={%d,%d,%d,%d}\n",
+			    rpt->path, rpt->flag_fb, rpt->flag_p20,
+			    rpt->flag_s20, rpt->flag_s40);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb {FB,p20,s20,s40}={%d,%d,%d,%d}(dBm)\n",
+			    rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20,
+			    rpt->pwdb_s40);
+		break;
+	case CHANNEL_WIDTH_40:
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb per20{0,1}={%d,%d}(dBm)\n",
+			    rpt->pwdb_0, rpt->pwdb_1);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "path-%d, edcca_flag {FB,p20,s20}={%d,%d,%d}\n",
+			    rpt->path, rpt->flag_fb, rpt->flag_p20,
+			    rpt->flag_s20);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb {FB,p20,s20}={%d,%d,%d}(dBm)\n",
+			    rpt->pwdb_fb, rpt->pwdb_p20, rpt->pwdb_s20);
+		break;
+	case CHANNEL_WIDTH_20:
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb per20{0}={%d}(dBm)\n", rpt->pwdb_0);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "path-%d, edcca_flag {FB,p20}={%d,%d}\n",
+			    rpt->path, rpt->flag_fb, rpt->flag_p20);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "pwdb {FB,p20}={%d,%d}(dBm)\n",
+			    rpt->pwdb_fb, rpt->pwdb_p20);
+		break;
+	default:
+		break;
+	}
+
+	edcca_en = (bool)halbb_get_reg(bb, cr->r_snd_en, cr->r_snd_en_m);
+	edcca_diff = (u8)halbb_get_reg(bb, cr->r_dwn_level, cr->r_dwn_level_m);
+	edcca_p_th = (u8)halbb_get_reg(bb, cr->r_edcca_level_p,
+				       cr->r_edcca_level_p_m);
+	edcca_s_th = (u8)halbb_get_reg(bb, cr->r_edcca_level,
+				       cr->r_edcca_level_m);
+	ppdu_s_th = (u8)halbb_get_reg(bb, cr->r_ppdu_level,
+				       cr->r_ppdu_level_m);
+	obss_th = (u8)halbb_get_reg(bb, cr->r_obss_level, cr->r_obss_level_m);
+
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "r_snd_en=%d, r_dwn_level = %d, r_edcca_level_p = %d(%d dBm)\n",
+		    edcca_en, edcca_diff, edcca_p_th, edcca_p_th - 128);
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "r_edcca_level = %d(%d dBm), r_ppdu_level = %d(%d dBm), r_obss_level = %d(%d dBm)\n",
+		    edcca_s_th, edcca_s_th - 128, ppdu_s_th, ppdu_s_th - 128,
+		    obss_th, obss_th - 128);
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "cca_sec = edcca_sec || ppducca_sec\n");
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "edcca_s20 : r_edcca_level    , ppducca_s20 : max(r_ppdu_level    , r_obss_level    )\n");
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "edcca_s40 : r_edcca_level + 3, ppducca_s40 : max(r_ppdu_level    , r_obss_level + 3)\n");
+	BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+		    "edcca_s80 : r_edcca_level + 6, ppducca_s80 : max(r_ppdu_level + 3, r_obss_level + 6)\n");
+}
+
 void halbb_edcca_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			      char *output, u32 *_out_len)
 {
 	struct bb_edcca_info *bb_edcca = &bb->bb_edcca_i;
-	struct edcca_hw_rpt *rpt = &bb_edcca->edcca_rpt;
 	struct bb_h2c_fw_edcca *fw_edcca_i = &bb->bb_fw_edcca_i;
-	enum channel_width bw = 0;
 	char help[] = "-h";
 	u32 var[10] = {0};
 	u32 used = *_used;
 	u32 out_len = *_out_len;
 
-	bw = bb->hal_com->band[0].cur_chandef.bw;
+	HALBB_SCAN(input[1], DCMD_DECIMAL, &var[0]);
 
 	if ((_os_strcmp(input[1], help) == 0)) {
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
@@ -364,146 +520,51 @@ void halbb_edcca_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			 "[EDCCA] Set EDCCA mode: {3} {mode 0:normal mode, 1:Adaptivity, 2: Carrier sense}\n");
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "Show Power threshold: {100}\n");
-	} else {
-		HALBB_SCAN(input[1], DCMD_DECIMAL, &var[0]);
+	} else if (var[0] == 1) {
+		HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
+		HALBB_SCAN(input[3], DCMD_DECIMAL, &var[2]);
+		HALBB_SCAN(input[4], DCMD_DECIMAL, &var[3]);
 
-		if (var[0] == 1) {
-			HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
-			HALBB_SCAN(input[3], DCMD_DECIMAL, &var[2]);
-			HALBB_SCAN(input[4], DCMD_DECIMAL, &var[3]);
+		bb_edcca->th_h_5g = (u8)var[1];
+		bb_edcca->th_h_2p4g = (u8)var[2];
+		bb_edcca->th_h_cs = (u8)var[3];
 
-			bb_edcca->th_h_5g = (u8)var[1];
-			bb_edcca->th_h_2p4g = (u8)var[2];
-			bb_edcca->th_h_cs = (u8)var[3];
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "Set Adapt-5G_th=-%d(dBm), Adapt-2.4G_th=-%d(dBm), Carrier-sense_th=-%d(dBm)\n",
+			    bb_edcca->th_h_5g, bb_edcca->th_h_2p4g,
+			    bb_edcca->th_h_cs);
 
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				    "Set Adapt-5G_th=-%d(dBm), Adapt-2.4G_th=-%d(dBm), Carrier-sense_th=-%d(dBm)\n",
-				    bb_edcca->th_h_5g, bb_edcca->th_h_2p4g,
-				    bb_edcca->th_h_cs);
-			
-			bb_edcca->th_h_5g = 0 - (bb_edcca->th_h_5g) + 128;
-			bb_edcca->th_h_2p4g = 0 - (bb_edcca->th_h_2p4g) + 128;
-			bb_edcca->th_h_cs = 0 - (bb_edcca->th_h_cs) + 128;
+		bb_edcca->th_h_5g = 0 - (bb_edcca->th_h_5g) + 128;
+		bb_edcca->th_h_2p4g = 0 - (bb_edcca->th_h_2p4g) + 128;
+		bb_edcca->th_h_cs = 0 - (bb_edcca->th_h_cs) + 128;
+	} else if (var[0] == 2) {
+		HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
+		HALBB_SCAN(input[3], DCMD_DECIMAL, &var[2]);
+		HALBB_SCAN(input[4], DCMD_DECIMAL, &var[3]);
 
-			
-		} else if (var[0] == 2) {
-			HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
-			HALBB_SCAN(input[3], DCMD_DECIMAL, &var[2]);
-			HALBB_SCAN(input[4], DCMD_DECIMAL, &var[3]);
+		fw_edcca_i->pwr_th_5g = (u8)var[1];
+		fw_edcca_i->pwr_th_2p4 = (u8)var[2];
+		fw_edcca_i->pwr_th_cs = (u8)var[3];
 
-			fw_edcca_i->pwr_th_5g = (u8)var[1];
-			fw_edcca_i->pwr_th_2p4 = (u8)var[2];
-			fw_edcca_i->pwr_th_cs = (u8)var[3];
-			
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				 "Set FW Adapt-5G_th=-%d, Adapt-2.4G_th=-%d, Carrier-sense_th=-%d\n",
-				  fw_edcca_i->pwr_th_5g, fw_edcca_i->pwr_th_2p4, 
-				  fw_edcca_i->pwr_th_cs);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			 "Set FW Adapt-5G_th=-%d, Adapt-2.4G_th=-%d, Carrier-sense_th=-%d\n",
+			  fw_edcca_i->pwr_th_5g, fw_edcca_i->pwr_th_2p4,
+			  fw_edcca_i->pwr_th_cs);
 
-			halbb_fw_edcca(bb);
-			
-		} else if (var[0] == 3) {
-			HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
+		halbb_fw_edcca(bb);
+	} else if (var[0] == 3) {
+		HALBB_SCAN(input[2], DCMD_DECIMAL, &var[1]);
 
-			bb_edcca->edcca_mode = (u8)var[1];
-			
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				 "Set FW EDCCA mode = %s\n", (bb_edcca->edcca_mode == EDCCA_NORMAL_MODE) ? "Normal mode" : "Adaptivity/Carrier Sense mode");
+		bb_edcca->edcca_mode = (u8)var[1];
 
-			halbb_fw_edcca(bb);
-			
-		} else if (var[0] == 100) {
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				    "Adapt-5G_th=%d(dBm), Adapt-2.4G_th=%d(dBm), Carrier-sense_th=%d(dBm)\n",
-				    bb_edcca->th_h_5g - 128,
-				    bb_edcca->th_h_2p4g -128,
-				    bb_edcca->th_h_cs - 128);
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				    "Mode=%d, th_h=%d(dBm), th_l=%d(dBm)\n",
-				    bb_edcca->edcca_mode, bb_edcca->th_h - 128,
-				    bb_edcca->th_l - 128);
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			    "Set FW EDCCA mode = %s\n",
+			    (bb_edcca->edcca_mode == EDCCA_NORMAL_MODE) ?
+			    "Normal mode" : "Adaptivity/Carrier Sense mode");
 
-			halbb_edcca_get_result(bb);
-			switch (bw) {
-			case CHANNEL_WIDTH_80_80:
-			case CHANNEL_WIDTH_160:
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb per20{0,1,2,3,4,5,6,7}={%d,%d,%d,%d,%d,%d,%d,%d}(dBm)\n",
-					    rpt->pwdb_0, rpt->pwdb_1, rpt->pwdb_2,
-					    rpt->pwdb_3, rpt->pwdb_4, rpt->pwdb_5,
-					    rpt->pwdb_6, rpt->pwdb_7);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "path-%d, flag {FB,p20,s20,s40,s80}={%d,%d,%d,%d,%d}\n",
-					    rpt->path, rpt->flag_fb, rpt->flag_p20,
-					    rpt->flag_s20, rpt->flag_s40,
-					    rpt->flag_s80);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb {FB,p20,s20,s40,s80}={%d,%d,%d,%d,%d}(dBm)\n",
-					    rpt->pwdb_fb, rpt->pwdb_p20,
-					    rpt->pwdb_s20, rpt->pwdb_s40,
-					    rpt->pwdb_s80);
-				break;
-			case CHANNEL_WIDTH_80:
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb per20{0,1,2,3}={%d,%d,%d,%d}(dBm)\n",
-					    rpt->pwdb_0, rpt->pwdb_1, rpt->pwdb_2,
-					    rpt->pwdb_3);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "path-%d, flag {FB,p20,s20,s40}={%d,%d,%d,%d}\n",
-					    rpt->path, rpt->flag_fb, rpt->flag_p20,
-					    rpt->flag_s20, rpt->flag_s40);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb {FB,p20,s20,s40}={%d,%d,%d,%d}(dBm)\n",
-					    rpt->pwdb_fb, rpt->pwdb_p20,
-					    rpt->pwdb_s20, rpt->pwdb_s40);
-				break;
-			case CHANNEL_WIDTH_40:
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb per20{0,1}={%d,%d}(dBm)\n",
-					    rpt->pwdb_0, rpt->pwdb_1);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "path-%d, flag {FB,p20,s20}={%d,%d,%d}\n",
-					    rpt->path, rpt->flag_fb, rpt->flag_p20,
-					    rpt->flag_s20);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb {FB,p20,s20}={%d,%d,%d}(dBm)\n",
-					    rpt->pwdb_fb, rpt->pwdb_p20,
-					    rpt->pwdb_s20);
-				break;
-			case CHANNEL_WIDTH_20:
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb per20{0}={%d}(dBm)\n",
-					    rpt->pwdb_0);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "path-%d, flag {FB,p20}={%d,%d}\n",
-					    rpt->path, rpt->flag_fb, rpt->flag_p20);
-				BB_DBG_CNSL(out_len, used, output + used,
-					    out_len - used,
-					    "pwdb {FB,p20}={%d,%d}(dBm)\n",
-					    rpt->pwdb_fb, rpt->pwdb_p20);
-				break;
-			default:
-				break;
-			}
-
-			#ifdef BB_8852A_52AA_CUT_SUPPORT
-			BB_DBG_CNSL(out_len, used, output + used, out_len - used,
-				 "FW Adapt-5G_th=-%d, Adapt-2.4G_th=-%d, Carrier-sense_th=-%d\n",
-				  fw_edcca_i->pwr_th_5g, fw_edcca_i->pwr_th_2p4, 
-				  fw_edcca_i->pwr_th_cs);
-			#endif
-		}
+		halbb_fw_edcca(bb);
+	} else if (var[0] == 100) {
+		halbb_edcca_cnsl_log(bb, _used, output, _out_len);
 	}
 	*_used = used;
 	*_out_len = out_len;
@@ -584,6 +645,10 @@ void halbb_cr_cfg_edcca_init(struct bb_info *bb)
 		cr->r_edcca_rpt_b_m = EDCCA_IOQ_P0_B_A_M;
 		cr->r_edcca_rpt_sel = EDCCA_RPTREG_SEL_P0_A;
 		cr->r_edcca_rpt_sel_m = EDCCA_RPTREG_SEL_P0_A_M;
+		cr->r_ppdu_level = SEG0R_PPDU_LVL_A;
+		cr->r_ppdu_level_m = SEG0R_PPDU_LVL_A_M;
+		cr->r_obss_level = SEG0R_OBSS_LVL_A;
+		cr->r_obss_level_m = SEG0R_OBSS_LVL_A_M;
 		break;
 
 	#endif
@@ -603,6 +668,10 @@ void halbb_cr_cfg_edcca_init(struct bb_info *bb)
 		cr->r_edcca_rpt_b_m = EDCCA_IOQ_P0_B_C_M;
 		cr->r_edcca_rpt_sel = EDCCA_RPTREG_SEL_P0_C;
 		cr->r_edcca_rpt_sel_m = EDCCA_RPTREG_SEL_P0_C_M;
+		cr->r_ppdu_level = SEG0R_PPDU_LVL_C;
+		cr->r_ppdu_level_m = SEG0R_PPDU_LVL_C_M;
+		cr->r_obss_level = SEG0R_OBSS_LVL_C;
+		cr->r_obss_level_m = SEG0R_OBSS_LVL_C_M;
 		break;
 	#endif
 

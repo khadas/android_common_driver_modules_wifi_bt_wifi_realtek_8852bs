@@ -395,4 +395,12 @@ void rtw_hal_ps_notify_wake(void *hal)
 	rtw_hal_mac_ps_notify_wake(hal_info);
 }
 
+void rtw_hal_lps_pvb_wait_rx(void *hal, u16 macid, bool pvb_wait_rx)
+{
+	struct hal_info_t *hal_info = (struct hal_info_t *)hal;
+
+	rtw_hal_mac_lps_pvb_wait_rx(hal_info, macid, pvb_wait_rx);
+}
+
+
 #endif /* CONFIG_POWER_SAVE */

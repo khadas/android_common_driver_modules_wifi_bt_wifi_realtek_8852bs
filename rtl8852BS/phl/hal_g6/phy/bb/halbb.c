@@ -81,6 +81,9 @@ void halbb_supportability_dbg(struct bb_info *bb, char input[][16], u32 *_used,
 			 "11. (( %s ))DIG\n",
 			 ((comp & BB_DIG) ? ("V") : (".")));
 		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
+			 "12. (( %s ))PATH_DIV\n",
+			 ((comp & DBG_PATH_DIV) ? ("V") : (".")));
+		BB_DBG_CNSL(out_len, used, output + used, out_len - used,
 			 "13. (( %s ))UL_TB_CTRL\n",
 			 ((comp & BB_UL_TB_CTRL) ? ("V") : (".")));
 		
@@ -237,6 +240,9 @@ void halbb_media_status_update(struct bb_info *bb,
 	} else {
 		phl_sta_info->hal_sta->rssi_stat.ma_factor = RSSI_MA_L;
 		phl_sta_info->hal_sta->rssi_stat.ma_factor_bcn = RSSI_MA_L;
+		#ifdef HALBB_UL_TB_CTRL_SUPPORT
+		halbb_ul_tb_chk(bb);
+		#endif
 	}
 }
 
@@ -430,6 +436,10 @@ u8 halbb_get_rssi_min(struct bb_info *bb)
 		else
 			rssi_curr = sta_rssi->rssi_bcn;
 
+		// Fix RSSI min = 0
+		if (rssi_curr == 0)
+			rssi_curr = sta_rssi->assoc_rssi << 1;
+
 		/*[RSSI min]*/
 		if (rssi_curr <= rssi_min) {
 			rssi_min = rssi_curr;
@@ -458,6 +468,7 @@ void halbb_cmn_info_self_update(struct bb_info *bb)
 	struct dev_cap_t *dev = &phl->dev_cap;
 	struct rtw_phl_stainfo_t *sta;
 	struct rtw_rssi_info *sta_rssi = NULL;
+	struct bb_ch_info *ch = &bb->bb_ch_i;
 	struct halbb_mcc_dm *mcc_dm = &bb->mcc_dm;
 	u8 sta_cnt = 0, num_active_client = 0;
 	u8 rssi_min = 0xff, rssi_max = 0, rssi_curr = 0;
@@ -497,7 +508,7 @@ void halbb_cmn_info_self_update(struct bb_info *bb)
 		}
 	}
 
-	bb->bb_ch_i.pre_rssi_min = bb->bb_ch_i.rssi_min;
+	ch->pre_rssi_min = ch->rssi_min;
 
 	for (i = 0; i < PHL_MAX_STA_NUM; i++) {
 		if (!bb->sta_exist[i])
@@ -532,6 +543,10 @@ void halbb_cmn_info_self_update(struct bb_info *bb)
 				rssi_curr = sta_rssi->rssi;
 		}
 
+		// Fix RSSI min = 0
+		if (rssi_curr == 0)
+			rssi_curr = sta_rssi->assoc_rssi << 1;
+
 		if (sta_rssi->pkt_cnt_data > 100)
 			sta_rssi->ma_factor = RSSI_MA_H;
 		else if (sta_rssi->pkt_cnt_data > 20)
@@ -561,15 +576,19 @@ void halbb_cmn_info_self_update(struct bb_info *bb)
 
 		/*[RSSI min]*/
 		if (rssi_curr <= rssi_min) {
-			bb->bb_ch_i.rssi_min = rssi_curr;
-			bb->bb_ch_i.rssi_min_macid = sta->macid;
+			ch->rssi_min = rssi_curr;
+			ch->rssi_min_macid = sta->macid;
 			rssi_min = rssi_curr;
+			ch->int_rssi_min = SUBTRACT_TO_0(ch->rssi_min,
+							 ch->ext_loss_avg / 2);
 		}
 		/*[RSSI max]*/
 		if (rssi_curr >= rssi_max) {
-			bb->bb_ch_i.rssi_max = rssi_curr;
-			bb->bb_ch_i.rssi_max_macid = sta->macid;
+			ch->rssi_max = rssi_curr;
+			ch->rssi_max_macid = sta->macid;
 			rssi_max = rssi_curr;
+			ch->int_rssi_max = SUBTRACT_TO_0(ch->rssi_max,
+							 ch->ext_loss_avg / 2);
 		}
 
 		//BB_DBG(bb, DBG_COMMON_FLOW, "TP: TRX=%d Mb/sec\n", trx_tp);
@@ -667,6 +686,9 @@ void halbb_store_data(struct bb_info *bb)
 
 void halbb_reset(struct bb_info *bb)
 {
+	if (bb->bb_cmn_hooker->bb_cmn_dbg_i.cmn_log_2_cnsl_en)
+		return;
+
 	halbb_store_data(bb);
 	#ifdef HALBB_STATISTICS_SUPPORT
 	halbb_statistics_reset(bb);
@@ -719,6 +741,9 @@ void halbb_watchdog_normal(struct bb_info *bb, enum phl_phy_idx phy_idx)
 	#endif
 	#ifdef HALBB_ANT_DIV_SUPPORT
 	halbb_antenna_diversity(bb);
+	#endif
+	#ifdef HALBB_PATH_DIV_SUPPORT
+	halbb_path_diversity(bb);
 	#endif
 	halbb_update_hal_info(bb);
 	#ifdef HALBB_DIG_MCC_SUPPORT
@@ -818,6 +843,10 @@ void halbb_bb_cmd_notify(struct bb_info *bb, void *bb_cmd, enum phl_phy_idx phy_
 	} else if (event_idx == BB_EVENT_TIMER_CFO) {
 		#ifdef HALBB_CFO_TRK_SUPPORT
 		halbb_cfo_acc_io_en(bb);
+		#endif
+	} else if (event_idx == BB_EVENT_TIMER_DTR) {
+		#ifdef HALBB_DYN_DTR_SUPPORT
+			halbb_dtr_acc_io_en(bb);
 		#endif
 	} else if (event_idx == BB_EVENT_TIMER_ANTDIV) {
 		#ifdef HALBB_ANT_DIV_SUPPORT

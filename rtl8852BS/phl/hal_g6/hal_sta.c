@@ -96,10 +96,11 @@ _hal_set_default_cctrl_tbl(struct hal_info_t *hal_info,
 				 struct rtw_phl_stainfo_t *sta)
 {
 	enum rtw_hal_status sts = RTW_HAL_STATUS_FAILURE;
+	struct rtw_phl_com_t *phl_com = hal_info->phl_com;
 	struct rtw_hal_mac_ax_cctl_info cctrl, cctl_info_mask;
 #ifdef RTW_WKARD_DEF_CMACTBL_CFG
 	u16 cfg;
-	enum rf_path path = (hal_info->hal_com->rfpath_tx_num == 1)?RF_PATH_B:RF_PATH_AB;
+	enum rf_path path = (phl_com->phy_cap[0].tx_path_num == 1)?RF_PATH_B:RF_PATH_AB;
 #endif
 	_os_mem_set(hal_to_drvpriv(hal_info), &cctrl, 0, sizeof(struct rtw_hal_mac_ax_cctl_info));
 	_os_mem_set(hal_to_drvpriv(hal_info), &cctl_info_mask, 0, sizeof(struct rtw_hal_mac_ax_cctl_info));
@@ -465,6 +466,15 @@ rtw_hal_stainfo_init(void *hal, struct rtw_phl_stainfo_t *sta)
 		goto error_exit;
 	}
 
+	/* alloc trx_stats */
+	sta->hal_sta->trx_stat.wp_rpt_stats =_os_mem_alloc(drv,
+		sizeof(struct rtw_wp_rpt_stats) * PHL_AC_QUEUE_TOTAL);
+
+	if (sta->hal_sta->trx_stat.wp_rpt_stats == NULL) {
+		PHL_ERR("alloc wp_rpt_stats failed\n");
+		goto error_rpt_stats;
+	}
+
 	sta->hal_sta->hw_cfg_tab =
 		_os_mem_alloc(drv, sizeof(struct rtw_hw_cfg_tab));
 	if (sta->hal_sta->hw_cfg_tab == NULL) {
@@ -491,6 +501,13 @@ error_hw_cfg_tab :
 		sta->hal_sta->hw_cfg_tab = NULL;
 	}
 error_hsta_mem :
+	if (sta->hal_sta->trx_stat.wp_rpt_stats) {
+		_os_mem_free(drv, sta->hal_sta->trx_stat.wp_rpt_stats,
+			     sizeof(struct rtw_wp_rpt_stats) * PHL_AC_QUEUE_TOTAL);
+		sta->hal_sta->trx_stat.wp_rpt_stats = NULL;
+	}
+
+error_rpt_stats :
 	if (sta->hal_sta) {
 		_os_mem_free(drv, sta->hal_sta,
 				sizeof(struct rtw_hal_stainfo_t));
@@ -510,6 +527,7 @@ rtw_hal_stainfo_deinit(void *hal, struct rtw_phl_stainfo_t *sta)
 	if (sta->hal_sta) {
 		/* Free lock for tx statistics */
 		_os_spinlock_free(drv, &sta->hal_sta->trx_stat.tx_sts_lock);
+
 		hal_status = rtw_hal_bb_stainfo_deinit(hal_info, sta);
 		if (hal_status != RTW_HAL_STATUS_SUCCESS)
 			PHL_ERR("bb_stainfo deinit failed\n");
@@ -518,6 +536,12 @@ rtw_hal_stainfo_deinit(void *hal, struct rtw_phl_stainfo_t *sta)
 			_os_mem_free(drv, sta->hal_sta->hw_cfg_tab,
 					sizeof(struct rtw_hw_cfg_tab));
 			sta->hal_sta->hw_cfg_tab = NULL;
+		}
+
+		if (sta->hal_sta->trx_stat.wp_rpt_stats) {
+			_os_mem_free(drv, sta->hal_sta->trx_stat.wp_rpt_stats,
+				     sizeof(struct rtw_wp_rpt_stats) * PHL_AC_QUEUE_TOTAL);
+			sta->hal_sta->trx_stat.wp_rpt_stats = NULL;
 		}
 
 		_os_mem_free(drv, sta->hal_sta,
@@ -641,6 +665,7 @@ rtw_hal_update_sta_entry(void *hal, struct rtw_phl_stainfo_t *sta,
 		if (hal_status != RTW_HAL_STATUS_SUCCESS)
 			PHL_ERR("rtw_hal_bb_ra_deregister failed\n");
 		hal_info->hal_com->assoc_sta_cnt--;
+		rtw_hal_mac_macid_drop(hal_info, sta->macid);
 		/* reset drv rssi_stat */
 		_hal_sta_rssi_init(sta);
 		_hal_sta_set_default_value(hal_info, sta);
@@ -766,6 +791,10 @@ rtw_hal_set_sta_rx_sts(struct rtw_phl_stainfo_t *sta, u8 rst,
 			sta->hal_sta->trx_stat.rx_err_cnt++;
 		else
 			sta->hal_sta->trx_stat.rx_ok_cnt++;
+
+		sta->hal_sta->trx_stat.rx_bw = meta->bw;
+		sta->hal_sta->trx_stat.rx_rate = meta->rx_rate;
+		sta->hal_sta->trx_stat.rx_gi_ltf = meta->rx_gi_ltf;
 	}
 	/* TODO: rx_rate_plurality */
 	return RTW_HAL_STATUS_SUCCESS;

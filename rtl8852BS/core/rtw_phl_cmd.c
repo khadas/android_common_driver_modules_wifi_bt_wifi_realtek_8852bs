@@ -191,11 +191,15 @@ u32 rtw_enqueue_phl_cmd(struct cmd_obj *pcmd)
 {
 	u32 res = _FAIL;
 	_adapter *padapter = pcmd->padapter;
+	enum phl_band_idx band_idx = pcmd->band_idx;
 	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
 	enum rtw_phl_status psts = RTW_PHL_STATUS_FAILURE;
 
-	if (rtw_is_adapter_up(padapter) == _FALSE)
-		goto free_cmd;
+	if (band_idx >= HW_BAND_MAX) {
+		if (rtw_is_adapter_up(padapter) == _FALSE)
+			goto free_cmd;
+		band_idx = padapter->phl_role->hw_band;
+	}
 
 #if defined(CONFIG_STA_CMD_DISPR) || defined(CONFIG_CMD_TSF_SYNC) || defined(CONFIG_CMD_AP_DISPR)
 	switch (pcmd->cmdcode) {
@@ -286,7 +290,7 @@ u32 rtw_enqueue_phl_cmd(struct cmd_obj *pcmd)
 
 #ifdef CONFIG_CMD_GENERAL
 	psts = rtw_phl_cmd_enqueue(dvobj->phl,
-			padapter->phl_role->hw_band,
+			band_idx,
 			MSG_EVT_LINUX_CMD_WRK,
 			(u8 *)pcmd, sizeof(struct cmd_obj),
 			phl_run_core_cmd,
