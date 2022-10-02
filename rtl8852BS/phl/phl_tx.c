@@ -734,11 +734,11 @@ enum rtw_phl_status phl_register_handler(struct rtw_phl_com_t *phl_com,
 	if (handler->type == RTW_PHL_HANDLER_PRIO_HIGH) {
 		tasklet = &handler->os_handler.u.tasklet;
 		phl_status = _os_tasklet_init(drv_priv, tasklet,
-										handler->callback, handler);
+										(void(*)(void*))handler->callback, handler);
 	} else if (handler->type == RTW_PHL_HANDLER_PRIO_LOW) {
 		workitem = &handler->os_handler.u.workitem;
 		phl_status = _os_workitem_init(drv_priv, workitem,
-										handler->callback, workitem);
+										(void(*)(void*))handler->callback, workitem);
 	} else if (handler->type == RTW_PHL_HANDLER_PRIO_NORMAL) {
 		_os_sema_init(drv_priv, &(handler->os_handler.hdlr_sema), 0);
 		handler->os_handler.hdlr_created = false;
@@ -1339,7 +1339,7 @@ enum rtw_phl_status phl_datapath_init(struct phl_info_t *phl_info)
 		_os_spinlock_init(drv_priv, &phl_info->t_ring_free_list_lock);
 
 		event_handler->type = RTW_PHL_HANDLER_PRIO_HIGH;
-		event_handler->callback = phl_event_indicator;
+		event_handler->callback = (int(*)(void*))phl_event_indicator;
 		event_handler->context = phl_info;
 		event_handler->drv_priv = drv_priv;
 		event_handler->status = 0;

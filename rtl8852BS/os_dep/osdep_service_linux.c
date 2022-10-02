@@ -387,6 +387,9 @@ inline int rtw_test_and_set_bit(int nr, unsigned long *addr)
 */
 static int openFile(struct file **fpp, const char *path, int flag, int mode)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+	return -1;
+#else
 	struct file *fp;
 
 	fp = filp_open(path, flag, mode);
@@ -397,6 +400,7 @@ static int openFile(struct file **fpp, const char *path, int flag, int mode)
 		*fpp = fp;
 		return 0;
 	}
+#endif
 }
 
 /*
@@ -423,7 +427,11 @@ static int readFile(struct file *fp, char *buf, int len)
 
 	while (sum < len) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+		return -1;
+#else
 		rlen = kernel_read(fp, buf + sum, len - sum, &fp->f_pos);
+#endif
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
 		rlen = __vfs_read(fp, buf + sum, len - sum, &fp->f_pos);
 #else
@@ -455,7 +463,11 @@ static int writeFile(struct file *fp, char *buf, int len)
 
 	while (sum < len) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+		return -1;
+#else
 		wlen = kernel_write(fp, buf + sum, len - sum, &fp->f_pos);
+#endif
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 1, 0))
 		wlen = __vfs_write(fp, buf + sum, len - sum, &fp->f_pos);
 #else
@@ -484,7 +496,11 @@ static int isDirReadable(const char *pathname, u32 *sz)
 	struct path path;
 	int error = 0;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+	return -1;
+#else
 	return kern_path(pathname, LOOKUP_FOLLOW, &path);
+#endif
 }
 #endif /* CONFIG_RTW_ANDROID */
 
@@ -496,6 +512,9 @@ static int isDirReadable(const char *pathname, u32 *sz)
 */
 static int isFileReadable(const char *path, u32 *sz)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+	return -1;
+#else
 	struct file *fp;
 	int ret = 0;
 	#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
@@ -533,6 +552,7 @@ static int isFileReadable(const char *path, u32 *sz)
 		filp_close(fp, NULL);
 	}
 	return ret;
+#endif
 }
 
 /*

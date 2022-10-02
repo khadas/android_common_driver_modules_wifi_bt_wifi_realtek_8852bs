@@ -506,7 +506,7 @@ u8 rtw_phl_test_is_test_complete(struct rtw_phl_com_t* phl_com)
 	return false;
 }
 
-static void _test_obj_thread_callback(void *context)
+static int _test_obj_thread_callback(void *context)
 {
 	struct rtw_phl_handler *phl_handler
 		= (struct rtw_phl_handler *)phl_container_of(context,
@@ -515,6 +515,7 @@ static void _test_obj_thread_callback(void *context)
 	struct test_object_ex *obj = (struct test_object_ex *)phl_handler->context;
 	obj->start_time = _os_get_cur_time_us();
 	obj->test_obj.ctrl.start_test(obj->test_obj.priv);
+	return 0;
 }
 
 u8 init_obj_thread(struct test_mgnt_info *test_mgnt,
