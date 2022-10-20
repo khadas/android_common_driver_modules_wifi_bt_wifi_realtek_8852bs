@@ -105,7 +105,7 @@ EXTRA_CFLAGS += -DRTKM_MPOOL_4=3
 EXTRA_CFLAGS += -DRTKM_MPOOL_5=8
 ########################## Android ###########################
 # CONFIG_RTW_ANDROID - 0: no Android, 4/5/6/7/8/9/10 : Android version
-CONFIG_RTW_ANDROID = 0
+CONFIG_RTW_ANDROID = 13
 
 ifeq ($(shell test $(CONFIG_RTW_ANDROID) -gt 0; echo $$?), 0)
 EXTRA_CFLAGS += -DCONFIG_RTW_ANDROID=$(CONFIG_RTW_ANDROID)
@@ -336,7 +336,11 @@ endif
 ifeq ($(CONFIG_LOAD_PHY_PARA_FROM_FILE), y)
 EXTRA_CFLAGS += -DCONFIG_LOAD_PHY_PARA_FROM_FILE
 #EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH_WITH_IC_NAME_FOLDER
+ifeq ($(shell test $(CONFIG_RTW_ANDROID) -ge 11; echo $$?), 0)
+EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH=\"/vendor/firmware/\"
+else
 EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH=\"/lib/firmware/\"
+endif
 endif
 
 ifeq ($(CONFIG_FILE_FWIMG), y)

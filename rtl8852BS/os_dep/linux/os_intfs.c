@@ -2016,6 +2016,10 @@ int rtw_os_ndevs_register(struct dvobj_priv *dvobj)
 				name = regsty->ifname;
 			else if (adapter->iface_id == IFACE_ID1)
 				name = regsty->if2name;
+#if defined(CONFIG_PLATFORM_ANDROID) && (CONFIG_IFACE_NUMBER > 2)
+			else if (adapter->iface_id == IFACE_ID2)
+				name = regsty->if3name;
+#endif
 			else
 				name = "wlan%d";
 

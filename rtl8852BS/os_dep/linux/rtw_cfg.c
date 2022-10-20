@@ -516,6 +516,12 @@ MODULE_PARM_DESC(ifname, "The default name to allocate for first interface");
 module_param(if2name, charp, 0644);
 MODULE_PARM_DESC(if2name, "The default name to allocate for second interface");
 
+#if defined(CONFIG_PLATFORM_ANDROID) && (CONFIG_IFACE_NUMBER > 2)
+char *if3name = "ap%d";
+module_param(if3name, charp, 0644);
+MODULE_PARM_DESC(if3name, "The default name to allocate for third interface");
+#endif
+
 char *rtw_initmac = 0;  /* temp mac address if users want to use instead of the mac address in Efuse */
 
 #ifdef CONFIG_CONCURRENT_MODE
@@ -1746,6 +1752,9 @@ int rtw_stbc_cap = 0x13;
 
 	snprintf(registry_par->ifname, 16, "%s", ifname);
 	snprintf(registry_par->if2name, 16, "%s", if2name);
+#if defined(CONFIG_PLATFORM_ANDROID) && (CONFIG_IFACE_NUMBER > 2)
+	snprintf(registry_par->if3name, 16, "%s", if3name);
+#endif
 
 #if defined(CONFIG_CONCURRENT_MODE) && !RTW_P2P_GROUP_INTERFACE
 #ifdef CONFIG_P2P
