@@ -79,9 +79,9 @@ static u32 rtw_sdio_xmit(struct dvobj_priv *d, u32 txaddr, u32 cnt, u8 *mem)
 
 /********************************xmit section*******************************/
 #ifdef CONFIG_TX_AMSDU_SW_MODE
-static void sdio_xmit_tasklet(_adapter *padapter)
+static void sdio_xmit_tasklet(unsigned long padapter)
 {
-	core_tx_amsdu_tasklet(padapter);
+	core_tx_amsdu_tasklet((_adapter  *)padapter);
 }
 #endif
 
@@ -91,7 +91,7 @@ s32 sdio_init_xmit_priv(_adapter *adapter)
 	struct xmit_priv *xmitpriv = &adapter->xmitpriv;
 
 	rtw_tasklet_init(&xmitpriv->xmit_tasklet,
-			(void(*)(unsigned long))sdio_xmit_tasklet,
+			sdio_xmit_tasklet,
 			(unsigned long)adapter);
 #endif
 	return _SUCCESS;
