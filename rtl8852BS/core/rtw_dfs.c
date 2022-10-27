@@ -88,7 +88,7 @@ bool adapter_is_tx_blocked_by_ch_waiting(_adapter *adapter)
 	struct rf_ctl_t *rfctl = adapter_to_rfctl(adapter);
 	struct _ADAPTER_LINK *alink = GET_PRIMARY_LINK(adapter);
 
-	if (!alink)
+	if (!alink || !alink->adapter || !alink->adapter->phl_role)
 		return false;
 
 	return rtw_rfctl_hwband_is_tx_blocked_by_ch_waiting(rfctl, ALINK_GET_HWBAND(alink));
