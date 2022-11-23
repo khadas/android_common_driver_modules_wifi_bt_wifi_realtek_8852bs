@@ -37,6 +37,8 @@ inline struct proc_dir_entry *get_rtw_drv_proc(void)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
 #define PDE_DATA(inode) PDE((inode))->data
 #define proc_get_parent_data(inode) PDE((inode))->parent->data
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0))
+#define PDE_DATA pde_data
 #endif
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24))
@@ -3454,13 +3456,24 @@ static ssize_t proc_set_skip_band(struct file *file, const char __user *buffer, 
 }
 
 #ifdef CONFIG_RTW_ACS
-#ifdef WKARD_ACS
 static void rtw_acs_chan_info_dump(struct seq_file *m, _adapter *a)
 {
-}
+	struct net_device *dev = m->private;
+	_adapter *adapter = (_adapter *)rtw_netdev_priv(dev);
+	struct dvobj_priv *d = adapter_to_dvobj(adapter);
+	struct rtw_acs_info_parm rpt;
+	RT_CHANNEL_INFO  *chset = adapter_to_chset(adapter);
+	int i;
 
-static void rtw_acs_info_dump(struct seq_file *m, _adapter *a)
-{
+	RTW_PRINT_SEL(m, "%5s  %3s  %5s  %4s(%%)  %4s(%%)\n",
+						"Index", "CH", "Band", "NHM", "CLM");
+
+	for (i = 0; i < MAX_CHANNEL_NUM && chset[i].ChannelNum != 0; i++){
+		_rtw_memset(&rpt, 0, sizeof(struct rtw_acs_info_parm));
+		rtw_acs_get_report(adapter, chset[i].band, chset[i].ChannelNum, &rpt);
+		RTW_PRINT_SEL(m, "%5d  %3d  %5s  %4d  %7d\n",
+			i, chset[i].ChannelNum ,band_str(chset[i].band), rpt.rpt.nhm_ratio, rpt.rpt.clm_ratio);
+	}
 }
 
 static int proc_get_chan_info(struct seq_file *m, void *v)
@@ -3472,6 +3485,10 @@ static int proc_get_chan_info(struct seq_file *m, void *v)
 	return 0;
 }
 
+#ifdef WKARD_ACS
+static void rtw_acs_info_dump(struct seq_file *m, _adapter *a)
+{
+}
 static int proc_get_best_chan(struct seq_file *m, void *v)
 {
 	struct net_device *dev = m->private;
@@ -5256,9 +5273,9 @@ const struct rtw_proc_hdl adapter_proc_hdls[] = {
 	RTW_PROC_HDL_SSEQ("monitor", proc_get_monitor, proc_set_monitor),
 
 #ifdef CONFIG_RTW_ACS
+	RTW_PROC_HDL_SSEQ("chan_info", proc_get_chan_info, NULL),
 #ifdef WKARD_ACS
 	RTW_PROC_HDL_SSEQ("acs", proc_get_best_chan, proc_set_acs),
-	RTW_PROC_HDL_SSEQ("chan_info", proc_get_chan_info, NULL),
 #endif
 #endif
 	RTW_PROC_HDL_SSEQ("env_info", proc_get_env_rpt, NULL),
@@ -5412,9 +5429,6 @@ const int adapter_proc_hdls_num = sizeof(adapter_proc_hdls) / sizeof(struct rtw_
 
 static int rtw_adapter_proc_open(struct inode *inode, struct file *file)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-	return -EROFS;
-#else
 	ssize_t index = (ssize_t)PDE_DATA(inode);
 	const struct rtw_proc_hdl *hdl = adapter_proc_hdls + index;
 	void *private = proc_get_parent_data(inode);
@@ -5441,7 +5455,6 @@ static int rtw_adapter_proc_open(struct inode *inode, struct file *file)
 	} else {
 		return -EROFS;
 	}
-#endif
 }
 
 static ssize_t rtw_adapter_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *pos)
@@ -5649,9 +5662,6 @@ const int odm_proc_hdls_num = sizeof(odm_proc_hdls) / sizeof(struct rtw_proc_hdl
 
 static int rtw_odm_proc_open(struct inode *inode, struct file *file)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
-	return -EROFS;
-#else
 	ssize_t index = (ssize_t)PDE_DATA(inode);
 	const struct rtw_proc_hdl *hdl = odm_proc_hdls + index;
 	void *private = proc_get_parent_data(inode);
@@ -5678,7 +5688,6 @@ static int rtw_odm_proc_open(struct inode *inode, struct file *file)
 	} else {
 		return -EROFS;
 	}
-#endif
 }
 
 static ssize_t rtw_odm_proc_write(struct file *file, const char __user *buffer, size_t count, loff_t *pos)

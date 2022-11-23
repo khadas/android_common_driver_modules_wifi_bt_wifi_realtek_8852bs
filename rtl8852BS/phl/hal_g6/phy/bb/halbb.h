@@ -150,10 +150,6 @@ struct bb_cmn_backup_info {
 	s16			cur_tx_pwr;
 	u8			cur_pd_lower_bound;
 	u8			last_rssi;
-	u32			cur_rfmode_a_12ac;
-	u32			cur_rfmode_a_12b0;
-	u32			cur_rfmode_b_32ac;
-	u32			cur_rfmode_b_32b0;
 	struct rssi_physts 	last_rssi_rpt;
 	struct rxevm_physts 	last_rxevm_rpt;
 };

@@ -514,7 +514,11 @@ static inline void rtw_thread_enter(char *name)
 
 static inline void rtw_thread_exit(_completion *comp)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
 	complete_and_exit(comp, 0);
+#else
+	kthread_complete_and_exit(comp, 0);
+#endif
 }
 
 static inline _thread_hdl_ rtw_thread_start(int (*threadfn)(void *data),
@@ -529,11 +533,13 @@ static inline _thread_hdl_ rtw_thread_start(int (*threadfn)(void *data),
 	}
 	return _rtw_thread;
 }
+
 static inline bool rtw_thread_stop(_thread_hdl_ th)
 {
 
 	return kthread_stop(th);
 }
+
 static inline void rtw_thread_wait_stop(void)
 {
 	#if 0
@@ -551,10 +557,8 @@ static inline void rtw_thread_wait_stop(void)
 
 static inline void flush_signals_thread(void)
 {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 15, 0))
 	if (signal_pending(current))
 		flush_signals(current);
-#endif
 }
 
 
@@ -1062,5 +1066,9 @@ static inline void rtw_dump_stack(void)
 #define  PCI_L1SS_CTL1_L1SS_MASK	0x0000000F
 #endif
 #endif /* CONFIG_PCI_HCI */
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0))
+#define dev_addr_mod(dev, offset, addr, len) _rtw_memcpy(&dev->dev_addr[offset], addr, len)
+#endif
 
 #endif /* __OSDEP_LINUX_SERVICE_H_ */

@@ -71,10 +71,6 @@ struct bb_edcca_cr_info {
 	u32 r_edcca_rpt_b_m;
 	u32 r_edcca_rpt_sel;
 	u32 r_edcca_rpt_sel_m;
-	u32 r_ppdu_level;
-	u32 r_ppdu_level_m;
-	u32 r_obss_level;
-	u32 r_obss_level_m;
 };
 
 struct edcca_hw_rpt {

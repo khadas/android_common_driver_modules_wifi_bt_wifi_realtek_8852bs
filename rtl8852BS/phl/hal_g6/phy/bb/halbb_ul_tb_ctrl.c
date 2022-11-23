@@ -93,6 +93,11 @@ void halbb_ul_tb_ctrl(struct bb_info *bb)
 		return;
 	}
 
+	if (bb_link->first_connect) {
+		BB_DBG(bb, DBG_UL_TB_CTRL, "first_connect = %d\n", bb_link->first_connect);
+		halbb_ul_tb_chk(bb);
+	}
+
 	if (!bb_link->is_linked || bb_link->first_disconnect) {
 		BB_DBG(bb, DBG_UL_TB_CTRL, "is_linked = %d, first_disconnect = %d\n", bb_link->is_linked, bb_link->first_disconnect);
 		halbb_ul_tb_reset(bb);

@@ -972,11 +972,11 @@ void dump_phl_rx_ring(void *phl)
 }
 
 
-void phl_event_indicator(unsigned long context)
+void phl_event_indicator(void *context)
 {
 	enum rtw_phl_status sts = RTW_PHL_STATUS_FAILURE;
 	struct rtw_phl_handler *phl_handler
-		= (struct rtw_phl_handler *)phl_container_of((void *)context,
+		= (struct rtw_phl_handler *)phl_container_of(context,
 							struct rtw_phl_handler,
 							os_handler);
 	struct phl_info_t *phl_info = (struct phl_info_t *)phl_handler->context;
@@ -1004,6 +1004,7 @@ void phl_event_indicator(unsigned long context)
 		}
 	}
 	FUNCOUT_WSTS(sts);
+
 }
 
 void _phl_rx_statistics_reset(struct phl_info_t *phl_info)

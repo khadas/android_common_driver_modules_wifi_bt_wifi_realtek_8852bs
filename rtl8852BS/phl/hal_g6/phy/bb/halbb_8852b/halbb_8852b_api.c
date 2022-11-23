@@ -1510,10 +1510,6 @@ void halbb_backup_info_8852b(struct bb_info *bb, enum phl_phy_idx phy_idx)
 	/*==== This Backup info is for RF TSSI calibration =====*/
 	bb->bb_cmn_backup_i.cur_tx_path = (u8)halbb_get_reg_cmn(bb, 0x458c, 0xf0000000, phy_idx);
 	bb->bb_cmn_backup_i.cur_rx_path = (u8)halbb_get_reg_cmn(bb, 0x49c4, 0xf, phy_idx);
-	bb->bb_cmn_backup_i.cur_rfmode_a_12ac= (u32)halbb_get_reg_cmn(bb, 0x12ac, MASKDWORD, phy_idx);
-	bb->bb_cmn_backup_i.cur_rfmode_a_12b0= (u32)halbb_get_reg_cmn(bb, 0x12b0, MASKDWORD, phy_idx);
-	bb->bb_cmn_backup_i.cur_rfmode_b_32ac= (u32)halbb_get_reg_cmn(bb, 0x32ac, MASKDWORD, phy_idx);
-	bb->bb_cmn_backup_i.cur_rfmode_b_32b0= (u32)halbb_get_reg_cmn(bb, 0x32b0, MASKDWORD, phy_idx);
 	bb->bb_cmn_backup_i.cur_tx_pwr = halbb_get_txpwr_dbm_8852b(bb, phy_idx);
 
 	BB_DBG(bb, DBG_PHY_CONFIG, "[Backup Info] [PHY%d] Tx path = %x\n", phy_idx, bb->bb_cmn_backup_i.cur_tx_path);
@@ -1530,10 +1526,6 @@ void halbb_restore_info_8852b(struct bb_info *bb, enum phl_phy_idx phy_idx)
 		halbb_set_reg(bb, 0x45B4, 0x1e0000, 0x0);
 	}
 	halbb_set_reg_cmn(bb, 0x49c4, 0xf, bb->bb_cmn_backup_i.cur_rx_path, phy_idx);
-	halbb_set_reg_cmn(bb, 0x12ac, MASKDWORD, bb->bb_cmn_backup_i.cur_rfmode_a_12ac, phy_idx);
-	halbb_set_reg_cmn(bb, 0x12b0, MASKDWORD, bb->bb_cmn_backup_i.cur_rfmode_a_12b0, phy_idx);
-	halbb_set_reg_cmn(bb, 0x32ac, MASKDWORD, bb->bb_cmn_backup_i.cur_rfmode_b_32ac, phy_idx);
-	halbb_set_reg_cmn(bb, 0x32b0, MASKDWORD, bb->bb_cmn_backup_i.cur_rfmode_b_32b0, phy_idx);
 	halbb_set_txpwr_dbm_8852b(bb, bb->bb_cmn_backup_i.cur_tx_pwr, phy_idx);
 
 	BB_DBG(bb, DBG_PHY_CONFIG, "[Restore Info] [PHY%d] Tx path = %x\n", phy_idx, bb->bb_cmn_backup_i.cur_tx_path);

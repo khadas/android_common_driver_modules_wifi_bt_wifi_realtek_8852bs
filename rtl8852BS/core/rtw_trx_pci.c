@@ -55,9 +55,10 @@ static s32 xmitframe_amsdu_direct(_adapter *padapter,
 #endif
 
 /********************************xmit section*****************************/
-static void pci_xmit_tasklet(_adapter *padapter)
+static void pci_xmit_tasklet(unsigned long data)
 {
 #ifdef CONFIG_TX_AMSDU_SW_MODE
+	_adapter *padapter = (_adapter *) data;
 	core_tx_amsdu_tasklet(padapter);
 #endif
 }
@@ -69,11 +70,11 @@ s32 pci_init_xmit_priv(_adapter *adapter)
 	struct dvobj_priv *dvobj = adapter_to_dvobj(adapter);
 
 	_rtw_spinlock_init(&dvobj_to_pci(dvobj)->irq_th_lock);
-
+#ifdef CONFIG_TX_AMSDU_SW_MODE
 	rtw_tasklet_init(&pxmitpriv->xmit_tasklet,
-		     (void(*)(unsigned long))pci_xmit_tasklet,
-		     (unsigned long)adapter);
-
+		     pci_xmit_tasklet,
+		     (unsigned long) adapter);
+#endif
 	return ret;
 }
 

@@ -208,7 +208,7 @@ struct cmd_dispatcher {
 	_os_lock token_op_q_lock;
 	_os_atomic token_cnt; // atomic
 	struct phl_cmd_token_req_ex *cur_cmd_req;
-	u8 bitmap[MODL_MASK_LEN + 1];
+	u8 bitmap[MODL_MASK_LEN];
 	u8 basemap[MODL_MASK_LEN];
 	struct mdl_mgnt_info mdl_info[PHL_MDL_ID_MAX];
 	struct phl_bk_module controller;

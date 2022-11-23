@@ -135,6 +135,7 @@
 	#ifndef CONFIG_NATIVEAP_MLME
 		#define CONFIG_HOSTAPD_MLME
 	#endif
+	/*#define CONFIG_RTW_HOSTAPD_ACS*/
 	/*#define CONFIG_FIND_BEST_CHANNEL*/
 #endif
 
@@ -193,10 +194,6 @@
 #define DISABLE_BB_RF		0
 
 #define CONFIG_TCP_CSUM_OFFLOAD_RX
-
-/*
- * Software feature Related Config
- */
 
 /*
  * Interface Related Config

@@ -41,14 +41,7 @@ void halbb_set_pmac_tx(struct bb_info *bb, struct halbb_pmac_info *tx_info,
 
 	#ifdef BB_8852A_2_SUPPORT
 	case BB_RTL8852A:
-		#ifdef HALBB_FW_OFLD_SUPPORT
-			if (halbb_check_fw_ofld(bb))
-				halbb_fwofld_set_pmac_tx_8852a_2(bb, tx_info, phy_idx);
-			else
-				halbb_set_pmac_tx_8852a_2(bb, tx_info, phy_idx);
-		#else
-			halbb_set_pmac_tx_8852a_2(bb, tx_info, phy_idx);
-		#endif
+		halbb_set_pmac_tx_8852a_2(bb, tx_info, phy_idx);
 		break;
 	#endif
 

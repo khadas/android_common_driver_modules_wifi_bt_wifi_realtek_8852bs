@@ -379,7 +379,6 @@ inline int rtw_test_and_set_bit(int nr, unsigned long *addr)
 }
 
 #if !defined(CONFIG_RTW_ANDROID_GKI)
-
 /*
 * Open a file with the specific @param path, @param flag, @param mode
 * @param fpp the pointer of struct file pointer to get struct file pointer while file opening is success
@@ -547,66 +546,66 @@ static int isFileReadable(const char *path, u32 *sz)
 static int retriveFromFile(const char *path, u8 *buf, u32 sz)
 {
 #if defined(CONFIG_RTW_ANDROID_GKI)
-		int ret = -EINVAL;
-		const struct firmware *fw = NULL;
-		char* const delim = "/";
-		char *name, *token, *cur, *path_tmp = NULL;
-	
-	
-		if (path == NULL || buf == NULL) {
-			RTW_ERR("%s() NULL pointer\n", __func__);
-			goto err;
-		}
-	
-		path_tmp = kstrdup(path, GFP_KERNEL);
-		if (path_tmp == NULL) {
-			RTW_ERR("%s() cannot copy path for parsing file name\n", __func__);
-			goto err;
-		}
-	
-		/* parsing file name from path */
-		cur = path_tmp;
+	int ret = -EINVAL;
+	const struct firmware *fw = NULL;
+	char* const delim = "/";
+	char *name, *token, *cur, *path_tmp = NULL;
+
+
+	if (path == NULL || buf == NULL) {
+		RTW_ERR("%s() NULL pointer\n", __func__);
+		goto err;
+	}
+
+	path_tmp = kstrdup(path, GFP_KERNEL);
+	if (path_tmp == NULL) {
+		RTW_ERR("%s() cannot copy path for parsing file name\n", __func__);
+		goto err;
+	}
+
+	/* parsing file name from path */
+	cur = path_tmp;
+	token = strsep(&cur, delim);
+	while (token != NULL) {
 		token = strsep(&cur, delim);
-		while (token != NULL) {
-			token = strsep(&cur, delim);
-			if(token)
-				name = token;
-		}
-	
-		if (name == NULL) {
-			RTW_ERR("%s() parsing file name fail\n", __func__);
-			goto err;
-		}
-	
-		/* request_firmware() will find file in /vendor/firmware but not in path */
-		ret = request_firmware(&fw, name, NULL);
-		if (ret == 0) {
-			RTW_INFO("%s() Success. retrieve file : %s, file size : %zu\n", __func__, name, fw->size);
-	
-			if ((u32)fw->size < sz) {
-				_rtw_memcpy(buf, fw->data, (u32)fw->size);
-				ret = (u32)fw->size;
-				goto exit;
-			} else {
-				RTW_ERR("%s() file size : %zu exceed buf size : %u\n", __func__, fw->size, sz);
-				ret = -EFBIG;
-				goto err;
-			}
+		if(token)
+			name = token;
+	}
+
+	if (name == NULL) {
+		RTW_ERR("%s() parsing file name fail\n", __func__);
+		goto err;
+	}
+
+	/* request_firmware() will find file in /vendor/firmware but not in path */
+	ret = request_firmware(&fw, name, NULL);
+	if (ret == 0) {
+		RTW_INFO("%s() Success. retrieve file : %s, file size : %zu\n", __func__, name, fw->size);
+
+		if ((u32)fw->size < sz) {
+			_rtw_memcpy(buf, fw->data, (u32)fw->size);
+			ret = (u32)fw->size;
+			goto exit;
 		} else {
-			RTW_ERR("%s() Fail. retrieve file : %s, error : %d\n", __func__, name, ret);
+			RTW_ERR("%s() file size : %zu exceed buf size : %u\n", __func__, fw->size, sz);
+			ret = -EFBIG;
 			goto err;
 		}
-	
-	
-	
-	err:
-		RTW_ERR("%s() Fail. retrieve file : %s, error : %d\n", __func__, path, ret);
-	exit:
-		if (path_tmp)
-			kfree(path_tmp);
-		if (fw)
-			release_firmware(fw);
-		return ret;
+	} else {
+		RTW_ERR("%s() Fail. retrieve file : %s, error : %d\n", __func__, name, ret);
+		goto err;
+	}
+
+
+
+err:
+	RTW_ERR("%s() Fail. retrieve file : %s, error : %d\n", __func__, path, ret);
+exit:
+	if (path_tmp)
+		kfree(path_tmp);
+	if (fw)
+		release_firmware(fw);
+	return ret;
 #else /* !defined(CONFIG_RTW_ANDROID_GKI) */
 	int ret = -1;
 	#if (LINUX_VERSION_CODE < KERNEL_VERSION(5, 10, 0))
@@ -723,7 +722,7 @@ int rtw_is_file_readable(const char *path)
 		return _FALSE;
 #else
 	RTW_INFO("%s() Android GKI prohibbit kernel_read, return _TRUE\n", __func__);
-	return	_TRUE;
+	return  _TRUE;
 #endif /* !defined(CONFIG_RTW_ANDROID_GKI) */
 }
 
@@ -743,7 +742,7 @@ int rtw_is_file_readable_with_size(const char *path, u32 *sz)
 #else
 	RTW_INFO("%s() Android GKI prohibbit kernel_read, return _TRUE\n", __func__);
 	*sz = 0;
-	return	_TRUE;
+	return  _TRUE;
 #endif /* !defined(CONFIG_RTW_ANDROID_GKI) */
 }
 
@@ -883,7 +882,7 @@ int rtw_change_ifname(_adapter *padapter, const char *ifname)
 
 	rtw_init_netdev_name(pnetdev, ifname);
 
-	_rtw_memcpy(pnetdev->dev_addr, adapter_mac_addr(padapter), ETH_ALEN);
+	dev_addr_mod(pnetdev, 0, adapter_mac_addr(padapter), ETH_ALEN);
 
 	if (rtnl_lock_needed)
 		ret = register_netdev(pnetdev);

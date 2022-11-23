@@ -240,9 +240,6 @@ void halbb_media_status_update(struct bb_info *bb,
 	} else {
 		phl_sta_info->hal_sta->rssi_stat.ma_factor = RSSI_MA_L;
 		phl_sta_info->hal_sta->rssi_stat.ma_factor_bcn = RSSI_MA_L;
-		#ifdef HALBB_UL_TB_CTRL_SUPPORT
-		halbb_ul_tb_chk(bb);
-		#endif
 	}
 }
 

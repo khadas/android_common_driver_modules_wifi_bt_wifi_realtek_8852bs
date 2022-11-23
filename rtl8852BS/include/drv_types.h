@@ -383,9 +383,6 @@ struct registry_priv {
 
 	u8 ifname[16];
 	u8 if2name[16];
-#if defined(CONFIG_PLATFORM_ANDROID) && (CONFIG_IFACE_NUMBER > 2)
-	u8 if3name[16];
-#endif
 
 	/* for pll reference clock selction */
 	u8 pll_ref_clk_sel;

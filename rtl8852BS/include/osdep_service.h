@@ -38,7 +38,6 @@
 #if defined(CONFIG_RTW_ANDROID_GKI)
 	#include <linux/firmware.h>
 #endif
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0))
 	#include <linux/sched/signal.h>
 	#include <linux/sched/types.h>

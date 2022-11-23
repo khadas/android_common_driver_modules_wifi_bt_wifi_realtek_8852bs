@@ -2312,6 +2312,7 @@ static struct rtw_phl_scan_param *_alloc_phl_param(_adapter *adapter, u8 scan_ch
 	phl_param->priv = scan_priv;
 	phl_param->wifi_role = adapter->phl_role;
 	phl_param->back_op_mode = SCAN_BKOP_NONE;
+	phl_param->ch_idx = -1;
 
 	phl_param->ch_sz = sizeof(struct phl_scan_channel) * (scan_ch_num + 1);
 	phl_param->ch = rtw_zmalloc(phl_param->ch_sz);
@@ -2649,12 +2650,26 @@ static void scan_channel_list_filled(_adapter *padapter,
 {
 	struct phl_scan_channel *phl_ch = phl_param->ch;
 	u8 i = 0;
+	#ifdef CONFIG_RTW_ACS
+	struct dvobj_priv *dvobj = adapter_to_dvobj(padapter);
+
+	phl_param->acs = _TRUE;
+	phl_param->nhm_include_cca = _FALSE;
+	#endif /*CONFIG_RTW_ACS*/
 
 	for (i = 0; i < param->ch_num; i++) {
 		phl_ch[i].channel = param->ch[i].hw_value;
 		phl_ch[i].scan_mode = NORMAL_SCAN_MODE;
 		phl_ch[i].bw = param->bw;
 		phl_ch[i].duration = param->duration;
+
+		if (phl_ch[i].channel > MAX_CHANNEL_NUM_2G)
+			phl_ch[i].band = BAND_ON_5G;
+		else
+			phl_ch[i].band = BAND_ON_24G;
+		#ifdef CONFIG_RTW_ACS
+		phl_ch[i].acs_idx = rtw_phl_get_acs_chnl_tbl_idx(dvobj->phl, phl_ch[i].band ,phl_ch[i].channel);
+		#endif /*CONFIG_RTW_ACS*/
 
 		if (param->ch[i].flags & RTW_IEEE80211_CHAN_PASSIVE_SCAN)
 			phl_ch[i].type = RTW_PHL_SCAN_PASSIVE;

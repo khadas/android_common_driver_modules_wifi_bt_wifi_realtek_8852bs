@@ -274,7 +274,7 @@ struct rtw_phl_handler {
 	char type;
 	void *drv_priv;
 	struct _os_handler os_handler;
-	int (*callback)(void *context);
+	void (*callback)(void *context);
 	char cb_name[RTW_PHL_HANDLER_CB_NAME_LEN];
 	void *context;
 };

@@ -589,7 +589,7 @@ static void phl_tx_stop_sdio(struct phl_info_t *phl)
 	_os_atomic_set(drv, &phl->phl_sw_tx_sts, PHL_TX_STATUS_SW_PAUSE);
 }
 
-static int _phl_tx_callback_sdio(void *context)
+static void _phl_tx_callback_sdio(void *context)
 {
 	enum rtw_phl_status pstatus = RTW_PHL_STATUS_FAILURE;
 	struct rtw_phl_handler *phl_handler;
@@ -690,11 +690,10 @@ chk_stop:
 
 end:
 	phl_free_deferred_tx_ring(phl_info);
-	return 0;
 }
 
 #ifdef CONFIG_PHL_SDIO_TX_CB_THREAD
-static int phl_tx_callback_sdio(void *context)
+static void phl_tx_callback_sdio(void *context)
 {
 	struct rtw_phl_handler *phl_handler;
 	struct phl_info_t *phl_info;
@@ -735,7 +734,6 @@ static int phl_tx_callback_sdio(void *context)
 
 	PHL_TRACE(COMP_PHL_XMIT, _PHL_INFO_, "SDIO: %s down\n",
 		  phl_handler->cb_name);
-	return 0;
 }
 #else /* !CONFIG_PHL_SDIO_TX_CB_THREAD */
 #define phl_tx_callback_sdio	_phl_tx_callback_sdio
@@ -1066,7 +1064,7 @@ end:
 	rtw_hal_config_interrupt(phl_info->hal , RTW_PHL_RESUME_RX_INT);
 }
 
-static int phl_rx_callback_sdio(void *context)
+static void phl_rx_callback_sdio(void *context)
 {
 #ifdef CONFIG_PHL_SDIO_RX_CB_THREAD
 #ifdef RTW_RECV_THREAD_HIGH_PRIORITY
@@ -1101,11 +1099,10 @@ static int phl_rx_callback_sdio(void *context)
 
 	_os_thread_wait_stop(d, (_os_thread*)context);
 	_os_sema_free(d, &(phl_handler->os_handler.hdlr_sema));
-	return 0;
+	return;
 #else
 	_phl_rx_callback_sdio(context);
 #endif
-	return 0;
 }
 
 static enum rtw_phl_status phl_register_trx_hdlr_sdio(struct phl_info_t *phl)

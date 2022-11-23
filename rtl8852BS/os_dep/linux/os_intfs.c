@@ -76,7 +76,7 @@ static int rtw_net_set_mac_address(struct net_device *pnetdev, void *addr)
 	}
 
 	_rtw_memcpy(adapter_mac_addr(padapter), sa->sa_data, ETH_ALEN); /* set mac addr to adapter */
-	_rtw_memcpy(pnetdev->dev_addr, sa->sa_data, ETH_ALEN); /* set mac addr to net_device */
+	dev_addr_mod(pnetdev, 0, sa->sa_data, ETH_ALEN);
 
 	/* Since the net_device is in down state, there is no wrole at this moment.
 	 * The new mac address will be set to hw when changing the net_device to up state.
@@ -633,7 +633,7 @@ int rtw_os_ndev_register(_adapter *adapter, const char *name)
 	/* alloc netdev name */
 	rtw_init_netdev_name(ndev, name);
 
-	_rtw_memcpy(ndev->dev_addr, adapter_mac_addr(adapter), ETH_ALEN);
+	dev_addr_mod(ndev, 0, adapter_mac_addr(adapter), ETH_ALEN);
 
 	/* Tell the network stack we exist */
 
@@ -1638,6 +1638,9 @@ static const struct net_device_ops rtw_netdev_vir_if_ops = {
 	.ndo_set_mac_address = rtw_net_set_mac_address,
 	.ndo_get_stats = rtw_net_get_stats,
 	.ndo_do_ioctl = rtw_ioctl,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 0))
+	.ndo_siocdevprivate = rtw_siocdevprivate,
+#endif
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))
 	.ndo_select_queue	= rtw_select_queue,
 #endif
@@ -2016,10 +2019,6 @@ int rtw_os_ndevs_register(struct dvobj_priv *dvobj)
 				name = regsty->ifname;
 			else if (adapter->iface_id == IFACE_ID1)
 				name = regsty->if2name;
-#if defined(CONFIG_PLATFORM_ANDROID) && (CONFIG_IFACE_NUMBER > 2)
-			else if (adapter->iface_id == IFACE_ID2)
-				name = regsty->if3name;
-#endif
 			else
 				name = "wlan%d";
 

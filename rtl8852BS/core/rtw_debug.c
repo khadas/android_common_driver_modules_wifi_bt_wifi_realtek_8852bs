@@ -1476,7 +1476,7 @@ int proc_get_survey_info(struct seq_file *m, void *v)
 
 #if 0 /*def CONFIG_BACKGROUND_NOISE_MONITOR*/
 		if (IS_NM_ENABLE(padapter))
-			notify_noise = rtw_noise_query_by_chan_num(padapter, pnetwork->network.Configuration.DSConfig);
+			notify_noise = rtw_acs_get_noise_dbm(padapter, pnetwork->network.Configuration.DSConfig);
 #endif
 
 		ie_wpa = rtw_get_wpa_ie(&pnetwork->network.IEs[12], &ielen, pnetwork->network.IELength - 12);

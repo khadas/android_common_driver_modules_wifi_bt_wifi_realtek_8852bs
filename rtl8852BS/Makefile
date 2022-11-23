@@ -15,6 +15,18 @@ EXTRA_CFLAGS += -Wno-unused-label
 EXTRA_CFLAGS += -Wno-unused
 #EXTRA_CFLAGS += -Wno-uninitialized
 
+############ ANDROID COMMON KERNEL ############
+# clang
+ifeq ($(CC), clang)
+EXTRA_CFLAGS += -Wno-uninitialized
+EXTRA_CFLAGS += -Wno-enum-conversion
+EXTRA_CFLAGS += -Wno-fortify-source
+EXTRA_CFLAGS += -Wno-invalid-source-encoding
+EXTRA_CFLAGS += -Wno-tautological-pointer-compare
+EXTRA_CFLAGS += -Wno-tautological-overlap-compare
+EXTRA_CFLAGS += -Wno-pointer-bool-conversion
+endif
+
 GCC_VER_49 := $(shell echo `$(CC) -dumpversion | cut -f1-2 -d.` \>= 4.9 | bc )
 ifeq ($(GCC_VER_49),1)
 EXTRA_CFLAGS += -Wno-date-time	# Fix compile error && warning on gcc 4.9 and later
@@ -115,7 +127,7 @@ endif
 CONFIG_RTW_DEBUG = y
 # default log level is _DRV_INFO_ = 4,
 # please refer to "How_to_set_driver_debug_log_level.doc" to set the available level.
-CONFIG_RTW_LOG_LEVEL = 3
+CONFIG_RTW_LOG_LEVEL = 4
 
 # enable /proc/net/rtlxxxx/ debug interfaces
 CONFIG_PROC_DEBUG = y
@@ -336,11 +348,7 @@ endif
 ifeq ($(CONFIG_LOAD_PHY_PARA_FROM_FILE), y)
 EXTRA_CFLAGS += -DCONFIG_LOAD_PHY_PARA_FROM_FILE
 #EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH_WITH_IC_NAME_FOLDER
-ifeq ($(shell test $(CONFIG_RTW_ANDROID) -ge 11; echo $$?), 0)
-EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH=\"/vendor/firmware/\"
-else
 EXTRA_CFLAGS += -DREALTEK_CONFIG_PATH=\"/lib/firmware/\"
-endif
 endif
 
 ifeq ($(CONFIG_FILE_FWIMG), y)
@@ -600,6 +608,15 @@ ifneq ($(USER_MODULE_NAME),)
 MODULE_NAME := $(USER_MODULE_NAME)
 endif
 
+############ ANDROID COMMON KERNEL ############
+export M ?= $(shell pwd)
+export OUT_DIR ?= $(shell pwd)
+ifneq ($(LLVM),)
+export CC_STRIP = llvm-strip
+else
+export CC_STRIP = $(CROSS_COMPILE)strip
+endif
+
 ifneq ($(KERNELRELEASE),)
 ########### COMMON #################################
 include $(src)/common.mk
@@ -648,28 +665,19 @@ endif
 else
 
 export CONFIG_RTL8852BS = m
-M ?= $(shell pwd)
 
 all: modules
 
 modules:
-	#rm -f .symvers.$(MODULE_NAME)
+#	rm -f .symvers.$(MODULE_NAME)
 
 	$(MAKE) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) -C $(KSRC) M=$(M)  modules
-ifneq ($(LLVM),)
-	llvm-strip --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
-else
-	$(CROSS_COMPILE)strip --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
-endif
-	#cp Module.symvers .symvers.$(MODULE_NAME)
 
-modules_install:
-	@$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KSRC) modules_install
-	mkdir -p ${OUT_DIR}/../vendor_lib/modules
-	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
+#	$(CC_STRIP) --strip-unneeded ${OUT_DIR}/$(M)/$(MODULE_NAME).ko
+#	cp Module.symvers .symvers.$(MODULE_NAME)
 
 strip:
-	$(CROSS_COMPILE)strip $(MODULE_NAME).ko --strip-unneeded
+	$(CC_STRIP) $(MODULE_NAME).ko --strip-unneeded
 
 install:
 	install -p -m 644 $(MODULE_NAME).ko  $(MODDESTDIR)
@@ -678,6 +686,11 @@ install:
 uninstall:
 	rm -f $(MODDESTDIR)/$(MODULE_NAME).ko
 	/sbin/depmod -a ${KVER}
+
+modules_install:
+	$(MAKE) INSTALL_MOD_STRIP=1 M=$(M) -C $(KSRC) modules_install
+#	mkdir -p ${OUT_DIR}/../vendor_lib/modules
+#	cd ${OUT_DIR}/$(M)/; find -name $(MODULE_NAME).ko -exec cp {} ${OUT_DIR}/../vendor_lib/modules/ \;
 
 backup_rtlwifi:
 	@echo "Making backup rtlwifi drivers"
@@ -721,7 +734,7 @@ config_r:
 .PHONY: modules clean
 
 clean:
-	$(MAKE) -C $(KSRC) M=$(M) clean
+#	$(MAKE) -C $(KSRC) M=$(shell pwd) clean
 	cd $(HAL) ; rm -fr */*/*/*/*.mod.c */*/*/*/*.mod */*/*/*/*.o */*/*/*/.*.cmd */*/*/*/*.ko
 	cd $(HAL) ; rm -fr */*/*/*.mod.c */*/*/*.mod */*/*/*.o */*/*/.*.cmd */*/*/*.ko
 	cd $(HAL) ; rm -fr */*/*.mod.c */*/*.mod */*/*.o */*/.*.cmd */*/*.ko
@@ -738,6 +751,8 @@ clean:
 	rm -fr .tmp_versions
 endif
 
+############ ANDROID COMMON KERNEL ############
+# Convert to absolute path
 ifneq ($(srctree),)
 _EXTRA_CFLAGS :=
 _INC_CFLAGS :=

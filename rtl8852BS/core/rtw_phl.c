@@ -2245,38 +2245,65 @@ void rtw_is_hang_check(_adapter *padapter)
 #endif /* RTW_DETECT_HANG */
 
 #ifdef CONFIG_RTW_ACS
-u16 rtw_acs_get_channel_by_idx(struct _ADAPTER *a, u8 idx)
+u8 rtw_acs_get_clm_ratio(struct _ADAPTER *a, enum band_type band, u8 ch)
 {
 	struct dvobj_priv *d = adapter_to_dvobj(a);
-	void *phl = GET_PHL_INFO(d);
+	struct rtw_acs_info_parm parm = {0};
+	enum rtw_phl_status rtn;
 
-	if (phl)
-		return rtw_phl_acs_get_channel_by_idx(phl, idx);
-	else
-		return 0;
+	parm.idx = rtw_phl_get_acs_chnl_tbl_idx(d->phl, band, ch);
+	rtn = rtw_phl_get_acs_info(d->phl, &parm);
+
+	if (rtn == RTW_PHL_STATUS_SUCCESS)
+		return parm.rpt.clm_ratio;
+
+	return 0;
 }
 
-u8 rtw_acs_get_clm_ratio_by_idx(struct _ADAPTER *a, u8 idx)
+u8 rtw_acs_get_nhm_ratio(struct _ADAPTER *a, enum band_type band, u8 ch)
 {
 	struct dvobj_priv *d = adapter_to_dvobj(a);
-	void *phl = GET_PHL_INFO(d);
+	struct rtw_acs_info_parm parm = {0};
+	enum rtw_phl_status rtn;
 
-	if (phl)
-		return rtw_phl_acs_get_clm_ratio_by_idx(phl, idx);
-	else
-		return 0;
+	parm.idx = rtw_phl_get_acs_chnl_tbl_idx(d->phl, band, ch);
+	rtn = rtw_phl_get_acs_info(d->phl, &parm);
+
+	if (rtn == RTW_PHL_STATUS_SUCCESS)
+		return parm.rpt.nhm_ratio;
+
+	return 0;
 }
 
-s8 rtw_noise_query_by_idx(struct _ADAPTER *a, u8 idx)
+s8 rtw_acs_get_noise_dbm(struct _ADAPTER *a, enum band_type band, u8 ch)
 {
 	struct dvobj_priv *d = adapter_to_dvobj(a);
-	void *phl = GET_PHL_INFO(d);
+	struct rtw_acs_info_parm parm = {0};
+	enum rtw_phl_status rtn;
 
-	if (phl)
-		return rtw_phl_noise_query_by_idx(phl, idx);
-	else
-		return 0;
+	parm.idx = rtw_phl_get_acs_chnl_tbl_idx(d->phl, band, ch);
+	rtn = rtw_phl_get_acs_info(d->phl, &parm);
+
+	if (rtn == RTW_PHL_STATUS_SUCCESS)
+		return parm.rpt.nhm_pwr;
+
+	return -110;
 }
+
+int rtw_acs_get_report(struct _ADAPTER *a, enum band_type band, u8 ch, struct rtw_acs_info_parm *rpt)
+{
+	struct dvobj_priv *d = adapter_to_dvobj(a);
+	enum rtw_phl_status rtn;
+
+	rpt->idx = rtw_phl_get_acs_chnl_tbl_idx(d->phl, band, ch);
+	rtn = rtw_phl_get_acs_info(d->phl, rpt);
+
+	if (rtn != RTW_PHL_STATUS_SUCCESS)
+		return -1;
+
+	return 0;
+}
+
 #endif /* CONFIG_RTW_ACS */
 
 void rtw_dump_env_rpt(struct _ADAPTER *a, void *sel)
@@ -2288,8 +2315,10 @@ void rtw_dump_env_rpt(struct _ADAPTER *a, void *sel)
 
 	rtw_phl_get_env_rpt(phl, &rpt, a->phl_role);
 
-	RTW_PRINT_SEL(sel, "clm_ratio:%d (%%)\n", rpt.nhm_cca_ratio);
-	RTW_PRINT_SEL(sel, "nhm_ratio:%d (%%)\n", rpt.nhm_ratio);
+	RTW_PRINT_SEL(sel, "clm_ratio(util_ratio_self):%d (%%)\n", rpt.nhm_cca_ratio);
+	RTW_PRINT_SEL(sel, "nhm_ratio(util_ratio_intrf):%d (%%)\n", rpt.nhm_ratio);
+	RTW_PRINT_SEL(sel, "nhm:%d (dBm)\n", (rpt.nhm_pwr - 110));
+	RTW_PRINT_SEL(sel, "util_ratio_fre:%d (%%)\n", (100 - rpt.nhm_cca_ratio - rpt.nhm_ratio));
 }
 
 void rtw_dump_rfe_type(struct dvobj_priv *d)

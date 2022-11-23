@@ -15,6 +15,7 @@
 #ifndef __DRV_CONF_H__
 #define __DRV_CONF_H__
 #include "autoconf.h"
+#include <linux/version.h>
 
 #define CONFIG_RSSI_PRIORITY
 
@@ -51,13 +52,7 @@
 #endif
 
 #ifdef CONFIG_RTW_ANDROID
-
-	#include <linux/version.h>
-
-	#ifndef CONFIG_PLATFORM_ANDROID
-	#define CONFIG_PLATFORM_ANDROID
-	#endif
-
+	
 	#ifndef CONFIG_IOCTL_CFG80211
 	#define CONFIG_IOCTL_CFG80211
 	#endif
@@ -85,13 +80,13 @@
 	#if (CONFIG_RTW_ANDROID >= 11)
 		#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5,4,0))
 			#ifndef CONFIG_RTW_ANDROID_GKI
-				#define CONFIG_RTW_ANDROID_GKI
+			#define CONFIG_RTW_ANDROID_GKI
 			#endif
 		#endif
 
 		#ifdef CONFIG_RTW_ANDROID_GKI
 			#ifdef CONFIG_ADAPTOR_INFO_CACHING_FILE
-				#undef CONFIG_ADAPTOR_INFO_CACHING_FILE
+			#undef CONFIG_ADAPTOR_INFO_CACHING_FILE
 			#endif
 		#endif
 	#endif
@@ -108,9 +103,9 @@
 	#ifndef CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
 	//#define CONFIG_RTW_CFGVENDOR_RANDOM_MAC_OUI
 	#endif
-	/*#ifndef CONFIG_RTW_CFGVENDOR_RSSIMONITOR
+	#ifndef CONFIG_RTW_CFGVENDOR_RSSIMONITOR
 	#define CONFIG_RTW_CFGVENDOR_RSSIMONITOR
-	#endif*/
+	#endif
 	#ifndef CONFIG_RTW_CFGVENDOR_WIFI_LOGGER
 	#define CONFIG_RTW_CFGVENDOR_WIFI_LOGGER
 	#endif
@@ -134,6 +129,14 @@
 	/* Android expect dbm as the rx signal strength unit */
 	#define CONFIG_SIGNAL_DISPLAY_DBM
 #endif // CONFIG_RTW_ANDROID
+
+/*
+ * MLD related linux kernel patch in
+ * Android Common Kernel android13-5.15(5.15.41)
+ */
+#if (defined(CONFIG_RTW_ANDROID) && (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 15, 41)))
+	#define CONFIG_MLD_KERNEL_PATCH
+#endif
 
 /*
 #if defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_RESUME_IN_WORKQUEUE)

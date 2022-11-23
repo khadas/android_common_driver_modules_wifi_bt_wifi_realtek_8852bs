@@ -120,9 +120,10 @@ void rtw_is_hang_check(struct _ADAPTER *a);
 int rtw_get_sta_tx_stat(_adapter *adapter, struct sta_info *sta);
 
 #ifdef CONFIG_RTW_ACS
-u16 rtw_acs_get_channel_by_idx(struct _ADAPTER *a, u8 idx);
-u8 rtw_acs_get_clm_ratio_by_idx(struct _ADAPTER *a, u8 idx);
-s8 rtw_noise_query_by_idx(struct _ADAPTER *a, u8 idx);
+u8 rtw_acs_get_clm_ratio(struct _ADAPTER *a, enum band_type band, u8 idx);
+u8 rtw_acs_get_nhm_ratio(struct _ADAPTER *a, enum band_type band, u8 ch);
+s8 rtw_acs_get_noise_dbm(struct _ADAPTER *a, enum band_type band, u8 idx);
+int rtw_acs_get_report(struct _ADAPTER *a, enum band_type band, u8 ch, struct rtw_acs_info_parm *rpt);
 #endif /* CONFIG_RTW_ACS */
 
 void rtw_dump_env_rpt(struct _ADAPTER *a, void *sel);
