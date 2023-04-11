@@ -972,8 +972,9 @@ void dump_phl_rx_ring(void *phl)
 }
 
 
-void phl_event_indicator(void *context)
+void phl_event_indicator(unsigned long param)
 {
+	void *context = (void *)param;
 	enum rtw_phl_status sts = RTW_PHL_STATUS_FAILURE;
 	struct rtw_phl_handler *phl_handler
 		= (struct rtw_phl_handler *)phl_container_of(context,

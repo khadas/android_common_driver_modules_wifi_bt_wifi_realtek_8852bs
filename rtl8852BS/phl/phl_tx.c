@@ -1339,7 +1339,7 @@ enum rtw_phl_status phl_datapath_init(struct phl_info_t *phl_info)
 		_os_spinlock_init(drv_priv, &phl_info->t_ring_free_list_lock);
 
 		event_handler->type = RTW_PHL_HANDLER_PRIO_HIGH;
-		event_handler->callback = phl_event_indicator;
+		event_handler->callback = (void(*)(void*))phl_event_indicator;
 		event_handler->context = phl_info;
 		event_handler->drv_priv = drv_priv;
 		event_handler->status = 0;

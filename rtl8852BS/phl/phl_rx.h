@@ -38,7 +38,7 @@ enum rtw_phl_status phl_rx_reorder(struct phl_info_t *phl_info,
 void phl_rx_deinit(struct phl_info_t *phl_info);
 void phl_recycle_rx_buf(struct phl_info_t *phl_info,
 				struct rtw_phl_rx_pkt *phl_rx);
-void phl_event_indicator(void *context);
+void phl_event_indicator(unsigned long param);
 
 enum rtw_phl_status rtw_phl_start_rx_process(void *phl);
 
